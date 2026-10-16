@@ -35,6 +35,7 @@ const ui = {
   retroSlide: 0,
   finishing: false,
   original: null,
+  editingProgress: null,
 };
 
 let lastDeleted = null;
@@ -110,6 +111,7 @@ function enterRoute(route) {
 function render() {
   const route = parseRoute();
   if (route.key !== currentKey) {
+    ui.editingProgress = null;
     previousKey = currentKey;
     currentKey = route.key;
     enterRoute(route);
@@ -325,6 +327,45 @@ function onLookupInput(value) {
   lookupTimer = setTimeout(runLookup, 450);
 }
 
+// ---------- Progresso da leitura (cartão do Início) ----------
+
+/** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. */
+function saveProgress(bookId, raw) {
+  const book = state.books.find((b) => b.id === bookId);
+  if (!book) return;
+  const text = String(raw ?? '').trim().replace('%', '').replace(',', '.');
+  if (text === '') {
+    toast(book.format === FORMATS.KINDLE ? 'Informe a porcentagem.' : 'Informe a página.');
+    return;
+  }
+  const value = Number(text);
+  if (book.format === FORMATS.KINDLE) {
+    if (!Number.isFinite(value) || value < 0 || value > 100) {
+      toast('Informe uma porcentagem entre 0 e 100.');
+      return;
+    }
+    ui.editingProgress = null;
+    if (Math.round(value) === 100) {
+      go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+      return;
+    }
+    persist(upsertBook(state, { ...book, currentPercent: Math.round(value) }).state, 'Progresso atualizado.');
+    render();
+    return;
+  }
+  if (!Number.isInteger(value) || value < 0 || (book.pages && value > book.pages)) {
+    toast(book.pages ? `Informe uma página entre 0 e ${book.pages}.` : 'Informe um número de página válido.');
+    return;
+  }
+  ui.editingProgress = null;
+  if (book.pages && value === book.pages) {
+    go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+    return;
+  }
+  persist(upsertBook(state, { ...book, currentPage: value }).state, 'Página atualizada.');
+  render();
+}
+
 // ---------- Ações ----------
 
 function saveBook() {
@@ -390,37 +431,14 @@ const actions = {
     go('#/inicio');
   },
   'update-page'(el) {
-    const book = state.books.find((b) => b.id === el.dataset.id);
-    if (!book) return;
-    if (book.format === FORMATS.KINDLE) {
-      const answer = window.prompt('Quantos % do livro o Kindle mostra? (0 a 100)', book.currentPercent ?? '');
-      if (answer === null || answer.trim() === '') return;
-      const pct = Number(answer.trim().replace('%', '').replace(',', '.'));
-      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
-        toast('Informe uma porcentagem entre 0 e 100.');
-        return;
-      }
-      if (Math.round(pct) === 100) {
-        go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
-        return;
-      }
-      persist(upsertBook(state, { ...book, currentPercent: Math.round(pct) }).state, 'Progresso atualizado.');
-      render();
-      return;
-    }
-    const total = book.pages ? ` de ${book.pages}` : '';
-    const answer = window.prompt(`Em que página você está${total}?`, book.currentPage ?? '');
-    if (answer === null || answer.trim() === '') return;
-    const page = Number(answer.trim());
-    if (!Number.isInteger(page) || page < 0 || (book.pages && page > book.pages)) {
-      toast(book.pages ? `Informe uma página entre 0 e ${book.pages}.` : 'Informe um número de página válido.');
-      return;
-    }
-    if (book.pages && page === book.pages) {
-      go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
-      return;
-    }
-    persist(upsertBook(state, { ...book, currentPage: page }).state, 'Página atualizada.');
+    ui.editingProgress = el.dataset.id;
+    render();
+    const input = document.getElementById('progress-input');
+    input?.focus();
+    input?.select();
+  },
+  'cancel-progress'() {
+    ui.editingProgress = null;
     render();
   },
   'undo-delete'() {
@@ -559,6 +577,11 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     saveBook();
   }
+  const progressForm = e.target.closest('[data-progress-form]');
+  if (progressForm) {
+    e.preventDefault();
+    saveProgress(progressForm.dataset.id, progressForm.querySelector('input')?.value);
+  }
 });
 
 // Capa que não carrega (offline, link quebrado): fica a capa desenhada.
@@ -573,10 +596,21 @@ window.addEventListener('hashchange', render);
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   let hadController = Boolean(navigator.serviceWorker.controller);
   navigator.serviceWorker.addEventListener('controllerchange', () => {
-    if (hadController) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
-    hadController = true;
+    if (!hadController) {
+      hadController = true;
+      return;
+    }
+    // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
+    const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
+    if (busy) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
+    else window.location.reload();
   });
-  navigator.serviceWorker.register('./sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').then((registration) => {
+    // O app instalado no iPhone volta do segundo plano sem recarregar: procura versão nova nessa hora.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') registration.update().catch(() => {});
+    });
+  }).catch(() => {});
 }
 
 render();

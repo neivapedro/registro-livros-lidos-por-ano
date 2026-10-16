@@ -88,8 +88,7 @@ await page.clock.setFixedTime(new Date('2026-10-16T12:00:00'));
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`); });
-let promptAnswer = '';
-page.on('dialog', (d) => (d.type() === 'prompt' ? d.accept(promptAnswer) : d.accept()));
+page.on('dialog', (d) => d.accept());
 await page.route('https://www.googleapis.com/**', (r) => r.fulfill({ json: googleFixture }));
 await page.route('https://openlibrary.org/**', (r) => r.fulfill({ json: olFixture }));
 await page.route('https://covers.openlibrary.org/**', (r) => r.abort());
@@ -254,8 +253,12 @@ try {
   await page.waitForFunction(() => /11\s*de 13/.test(document.querySelector('.ring-center').textContent));
 
   step('progresso da leitura');
-  promptAnswer = '120';
   await page.click('[data-action="update-page"] >> nth=0');
+  await page.waitForSelector('#progress-input');
+  assert.equal(await page.evaluate(() => document.activeElement.id), 'progress-input');
+  await page.fill('#progress-input', '120');
+  await shot('11-inicio-informar-pagina');
+  await page.click('.progress-edit button[type="submit"]');
   await page.waitForSelector('.reading .progress');
   assert.match(await page.textContent('.reading .progress'), /Na pág\. 120 · informe o total/);
   await shot('11-inicio-progresso');
@@ -286,9 +289,16 @@ try {
   await onPage('inicio');
   const kindleCard = page.locator('.reading:has-text("Livro no Kindle")');
   assert.match(await kindleCard.locator('.progress').textContent(), /2% · no Kindle/);
-  promptAnswer = '45';
   await kindleCard.locator('[data-action="update-page"]').click();
+  assert.match(await page.textContent('.progress-edit-label'), /Quantos % o Kindle mostra/);
+  await page.fill('#progress-input', '150');
+  await page.press('#progress-input', 'Enter');
+  await page.waitForFunction(() => /entre 0 e 100/.test(document.getElementById('toast').textContent));
+  await page.fill('#progress-input', '45');
+  await shot('16-inicio-kindle-editando');
+  await page.press('#progress-input', 'Enter');
   await page.waitForFunction(() => /45% · no Kindle/.test(document.body.textContent));
+  assert.equal(await page.locator('.progress-edit').count(), 0);
   await shot('16-inicio-kindle');
 
   step('abandonei');
