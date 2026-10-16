@@ -56,7 +56,26 @@ function updateLabel(b) {
   return `${has ? 'Atualizar' : 'Informar'} ${kindle ? '%' : 'página'}`;
 }
 
-function readingNow(books) {
+function progressEditor(b) {
+  const kindle = b.format === 'kindle';
+  const value = kindle ? b.currentPercent : b.currentPage;
+  const label = kindle ? 'Quantos % o Kindle mostra?' : `Em que página você está?${b.pages ? ` (de ${b.pages})` : ''}`;
+  return `
+    <form class="progress-edit" data-progress-form data-id="${esc(b.id)}" novalidate>
+      <label class="progress-edit-label" for="progress-input">${esc(label)}</label>
+      <div class="progress-edit-row">
+        <span class="progress-edit-field">
+          <input id="progress-input" type="number" inputmode="${kindle ? 'decimal' : 'numeric'}" min="0" max="${kindle ? 100 : b.pages || 20000}"
+            value="${esc(value ?? '')}" placeholder="${kindle ? '0 a 100' : 'Página'}" enterkeyhint="done">
+          <span class="progress-edit-suffix">${kindle ? '%' : 'pág.'}</span>
+        </span>
+        <button type="submit" class="btn-primary sm">Salvar</button>
+        <button type="button" class="btn-text small" data-action="cancel-progress">Cancelar</button>
+      </div>
+    </form>`;
+}
+
+function readingNow(books, editingId) {
   if (!books.length) return '';
   const cards = books.map((b) => `
     <div class="card reading">
@@ -71,10 +90,11 @@ function readingNow(books) {
       </a>
       <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
       </div>
+      ${editingId === b.id ? progressEditor(b) : `
       <div class="reading-progress">
         ${progressBar(b) || `<span class="muted small">${b.format === 'kindle' ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`}
         <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${updateLabel(b)}</button>
-      </div>
+      </div>`}
     </div>`).join('');
   return `
     <section class="section">
@@ -105,7 +125,7 @@ function wantTeaser(books) {
   return `<a class="card teaser" href="#/estante?aba=quero"><span class="stack">${stack}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">${plural(want.length, 'livro', 'livros')} na fila</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
 }
 
-export function homeView({ state, year, today }) {
+export function homeView({ state, ui, year, today }) {
   const currentYear = yearOf(today);
   const stats = yearStats(state.books, year, getGoal(state, year), today);
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
@@ -121,7 +141,7 @@ export function homeView({ state, year, today }) {
     </header>
     ${hero(stats, streak, year === currentYear)}
     ${statTiles(stats)}
-    ${year === currentYear ? readingNow(reading) : ''}
+    ${year === currentYear ? readingNow(reading, ui?.editingProgress) : ''}
     ${readGrid(stats)}
     ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;
 }

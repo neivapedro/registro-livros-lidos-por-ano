@@ -247,6 +247,17 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .progress-track { display: block; height: 6px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
 .progress-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
 .progress-text { font-size: 12px; color: var(--muted); font-weight: 600; }
+.progress-edit { display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--line); }
+.progress-edit-label { font-size: 13px; font-weight: 600; color: var(--text-soft); }
+.progress-edit-row { display: flex; align-items: center; gap: 8px; }
+.progress-edit-field {
+  flex: 1; min-width: 0; height: 48px; display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  border-radius: 14px; background: var(--surface-2); border: 1px solid var(--accent);
+}
+.progress-edit-field input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 18px; font-weight: 800; }
+.progress-edit-suffix { color: var(--muted); font-weight: 700; }
+.progress-edit .btn-primary.sm { width: auto; min-height: 48px; padding: 0 16px; }
+.progress-edit .btn-text { padding: 0 6px; }
 .reading-link { display: flex; gap: 14px; align-items: center; flex: 1; min-width: 0; color: var(--text); }
 .reading-text { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .btn-outline {
