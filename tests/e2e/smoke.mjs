@@ -146,6 +146,16 @@ try {
   assert.match(await page.textContent('.ring-center'), /10\s*de 12/);
   assert.match(await page.textContent('.hero'), /10 meses seguidos/);
   await shot('04-inicio');
+  assert.equal(await page.locator('.banner').count(), 0, 'sem aviso de backup na tela inicial');
+  for (const width of [390, 375, 320]) {
+    await page.setViewportSize({ width, height: 844 });
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert.ok(overflow <= 0, `tela de ${width}px com ${overflow}px sobrando à direita`);
+  }
+  await page.setViewportSize({ width: 390, height: 844 });
+  const smallFields = await page.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
+    .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).map((el) => el.outerHTML.slice(0, 60)));
+  assert.deepEqual(smallFields, [], 'campos com letra < 16px fazem o iPhone dar zoom');
 
   step('concluir leitura em andamento');
   await page.click('.reading .btn-outline');

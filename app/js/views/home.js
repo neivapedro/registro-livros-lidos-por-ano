@@ -1,22 +1,13 @@
-import { daysSince, formatShort, yearOf } from '../dates.js';
+import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
 import { cover, decimal, esc, icon, num, plural, emptyState } from '../ui.js';
 
 const RING_C = 2 * Math.PI * 56;
-const BACKUP_REMINDER_DAYS = 30;
 
 export function yearSelect(years, selected, action) {
   const options = years.map((y) => `<option value="${y}"${y === selected ? ' selected' : ''}>${y}</option>`).join('');
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
-}
-
-function backupBanner(state, today) {
-  if (!state.books.length) return '';
-  const days = state.lastBackupAt ? daysSince(state.lastBackupAt.slice(0, 10), today) : null;
-  if (days !== null && days < BACKUP_REMINDER_DAYS) return '';
-  const text = days === null ? 'Você ainda não fez nenhum backup.' : `Último backup há ${days} dias.`;
-  return `<a class="banner" href="#/ajustes">${icon('download', { size: 18 })}<span><strong>Guarde uma cópia dos seus dados.</strong> ${text}</span>${icon('chevronRight', { size: 18 })}</a>`;
 }
 
 function hero(stats, streak, isCurrentYear) {
@@ -115,7 +106,6 @@ export function homeView({ state, year, today }) {
         <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>
       </div>
     </header>
-    ${backupBanner(state, today)}
     ${hero(stats, streak, year === currentYear)}
     ${statTiles(stats)}
     ${year === currentYear ? readingNow(reading) : ''}

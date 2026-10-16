@@ -10,7 +10,7 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
    - **iPhone (Safari):** Compartilhar → *Adicionar à Tela de Início*.
 3. Pronto: abre como um app e funciona sem internet (a busca de livros precisa de conexão).
 
-> **Seus dados ficam só no celular.** Em *Ajustes → Exportar backup* gere um arquivo de cópia de vez em quando e guarde no Drive/e-mail. Para trocar de celular, use *Importar backup*. O app avisa quando o último backup tiver mais de 30 dias.
+> **Seus dados ficam só no celular.** Em *Ajustes → Exportar backup* gere um arquivo de cópia de vez em quando e guarde no Drive/e-mail. Para trocar de celular, use *Importar backup*.
 
 ## O que o app faz
 
