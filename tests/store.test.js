@@ -162,7 +162,7 @@ test('capa por foto aceita só imagem em data URL dentro do limite', () => {
   const jpg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
   assert.equal(normalizeBook({ title: 'X', cover: jpg }).cover, jpg);
   assert.equal(normalizeBook({ title: 'X', cover: 'data:text/html;base64,PHNjcmlwdD4=' }).cover, null);
-  assert.equal(normalizeBook({ title: 'X', cover: `data:image/jpeg;base64,${'A'.repeat(500000)}` }).cover, null);
+  assert.equal(normalizeBook({ title: 'X', cover: `data:image/jpeg;base64,${'A'.repeat(700000)}` }).cover, null);
   assert.equal(normalizeBook({ title: 'X', cover: 'data:image/png;base64,abc"onerror=x' }).cover, null);
 });
 

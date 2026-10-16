@@ -3,7 +3,7 @@ import { getGoal } from '../store.js';
 import { monthlyTarget } from '../stats.js';
 import { esc, icon, plural } from '../ui.js';
 
-export const APP_VERSION = '1.2.3';
+export const APP_VERSION = '1.2.4';
 
 function stepper(label, value, action, hint) {
   return `

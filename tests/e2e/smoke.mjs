@@ -271,6 +271,14 @@ try {
   await page.waitForFunction(() => document.querySelector('.cover-edit .cover-img')?.src.startsWith('data:image/jpeg'));
   assert.equal(await page.inputValue('#f-current'), '120');
   await shot('12-formulario-lendo');
+  await page.click('[data-action="zoom-cover"]');
+  await page.waitForSelector('.cover-viewer .cover-viewer-img');
+  const box = await page.locator('.cover-viewer-img').boundingBox();
+  assert.ok(box.width > 200, `capa ampliada pequena demais: ${box.width}px`);
+  await page.waitForTimeout(400);
+  await page.screenshot({ path: join(SHOTS, '12b-capa-ampliada.png') });
+  await page.click('.cover-viewer-close');
+  assert.equal(await page.locator('.cover-viewer').count(), 0);
   await page.click('.btn-primary');
   await onPage('inicio');
   assert.match(await page.getAttribute('.reading .cover-img', 'src'), /^data:image\/jpeg/);
