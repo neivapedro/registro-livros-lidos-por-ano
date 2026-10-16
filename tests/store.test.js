@@ -207,3 +207,16 @@ test('Kindle guarda o avanço em %, livro físico em página', () => {
   assert.match(validateBook({ title: 'X', status: 'lendo', format: 'kindle', currentPercent: 140 })[0], /0 a 100/);
   assert.deepEqual(validateBook({ title: 'X', status: 'lendo', format: 'kindle', pages: 100, currentPage: 500, currentPercent: 30 }), []);
 });
+
+test('datas no futuro são recusadas quando se informa o dia de hoje', () => {
+  const today = '2026-10-16';
+  assert.match(validateBook({ title: 'X', status: 'lido', endDate: '2062-01-01' }, today)[0], /término não pode estar no futuro/);
+  assert.match(validateBook({ title: 'X', status: 'lendo', startDate: '2026-10-17' }, today)[0], /início não pode estar no futuro/);
+  assert.match(validateBook({ title: 'X', status: 'abandonado', endDate: '2027-01-01' }, today)[0], /em que parou não pode estar no futuro/);
+  assert.deepEqual(validateBook({ title: 'X', status: 'lido', startDate: '2026-10-01', endDate: today }, today), []);
+  assert.deepEqual(validateBook({ title: 'X', status: 'quero', startDate: '2099-01-01' }, today), []);
+});
+
+test('página maior que o total também é recusada ao abandonar', () => {
+  assert.match(validateBook({ title: 'X', status: 'abandonado', pages: 100, currentPage: 500 })[0], /passa do total/);
+});

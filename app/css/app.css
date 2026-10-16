@@ -42,6 +42,8 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 body:has(.retro) { background: var(--bg-retro); }
+.app, .toast { overflow-wrap: break-word; }
+.hbar-head > span, .rank-name, .dropped-row > span, .drop-reason, .cmp-year { min-width: 0; overflow-wrap: anywhere; }
 a { color: var(--accent); text-decoration: none; }
 button, input, select, textarea { font: inherit; color: inherit; }
 /* No iPhone, campos com letra menor que 16px fazem a tela dar zoom ao serem tocados. */
@@ -61,7 +63,11 @@ em { font-style: italic; }
 .strong-ish { font-weight: 600; }
 .eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
 .eyebrow.accent { color: var(--accent); }
-.serif-title { font-family: var(--serif); font-size: 21px; line-height: 1.1; }
+.serif-title { font-family: var(--serif); font-size: 21px; line-height: 1.1; overflow-wrap: anywhere; }
+/* Títulos longos: no máximo 3 linhas nos cartões e listas. */
+.reading .serif-title, .favorite .serif-title, .picked .serif-title, .book-row-title, .result-title {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
 .serif-title.lg { font-size: 26px; }
 .display { font-family: var(--serif); font-weight: 400; font-size: 40px; line-height: 1.05; }
 .display.sm { font-size: 34px; }
@@ -205,7 +211,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .link { font-size: 13px; font-weight: 700; }
 
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); white-space: nowrap; }
+.chip { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
 
 /* ---------- Capas ---------- */
 
@@ -308,7 +314,8 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 }
 .book-row-link { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; color: var(--text); }
 .book-row-text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.book-row-title { font-family: var(--serif); font-size: 19px; line-height: 1.1; display: inline-flex; align-items: center; gap: 6px; }
+.book-row-title { font-family: var(--serif); font-size: 19px; line-height: 1.1; }
+.book-row-title .icon { vertical-align: -1px; margin-left: 4px; }
 .book-row-author { font-size: 13px; color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .year-head { font-family: var(--serif); font-weight: 400; font-size: 28px; margin-top: 10px; display: flex; align-items: baseline; gap: 10px; }
 .year-head .small { font-family: var(--sans); }
@@ -405,6 +412,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   min-height: 40px; padding: 0 16px; border-radius: 999px;
   border: 1px solid var(--line-strong); background: transparent; color: var(--text-soft);
   font-size: 13px; font-weight: 700;
+  max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .chip-btn.is-on { background: var(--surface-warm); color: var(--accent); border-color: var(--accent); }
 .chip-dashed { border-style: dashed; color: var(--muted); }

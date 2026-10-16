@@ -87,6 +87,7 @@ function enterRoute(route) {
       const status = Object.values(STATUS).includes(route.query.get('status')) ? route.query.get('status') : STATUS.READ;
       ui.draft = blankDraft(status);
       ui.original = null;
+      ui.finishing = false;
       ui.picked = false;
       ui.lookup = emptyLookup();
     } else {
@@ -371,7 +372,7 @@ function saveProgress(bookId, raw) {
 function saveBook() {
   const d = ui.draft;
   if (!d) return;
-  const errors = validateBook(d);
+  const errors = validateBook(d, todayIso());
   if (errors.length) {
     ui.formErrors = errors;
     render();
