@@ -54,6 +54,28 @@ test('normalizeOpenLibraryDoc', () => {
   assert.equal(normalizeOpenLibraryDoc({}), null);
 });
 
+test('normalizeOpenLibraryDoc usa a edição em português quando vem', () => {
+  const doc = {
+    ...olDoc,
+    editions: { numFound: 1, docs: [{
+      key: '/books/OL9M', title: 'A Meta', subtitle: 'Um processo de melhoria contínua',
+      language: ['por'], isbn: ['8521315316', '9788521315316'], cover_i: 999,
+    }] },
+  };
+  const r = normalizeOpenLibraryDoc(doc);
+  assert.equal(r.title, 'A Meta: Um processo de melhoria contínua');
+  assert.equal(r.isbn, '9788521315316');
+  assert.equal(r.cover, 'https://covers.openlibrary.org/b/id/999-M.jpg');
+  assert.equal(r.sourceId, 'openlibrary:/books/OL9M');
+  assert.equal(r.pages, 337);
+  assert.equal(r.authors, 'Eliyahu M. Goldratt');
+});
+
+test('normalizeOpenLibraryDoc ignora edição em outro idioma', () => {
+  const doc = { ...olDoc, editions: { docs: [{ key: '/books/X', title: 'Le But', language: ['fre'] }] } };
+  assert.equal(normalizeOpenLibraryDoc(doc).title, 'The Goal');
+});
+
 test('mergeResults intercala as fontes e tira repetidos', () => {
   const g = [{ title: 'A', authors: 'X', isbn: '1' }, { title: 'B', authors: 'Y', isbn: '' }];
   const o = [{ title: 'Á', authors: 'x', isbn: '1' }, { title: 'C', authors: 'Z', isbn: '' }, { title: 'b', authors: 'y', isbn: '' }];
@@ -74,7 +96,7 @@ function fakeFetch(routes) {
 
 const ok = (body) => ({ ok: true, status: 200, json: async () => body });
 
-test('searchBooks consulta as duas fontes e junta', async () => {
+test('searchBooks consulta as duas fontes pedindo português e junta', async () => {
   const { impl, calls } = fakeFetch([
     ['https://www.googleapis.com/', () => ok({ items: [googleItem] })],
     ['https://openlibrary.org/', () => ok({ docs: [olDoc] })],
@@ -83,7 +105,23 @@ test('searchBooks consulta as duas fontes e junta', async () => {
   assert.equal(failed, false);
   assert.equal(results.length, 2);
   assert.equal(results[0].source, 'Google Books');
-  assert.match(calls[0], /q=a%20meta%20goldratt/);
+  assert.equal(calls.length, 2);
+  assert.match(calls[0], /q=a%20meta%20goldratt&/);
+  assert.match(calls[0], /langRestrict=pt/);
+  assert.match(calls[1], /q=a%20meta%20goldratt%20language%3Apor&lang=pt/);
+  assert.match(calls[1], /editions\.title/);
+});
+
+test('searchBooks refaz sem filtro de idioma quando não acha nada em português', async () => {
+  const { impl, calls } = fakeFetch([
+    ['https://www.googleapis.com/', (url) => ok(url.includes('langRestrict') ? {} : { items: [googleItem] })],
+    ['https://openlibrary.org/', (url) => ok(url.includes('language%3Apor') ? { docs: [] } : { docs: [olDoc] })],
+  ]);
+  const { results } = await searchBooks('obscure book', { fetchImpl: impl });
+  assert.equal(calls.length, 4);
+  assert.doesNotMatch(calls[2], /langRestrict/);
+  assert.doesNotMatch(calls[3], /language%3Apor/);
+  assert.equal(results.length, 2);
 });
 
 test('searchBooks segue funcionando se o Google recusar (cota excedida)', async () => {
@@ -109,7 +147,9 @@ test('searchBooks reconhece ISBN', async () => {
     ['https://openlibrary.org/', () => ok({})],
   ]);
   await searchBooks('978-85-213-1531-6', { fetchImpl: impl });
+  assert.equal(calls.length, 2);
   assert.match(calls[0], /q=isbn%3A9788521315316/);
+  assert.doesNotMatch(calls[0], /langRestrict/);
   assert.match(calls[1], /isbn=9788521315316/);
 });
 
