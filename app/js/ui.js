@@ -1,7 +1,7 @@
 // Peças de interface reutilizadas pelas telas. Todo texto vindo de dados passa por esc().
 
 import { formatShort } from './dates.js';
-import { FORMAT_LABELS, STATUS } from './store.js';
+import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -96,8 +96,15 @@ export function chip(text, cls = '') {
   return `<span class="chip ${cls}">${esc(text)}</span>`;
 }
 
-/** Avanço da leitura: { pct, label } quando há página atual e total de páginas. */
+const isBlank = (v) => v === null || v === undefined || v === '';
+
+/** Avanço da leitura: { pct, label }. Kindle usa a % informada; físico calcula pela página. */
 export function progressOf(book) {
+  if (book.format === FORMATS.KINDLE) {
+    if (isBlank(book.currentPercent)) return null;
+    const pct = Math.max(0, Math.min(100, Math.round(Number(book.currentPercent))));
+    return Number.isFinite(pct) ? { pct, label: 'no Kindle' } : null;
+  }
   if (book.currentPage === null || book.currentPage === undefined || book.currentPage === '') return null;
   const current = Number(book.currentPage);
   if (!Number.isFinite(current)) return null;

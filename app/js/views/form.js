@@ -1,5 +1,5 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
-import { FORMAT_LABELS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
+import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
 import { cover, esc, icon, plural, progressOf } from '../ui.js';
 
 function segmented(options, current, action, label) {
@@ -116,7 +116,9 @@ export function formView({ state, ui, isEdit }) {
           ${d.status === STATUS.READ || d.status === STATUS.DROPPED ? `<div class="field"><label for="f-end">${d.status === STATUS.READ ? 'Término' : 'Parei em'}</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate"></div>` : ''}
         </div>
         ${d.status === STATUS.READING || d.status === STATUS.DROPPED ? `
-        <div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>` : ''}
+        ${d.format === FORMATS.KINDLE
+    ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
+    : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`}` : ''}
         <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
       </section>` : ''}
 
