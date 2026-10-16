@@ -1,0 +1,138 @@
+import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
+import { FORMAT_LABELS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
+import { cover, esc, icon, plural } from '../ui.js';
+
+function segmented(options, current, action, label) {
+  const buttons = options.map(([value, text]) => `
+    <button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="${action}" data-value="${esc(value)}" aria-pressed="${value === current}">${esc(text)}</button>`).join('');
+  return `<div class="segmented" role="group" aria-label="${esc(label)}" style="--seg-count:${options.length}">${buttons}</div>`;
+}
+
+export function lookupResults(lookup) {
+  if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
+  if (lookup.failed) {
+    return '<p class="muted small lookup-status">Não foi possível buscar agora (sem internet ou serviço fora do ar). Preencha os dados abaixo manualmente.</p>';
+  }
+  if (lookup.query.trim().length >= 2 && lookup.searched && !lookup.results.length) {
+    return '<p class="muted small lookup-status">Nenhum livro encontrado. Tente outro termo ou preencha abaixo.</p>';
+  }
+  return lookup.results.map((r, i) => `
+    <button type="button" class="result" data-action="pick-result" data-index="${i}">
+      ${cover(r, { size: 'xs', showText: false })}
+      <span class="result-text">
+        <span class="result-title">${esc(r.title)}</span>
+        <span class="muted small">${esc([r.authors, r.pages ? `${r.pages} págs.` : '', r.year].filter(Boolean).join(' · '))}</span>
+      </span>
+    </button>`).join('');
+}
+
+function lookupBlock(ui) {
+  return `
+    <section class="field-group">
+      <label class="label" for="lookup">Buscar livro</label>
+      <div class="search-box">
+        ${icon('search', { size: 20, stroke: 2, cls: 'muted' })}
+        <input id="lookup" type="search" inputmode="search" autocomplete="off" enterkeyhint="search"
+          placeholder="Título, autor ou ISBN" value="${esc(ui.lookup.query)}" data-lookup>
+      </div>
+      <div id="lookup-results" class="results" aria-live="polite">${lookupResults(ui.lookup)}</div>
+    </section>`;
+}
+
+function readingSummary(d) {
+  if (d.status !== STATUS.READ || !isIsoDate(d.endDate)) return '';
+  const year = yearOf(d.endDate);
+  if (isIsoDate(d.startDate) && d.startDate <= d.endDate) {
+    return `<p class="muted small">Lido em <strong class="accent">${plural(daysInclusive(d.startDate, d.endDate), 'dia', 'dias')}</strong> · entra no registro de ${year}</p>`;
+  }
+  return `<p class="muted small">Entra no registro de ${year}</p>`;
+}
+
+export function formView({ state, ui, isEdit }) {
+  const d = ui.draft;
+  const genres = allGenres(state);
+  if (d.genre && !genres.includes(d.genre)) genres.push(d.genre);
+  const genreChips = genres.map((g) => `
+    <button type="button" class="chip-btn${g === d.genre ? ' is-on' : ''}" data-action="set-genre" data-value="${esc(g)}" aria-pressed="${g === d.genre}">${esc(g)}</button>`).join('');
+  const newGenre = ui.newGenreOpen
+    ? `<span class="new-genre"><label class="sr-only" for="new-genre">Novo gênero</label><input id="new-genre" type="text" maxlength="60" placeholder="Novo gênero" data-new-genre><button type="button" class="chip-btn is-on" data-action="add-genre">OK</button></span>`
+    : '<button type="button" class="chip-btn chip-dashed" data-action="open-genre">+ Novo</button>';
+
+  const starButtons = [1, 2, 3, 4, 5].map((n) => `
+    <button type="button" class="star-btn" data-action="set-rating" data-value="${n}" aria-label="${plural(n, 'estrela', 'estrelas')}" aria-pressed="${d.rating === n}">
+      ${icon('star', { size: 26, cls: d.rating && n <= d.rating ? 'star-on' : 'star-off' })}
+    </button>`).join('');
+
+  const errors = ui.formErrors?.length
+    ? `<div class="form-errors" role="alert">${ui.formErrors.map((e) => `<p>${esc(e)}</p>`).join('')}</div>`
+    : '';
+
+  const showLookup = !isEdit && !ui.picked;
+  const pickedCard = !isEdit && ui.picked
+    ? `<div class="picked">${cover(d, { size: 'sm' })}<span class="picked-text"><span class="serif-title">${esc(d.title)}</span><span class="muted small">${esc(d.authors)}</span></span><button type="button" class="btn-text" data-action="unpick">Trocar</button></div>`
+    : '';
+
+  return `
+    <header class="form-top">
+      <a class="btn-text muted" href="${esc(ui.backHref)}">Cancelar</a>
+      <h1 class="form-title">${isEdit ? 'Editar livro' : 'Adicionar livro'}</h1>
+      <button type="submit" form="book-form" class="btn-text accent strong">Salvar</button>
+    </header>
+    <form id="book-form" class="form" data-submit="save-book" novalidate>
+      ${showLookup ? lookupBlock(ui) : ''}
+      ${pickedCard}
+
+      <section class="field-group">
+        <span class="label">${showLookup ? 'Ou preencha os dados' : 'Dados do livro'}</span>
+        <div class="field"><label for="f-title">Título</label><input id="f-title" type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
+        <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
+        <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+      </section>
+
+      <section class="field-group">
+        <span class="label">Status</span>
+        ${segmented(Object.entries(STATUS_LABELS), d.status, 'set-status', 'Status')}
+      </section>
+
+      ${d.status !== STATUS.WANT ? `
+      <section class="field-group">
+        <span class="label">Período de leitura</span>
+        <div class="two-cols">
+          <div class="field"><label for="f-start">Início</label><input id="f-start" type="date" value="${esc(d.startDate || '')}" data-field="startDate" data-rerender></div>
+          ${d.status === STATUS.READ ? `<div class="field"><label for="f-end">Término</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate" data-rerender></div>` : ''}
+        </div>
+        ${readingSummary(d)}
+      </section>` : ''}
+
+      <section class="field-group">
+        <span class="label">Formato</span>
+        ${segmented(Object.entries(FORMAT_LABELS), d.format, 'set-format', 'Formato')}
+      </section>
+
+      <section class="field-group">
+        <span class="label">Gênero</span>
+        <div class="chips-wrap">${genreChips}${newGenre}</div>
+      </section>
+
+      ${d.status === STATUS.READ ? `
+      <section class="field-group">
+        <span class="label">Sua nota</span>
+        <div class="star-row">${starButtons}</div>
+      </section>
+
+      <button type="button" class="card toggle-row" data-action="toggle-fav" aria-pressed="${d.favorite}">
+        ${icon('heart', { size: 22, cls: 'accent', fill: d.favorite ? 'currentColor' : 'none' })}
+        <span class="toggle-text"><span class="strong">Favorito do ano</span><span class="muted small">Aparece em destaque no resumo${isIsoDate(d.endDate) ? ` de ${yearOf(d.endDate)}` : ''}</span></span>
+        <span class="switch${d.favorite ? ' is-on' : ''}"><span class="switch-knob"></span></span>
+      </button>` : ''}
+
+      <section class="field-group">
+        <label class="label" for="f-notes">Anotações</label>
+        <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
+      </section>
+
+      ${errors}
+      <button type="submit" class="btn-primary">Salvar livro</button>
+      ${isEdit ? `<button type="button" class="btn-danger" data-action="delete-book">${icon('trash', { size: 18 })}Excluir livro</button>` : ''}
+    </form>`;
+}
