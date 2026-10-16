@@ -96,12 +96,35 @@ export function chip(text, cls = '') {
   return `<span class="chip ${cls}">${esc(text)}</span>`;
 }
 
+/** Avanço da leitura: { pct, label } quando há página atual e total de páginas. */
+export function progressOf(book) {
+  if (book.currentPage === null || book.currentPage === undefined || book.currentPage === '') return null;
+  const current = Number(book.currentPage);
+  if (!Number.isFinite(current)) return null;
+  const pages = Number(book.pages) || 0;
+  // Sem o total de páginas não dá para calcular o percentual.
+  if (!pages) return { pct: null, label: `pág. ${current}` };
+  const pct = Math.max(0, Math.min(100, Math.round((current / pages) * 100)));
+  return { pct, label: `pág. ${current} de ${pages}` };
+}
+
+export function progressBar(book) {
+  const p = progressOf(book);
+  if (!p) return '';
+  if (p.pct === null) {
+    return `<span class="progress"><span class="progress-text">Na ${esc(p.label)} · informe o total de páginas para ver o %</span></span>`;
+  }
+  return `<span class="progress" role="img" aria-label="${p.pct}% lido, ${esc(p.label)}"><span class="progress-track"><span class="progress-fill" style="width:${p.pct}%"></span></span><span class="progress-text">${p.pct}% · ${esc(p.label)}</span></span>`;
+}
+
 /** Linha de livro usada na estante e na busca. */
 export function bookRow(book, { action = '' } = {}) {
   const meta = [];
   if (book.status === STATUS.READ && book.endDate) meta.push(chip(`Lido em ${formatShort(book.endDate)} ${book.endDate.slice(0, 4)}`));
   if (book.status === STATUS.READING) meta.push(chip(book.startDate ? `Lendo desde ${formatShort(book.startDate)}` : 'Lendo'));
   if (book.status === STATUS.WANT) meta.push(chip('Quero ler'));
+  if (book.status === STATUS.DROPPED) meta.push(chip(book.endDate ? `Abandonado em ${formatShort(book.endDate)} ${book.endDate.slice(0, 4)}` : 'Abandonado', 'chip-muted'));
+  if (book.reread) meta.push(chip('Releitura'));
   meta.push(chip(FORMAT_LABELS[book.format]));
   if (book.genre) meta.push(chip(book.genre));
   return `
@@ -112,6 +135,7 @@ export function bookRow(book, { action = '' } = {}) {
           <span class="book-row-title">${esc(book.title)}${book.favorite ? ` ${icon('heart', { size: 14, cls: 'accent', label: 'Favorito do ano' })}` : ''}</span>
           <span class="book-row-author">${esc(book.authors || 'Autor não informado')}</span>
           ${book.rating ? stars(book.rating, { size: 12 }) : ''}
+          ${book.status === STATUS.READING ? progressBar(book) : ''}
           <span class="chips">${meta.join('')}</span>
         </span>
       </a>

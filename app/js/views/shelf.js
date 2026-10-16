@@ -1,9 +1,9 @@
 import { yearOf } from '../dates.js';
 import { STATUS } from '../store.js';
 import { booksReadInYear, countByStatus, readBooks } from '../stats.js';
-import { bookRow, emptyState, plural } from '../ui.js';
+import { bookRow, emptyState, esc, plural } from '../ui.js';
 
-const TABS = [[STATUS.WANT, 'Quero ler'], [STATUS.READING, 'Lendo'], [STATUS.READ, 'Lidos']];
+const TABS = [[STATUS.WANT, 'Quero ler'], [STATUS.READING, 'Lendo'], [STATUS.READ, 'Lidos'], [STATUS.DROPPED, 'Abandonei']];
 
 function wantList(books) {
   const want = books.filter((b) => b.status === STATUS.WANT)
@@ -37,6 +37,16 @@ function readList(books) {
   }).join('');
 }
 
+function droppedList(books) {
+  const dropped = books.filter((b) => b.status === STATUS.DROPPED)
+    .sort((a, b) => (b.endDate || b.updatedAt).localeCompare(a.endDate || a.updatedAt));
+  if (!dropped.length) {
+    return emptyState('Nenhum livro abandonado', 'Quando largar um livro, marque o status "Abandonei" e conte o porquê.');
+  }
+  return dropped.map((b) => bookRow(b) + (b.dropReason
+    ? `<p class="drop-reason"><span class="eyebrow">Por que parei</span>${esc(b.dropReason)}</p>` : '')).join('');
+}
+
 export function shelfView({ state, tab }) {
   const counts = countByStatus(state.books);
   const tabs = TABS.map(([value, label]) => `
@@ -44,9 +54,10 @@ export function shelfView({ state, tab }) {
   let body;
   if (tab === STATUS.WANT) body = wantList(state.books);
   else if (tab === STATUS.READING) body = readingList(state.books);
+  else if (tab === STATUS.DROPPED) body = droppedList(state.books);
   else body = readList(state.books);
   return `
     <header class="top"><h1 class="display sm">Estante</h1></header>
-    <nav class="segmented" style="--seg-count:3" aria-label="Listas">${tabs}</nav>
+    <nav class="segmented tabs-4" style="--seg-count:4" aria-label="Listas">${tabs}</nav>
     <div class="list">${body}</div>`;
 }

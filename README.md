@@ -14,11 +14,11 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 
 ## O que o app faz
 
-- **Início:** anel da meta anual, sequência de meses na meta, páginas, nota média, dias por livro, livros em leitura e capas do ano.
-- **Adicionar livro:** busca por título, autor ou ISBN (Google Books + Open Library) ou cadastro manual; status (Quero ler / Lendo / Lido), datas, formato (Físico / Kindle), gênero, nota, favorito do ano e anotações.
-- **Estante:** fila "Quero ler", leituras em andamento e lidos por ano.
+- **Início:** anel da meta anual, sequência de meses na meta, páginas, nota média, dias por livro, livros em leitura (com a página atual e o % lido) e capas do ano.
+- **Adicionar livro:** busca por título, autor ou ISBN (Google Books + Open Library) ou cadastro manual; capa pela foto (câmera ou galeria); status (Quero ler / Lendo / Lido / Abandonei, com o motivo), datas, página atual, formato (Físico / Kindle), gênero, nota, favorito do ano e anotações. Livros lidos podem ser lidos de novo (releitura).
+- **Estante:** fila "Quero ler", leituras em andamento, lidos por ano e abandonados.
 - **Buscar:** texto livre (título, autor, anotações) e filtros por status, ano, gênero, formato e nota.
-- **Resumo:** indicadores, favorito do ano, livros por mês com a meta, formatos, gêneros, autores e comparativo entre anos.
+- **Resumo:** indicadores, favorito do ano, livros por mês com a meta, formatos, gêneros, autores, abandonados e comparativo entre anos. Opção **Todos os anos** com os números da vida toda.
 - **Retrospectiva:** telas em sequência com os números do ano e imagem pronta para salvar ou compartilhar.
 - **Ajustes:** meta do ano e dos próximos anos, backup, instruções de instalação.
 

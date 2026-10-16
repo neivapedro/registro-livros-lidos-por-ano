@@ -88,7 +88,8 @@ await page.clock.setFixedTime(new Date('2026-10-16T12:00:00'));
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`); });
-page.on('dialog', (d) => d.accept());
+let promptAnswer = '';
+page.on('dialog', (d) => (d.type() === 'prompt' ? d.accept(promptAnswer) : d.accept()));
 await page.route('https://www.googleapis.com/**', (r) => r.fulfill({ json: googleFixture }));
 await page.route('https://openlibrary.org/**', (r) => r.fulfill({ json: olFixture }));
 await page.route('https://covers.openlibrary.org/**', (r) => r.abort());
@@ -243,12 +244,72 @@ try {
   await page.goto(`${BASE}#/inicio`);
   assert.match(await page.textContent('.ring-center'), /11\s*de 13/);
 
-  step('editar e excluir');
+  step('excluir e desfazer');
   await page.click('.grid-book >> nth=0');
   await onPage('livro');
   await page.click('[data-action="delete-book"]');
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /10\s*de 13/);
+  await page.click('.toast button:has-text("Desfazer")');
+  await page.waitForFunction(() => /11\s*de 13/.test(document.querySelector('.ring-center').textContent));
+
+  step('progresso da leitura');
+  promptAnswer = '120';
+  await page.click('[data-action="update-page"] >> nth=0');
+  await page.waitForSelector('.reading .progress');
+  assert.match(await page.textContent('.reading .progress'), /Na pág\. 120 · informe o total/);
+  await shot('11-inicio-progresso');
+
+  step('capa pela foto');
+  await page.click('.reading-link >> nth=0');
+  await onPage('livro');
+  await page.fill('#f-pages', '336');
+  await page.setInputFiles('[data-cover-photo]', new URL('../../app/icons/icon-512.png', import.meta.url).pathname);
+  await page.waitForFunction(() => document.querySelector('.cover-edit .cover-img')?.src.startsWith('data:image/jpeg'));
+  assert.equal(await page.inputValue('#f-current'), '120');
+  await shot('12-formulario-lendo');
+  await page.click('.btn-primary');
+  await onPage('inicio');
+  assert.match(await page.getAttribute('.reading .cover-img', 'src'), /^data:image\/jpeg/);
+  assert.match(await page.textContent('.reading .progress'), /36% · pág\. 120 de 336/);
+
+  step('abandonei');
+  await page.click('.nav-add');
+  await onPage('novo');
+  await page.fill('#f-title', 'Livro Chato');
+  await page.click('[data-action="set-status"][data-value="abandonado"]');
+  await page.fill('#f-current', '80');
+  await page.fill('#f-drop', 'Não prendeu a atenção.');
+  await shot('13-formulario-abandonei');
+  await page.click('.btn-primary');
+  await onPage('inicio');
+  assert.match(await page.textContent('.ring-center'), /11\s*de 13/, 'abandonado não conta na meta');
+  await page.click('[data-nav="estante"]');
+  await onPage('estante');
+  await page.click('a.seg-btn:has-text("Abandonei")');
+  await page.waitForSelector('.drop-reason');
+  assert.match(await page.textContent('.drop-reason'), /Não prendeu/);
+  await shot('14-estante-abandonei');
+  await page.click('[data-nav="resumo"]');
+  await onPage('resumo');
+  assert.match(await page.textContent('body'), /Abandonados/);
+
+  step('todos os anos');
+  await page.selectOption('[data-change="summary-year"]', 'todos');
+  await page.waitForURL(/resumo\/todos/);
+  await page.waitForSelector('.best-year');
+  assert.match(await page.textContent('.tiles'), /12\s*livros lidos/);
+  assert.match(await page.textContent('.best-year'), /2026/);
+  await shot('15-todos-os-anos');
+
+  step('ler de novo');
+  await page.goto(`${BASE}#/estante?aba=lido`);
+  await page.waitForSelector('.book-row');
+  await page.click('.book-row-link:has-text("Sapiens")');
+  await onPage('livro');
+  await page.click('[data-action="reread"]');
+  await onPage('inicio');
+  assert.equal(await page.locator('.reading:has-text("Sapiens")').count(), 1);
 
   step('funciona offline depois da primeira visita');
   await page.evaluate(() => navigator.serviceWorker.ready);

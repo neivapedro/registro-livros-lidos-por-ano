@@ -14,9 +14,9 @@ export function booksReadInYear(books, year) {
     .sort((a, b) => (b.endDate.localeCompare(a.endDate)) || b.updatedAt.localeCompare(a.updatedAt));
 }
 
-/** Livros por mês exigidos pela meta anual (12/ano = 1/mês; 18/ano = 2/mês). */
+/** Livros por mês para manter a sequência: a meta anual ÷ 12, arredondada (12 a 17/ano = 1/mês; 18 a 29 = 2/mês). */
 export function monthlyTarget(goal) {
-  return Math.max(1, Math.ceil(goal / 12));
+  return Math.max(1, Math.round(goal / 12));
 }
 
 /** Autores separados: "Womack, Jones" conta para os dois. */
@@ -130,7 +130,7 @@ export function yearsWithData(books, currentYear) {
 }
 
 export function countByStatus(books) {
-  const out = { [STATUS.WANT]: 0, [STATUS.READING]: 0, [STATUS.READ]: 0 };
+  const out = { [STATUS.WANT]: 0, [STATUS.READING]: 0, [STATUS.READ]: 0, [STATUS.DROPPED]: 0 };
   for (const b of books) out[b.status] += 1;
   return out;
 }
@@ -155,4 +155,48 @@ export function filterBooks(books, filters) {
     .filter((b) => !filters.format || b.format === filters.format)
     .filter((b) => !minRating || (b.rating || 0) >= minRating)
     .sort((a, b) => (b.endDate || b.startDate || b.createdAt).localeCompare(a.endDate || a.startDate || a.createdAt));
+}
+
+/** Livros abandonados no ano (pela data em que parou), do mais recente ao mais antigo. */
+export function droppedInYear(books, year) {
+  return books
+    .filter((b) => b.status === STATUS.DROPPED && b.endDate && yearOf(b.endDate) === year)
+    .sort((a, b) => b.endDate.localeCompare(a.endDate));
+}
+
+/** Indicadores de todos os anos somados. */
+export function allTimeStats(books, today) {
+  const read = readBooks(books);
+  const currentYear = yearOf(today);
+  const perYear = new Map();
+  const genres = new Map();
+  const authors = new Map();
+  const formats = { [FORMATS.PHYSICAL]: 0, [FORMATS.KINDLE]: 0 };
+  for (const b of read) {
+    const y = yearOf(b.endDate);
+    perYear.set(y, (perYear.get(y) || 0) + 1);
+    formats[b.format] += 1;
+    if (b.genre) genres.set(b.genre, (genres.get(b.genre) || 0) + 1);
+    for (const a of splitAuthors(b.authors)) authors.set(a, (authors.get(a) || 0) + 1);
+  }
+  const firstYear = perYear.size ? Math.min(...perYear.keys(), currentYear) : currentYear;
+  const years = [];
+  for (let y = currentYear; y >= firstYear; y -= 1) years.push({ year: y, count: perYear.get(y) || 0 });
+  const best = years.reduce((top, y) => (y.count > (top?.count || 0) ? y : top), null);
+  return {
+    count: read.length,
+    pages: read.reduce((s, b) => s + (b.pages || 0), 0),
+    avgRating: average(read.map((b) => b.rating).filter((r) => r)),
+    // Média dos anos já encerrados; no primeiro ano, o próprio ano em andamento.
+    avgPerYear: years.length > 1
+      ? years.slice(1).reduce((sum, y) => sum + y.count, 0) / (years.length - 1)
+      : read.length,
+    years,
+    bestYear: best,
+    formats,
+    genres: ranking(genres),
+    authors: ranking(authors),
+    rereads: read.filter((b) => b.reread).length,
+    dropped: books.filter((b) => b.status === STATUS.DROPPED).length,
+  };
 }

@@ -1,12 +1,14 @@
 import { searchBooks } from './books-api.js';
 import { todayIso, yearOf } from './dates.js';
+import { photoToCover } from './cover-photo.js';
 import { renderRetroImage } from './share-image.js';
 import {
   STATUS, FORMATS, STORAGE_KEY, createEmptyState, getGoal, loadState, newId, parseBackup,
-  removeBook, saveState, serializeBackup, setGoal, upsertBook, validateBook,
+  removeBook, restoreBook, saveState, serializeBackup, setGoal, startReread, upsertBook, validateBook,
 } from './store.js';
 import { esc } from './ui.js';
-import { formView, lookupResults } from './views/form.js';
+import { allTimeView } from './views/alltime.js';
+import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
@@ -32,7 +34,10 @@ const ui = {
   filters: { q: '', status: '', year: '', genre: '', format: '', minRating: '' },
   retroSlide: 0,
   finishing: false,
+  original: null,
 };
+
+let lastDeleted = null;
 
 let currentKey = null;
 let previousKey = null;
@@ -66,6 +71,7 @@ function blankDraft(status) {
     startDate: status === STATUS.READING ? today : null,
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
+    currentPage: null, dropReason: '', reread: false,
   };
 }
 
@@ -79,6 +85,7 @@ function enterRoute(route) {
     if (route.name === 'novo') {
       const status = Object.values(STATUS).includes(route.query.get('status')) ? route.query.get('status') : STATUS.READ;
       ui.draft = blankDraft(status);
+      ui.original = null;
       ui.picked = false;
       ui.lookup = emptyLookup();
     } else {
@@ -88,6 +95,7 @@ function enterRoute(route) {
         return;
       }
       ui.draft = { ...book };
+      ui.original = book;
       ui.finishing = Boolean(route.query.get('concluir')) && book.status !== STATUS.READ;
       if (route.query.get('concluir')) {
         ui.draft.status = STATUS.READ;
@@ -132,6 +140,10 @@ function render() {
       html = searchView(ctx);
       break;
     case 'resumo': {
+      if (route.params[0] === 'todos') {
+        html = allTimeView(ctx);
+        break;
+      }
       const year = Number(route.params[0]) || ui.year;
       html = summaryView({ ...ctx, year });
       break;
@@ -187,11 +199,16 @@ window.addEventListener('storage', (e) => {
 
 // ---------- Avisos ----------
 
-function toast(message, { actionLabel, action, sticky = false } = {}) {
+function toast(message, { actionLabel, action, sticky = false, duration = 3200 } = {}) {
   clearTimeout(toastTimer);
   toastEl.innerHTML = `<span>${esc(message)}</span>${actionLabel ? `<button type="button" data-action="${action}">${esc(actionLabel)}</button>` : ''}`;
   toastEl.classList.add('show');
-  if (!sticky) toastTimer = setTimeout(() => toastEl.classList.remove('show'), 3200);
+  if (!sticky) toastTimer = setTimeout(() => toastEl.classList.remove('show'), duration);
+}
+
+function hideToast() {
+  clearTimeout(toastTimer);
+  toastEl.classList.remove('show');
 }
 
 // ---------- Arquivos ----------
@@ -256,12 +273,24 @@ async function retroImage(share) {
     const blob = await renderRetroImage(data, year);
     const name = `leituras-${year}.png`;
     const file = new File([blob], name, { type: 'image/png' });
-    toastEl.classList.remove('show');
+    hideToast();
     if ((share || isIOS()) && await shareFile(file, `Minhas leituras de ${year}`)) return;
     downloadBlob(file, name);
     toast(share ? 'Imagem salva. Compartilhe a partir da galeria.' : 'Imagem salva.');
   } catch {
     toast('Não foi possível gerar a imagem.');
+  }
+}
+
+async function setCoverFromPhoto(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !ui.draft) return;
+  try {
+    ui.draft.cover = await photoToCover(file);
+    render();
+  } catch (err) {
+    toast(err.message || 'Não foi possível usar essa imagem.');
   }
 }
 
@@ -346,7 +375,42 @@ const actions = {
     const d = ui.draft;
     d.status = el.dataset.value;
     if (d.status === STATUS.READING && !d.startDate) d.startDate = todayIso();
-    if (d.status === STATUS.READ && !d.endDate) d.endDate = todayIso();
+    if ((d.status === STATUS.READ || d.status === STATUS.DROPPED) && !d.endDate) d.endDate = todayIso();
+    render();
+  },
+  'remove-cover'() {
+    ui.draft.cover = null;
+    render();
+  },
+  reread() {
+    if (!ui.original) return;
+    const { state: next } = startReread(state, ui.original.id, todayIso());
+    persist(next, 'Releitura iniciada. Boa leitura!');
+    ui.year = yearOf(todayIso());
+    go('#/inicio');
+  },
+  'update-page'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (!book) return;
+    const total = book.pages ? ` de ${book.pages}` : '';
+    const answer = window.prompt(`Em que página você está${total}?`, book.currentPage ?? '');
+    if (answer === null || answer.trim() === '') return;
+    const page = Number(answer.trim());
+    if (!Number.isInteger(page) || page < 0 || (book.pages && page > book.pages)) {
+      toast(book.pages ? `Informe uma página entre 0 e ${book.pages}.` : 'Informe um número de página válido.');
+      return;
+    }
+    if (book.pages && page === book.pages) {
+      go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+      return;
+    }
+    persist(upsertBook(state, { ...book, currentPage: page }).state, 'Página atualizada.');
+    render();
+  },
+  'undo-delete'() {
+    if (!lastDeleted) return;
+    persist(restoreBook(state, lastDeleted.book, lastDeleted.index), 'Livro restaurado.');
+    lastDeleted = null;
     render();
   },
   'set-format'(el) {
@@ -379,9 +443,12 @@ const actions = {
   },
   'delete-book'() {
     if (!ui.draft?.id) return;
-    if (!window.confirm(`Excluir "${ui.draft.title}"? Esta ação não pode ser desfeita.`)) return;
-    persist(removeBook(state, ui.draft.id), 'Livro excluído.');
+    const index = state.books.findIndex((b) => b.id === ui.draft.id);
+    if (index < 0) return;
+    lastDeleted = { book: state.books[index], index };
+    persist(removeBook(state, ui.draft.id));
     go(ui.backHref);
+    toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
   },
   'start-reading'(el) {
     const book = state.books.find((b) => b.id === el.dataset.id);
@@ -426,6 +493,11 @@ document.addEventListener('input', (e) => {
   const t = e.target;
   if (t.dataset.field && ui.draft) {
     ui.draft[t.dataset.field] = t.type === 'number' ? (t.value === '' ? null : Number(t.value)) : t.value;
+    // Atualiza só o resumo (dias, %): redesenhar o formulário tiraria o foco do campo.
+    const summary = document.getElementById('reading-summary');
+    if (summary && ['startDate', 'endDate', 'currentPage', 'pages'].includes(t.dataset.field)) {
+      summary.innerHTML = readingSummary(ui.draft);
+    }
   }
   if ('lookup' in t.dataset) onLookupInput(t.value);
   if (t.dataset.filter === 'q') {
@@ -441,15 +513,15 @@ document.addEventListener('change', (e) => {
     ui.year = Number(t.value);
     render();
   } else if (t.dataset.change === 'summary-year') {
-    ui.year = Number(t.value);
+    if (t.value !== 'todos') ui.year = Number(t.value);
     go(`#/resumo/${t.value}`);
   } else if (t.dataset.filter && t.dataset.filter !== 'q') {
     ui.filters[t.dataset.filter] = t.value;
     render();
-  } else if ('rerender' in t.dataset) {
-    render();
   } else if ('import' in t.dataset) {
     importBackup(t);
+  } else if ('coverPhoto' in t.dataset) {
+    setCoverFromPhoto(t);
   }
 });
 

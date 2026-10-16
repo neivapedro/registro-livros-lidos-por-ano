@@ -1,12 +1,13 @@
 import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
-import { cover, decimal, esc, icon, num, plural, emptyState } from '../ui.js';
+import { cover, decimal, esc, icon, num, plural, emptyState, progressBar } from '../ui.js';
 
 const RING_C = 2 * Math.PI * 56;
 
-export function yearSelect(years, selected, action) {
-  const options = years.map((y) => `<option value="${y}"${y === selected ? ' selected' : ''}>${y}</option>`).join('');
+export function yearSelect(years, selected, action, { withAll = false } = {}) {
+  let options = years.map((y) => `<option value="${y}"${y === selected ? ' selected' : ''}>${y}</option>`).join('');
+  if (withAll) options += `<option value="todos"${selected === 'todos' ? ' selected' : ''}>Todos os anos</option>`;
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
 }
 
@@ -53,6 +54,7 @@ function readingNow(books) {
   if (!books.length) return '';
   const cards = books.map((b) => `
     <div class="card reading">
+      <div class="reading-main">
       <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}">
         ${cover(b, { size: 'md' })}
         <span class="reading-text">
@@ -62,6 +64,11 @@ function readingNow(books) {
         </span>
       </a>
       <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
+      </div>
+      <div class="reading-progress">
+        ${progressBar(b) || '<span class="muted small">Registre a página em que você está</span>'}
+        <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${b.currentPage != null ? 'Atualizar página' : 'Informar página'}</button>
+      </div>
     </div>`).join('');
   return `
     <section class="section">

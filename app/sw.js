@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.1.1';
+const VERSION = 'v1.2.0';
 const CACHE = `leituras-${VERSION}`;
 
 const SHELL = [
@@ -11,11 +11,13 @@ const SHELL = [
   './css/app.css',
   './js/main.js',
   './js/books-api.js',
+  './js/cover-photo.js',
   './js/dates.js',
   './js/share-image.js',
   './js/stats.js',
   './js/store.js',
   './js/ui.js',
+  './js/views/alltime.js',
   './js/views/form.js',
   './js/views/home.js',
   './js/views/retro.js',
