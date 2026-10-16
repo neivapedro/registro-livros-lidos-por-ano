@@ -8,8 +8,8 @@ export const BACKUP_APP_ID = 'leituras';
 export const SCHEMA_VERSION = 1;
 export const DEFAULT_GOAL = 12;
 
-export const STATUS = { WANT: 'quero', READING: 'lendo', READ: 'lido' };
-export const STATUS_LABELS = { quero: 'Quero ler', lendo: 'Lendo', lido: 'Lido' };
+export const STATUS = { WANT: 'quero', READING: 'lendo', READ: 'lido', DROPPED: 'abandonado' };
+export const STATUS_LABELS = { quero: 'Quero ler', lendo: 'Lendo', lido: 'Lido', abandonado: 'Abandonei' };
 export const FORMATS = { PHYSICAL: 'fisico', KINDLE: 'kindle' };
 export const FORMAT_LABELS = { fisico: 'Físico', kindle: 'Kindle' };
 
@@ -20,6 +20,9 @@ export const DEFAULT_GENRES = [
 
 const MAX_TEXT = 300;
 const MAX_NOTES = 10000;
+// Capa tirada pelo celular: imagem já reduzida pelo app (cerca de 30 KB).
+const MAX_COVER_DATA = 400000;
+const COVER_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 export function createEmptyState() {
   return {
@@ -48,6 +51,13 @@ function intIn(value, min, max) {
   return r >= min && r <= max ? r : null;
 }
 
+function coverSource(value) {
+  if (typeof value === 'string' && value.startsWith('data:')) {
+    return value.length <= MAX_COVER_DATA && COVER_DATA_RE.test(value) ? value : null;
+  }
+  return httpsUrl(value);
+}
+
 function httpsUrl(value) {
   if (typeof value !== 'string') return null;
   try {
@@ -67,21 +77,27 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
   const status = Object.values(STATUS).includes(raw.status) ? raw.status : STATUS.WANT;
   const startDate = isIsoDate(raw.startDate) ? raw.startDate : null;
   const endDate = isIsoDate(raw.endDate) ? raw.endDate : null;
+  const pages = intIn(raw.pages, 1, 20000);
+  const tracksPage = status === STATUS.READING || status === STATUS.DROPPED;
+  const finished = status === STATUS.READ || status === STATUS.DROPPED;
   return {
     id: text(raw.id, 100) || newId(),
     title,
     authors: text(raw.authors),
-    pages: intIn(raw.pages, 1, 20000),
-    cover: httpsUrl(raw.cover),
+    pages,
+    cover: coverSource(raw.cover),
     isbn: text(raw.isbn, 20),
     status,
     startDate: status === STATUS.WANT ? null : startDate,
-    endDate: status === STATUS.READ ? endDate : null,
+    endDate: finished ? endDate : null,
+    currentPage: tracksPage ? intIn(raw.currentPage, 0, pages || 20000) : null,
     format: raw.format === FORMATS.KINDLE ? FORMATS.KINDLE : FORMATS.PHYSICAL,
     genre: text(raw.genre, 60) || null,
     rating: status === STATUS.READ ? intIn(raw.rating, 1, 5) : null,
     favorite: status === STATUS.READ && raw.favorite === true,
     notes: text(raw.notes, MAX_NOTES),
+    dropReason: status === STATUS.DROPPED ? text(raw.dropReason, MAX_NOTES) : '',
+    reread: raw.reread === true,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : nowTs,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowTs,
   };
@@ -97,9 +113,13 @@ export function validateBook(book) {
   if (book.status !== STATUS.WANT && book.startDate && !isIsoDate(book.startDate)) {
     errors.push('Data de início inválida.');
   }
-  if (book.status === STATUS.READ && isIsoDate(book.startDate) && isIsoDate(book.endDate)
-      && book.endDate < book.startDate) {
-    errors.push('A data de término é anterior à de início.');
+  const finished = book.status === STATUS.READ || book.status === STATUS.DROPPED;
+  if (finished && isIsoDate(book.startDate) && isIsoDate(book.endDate) && book.endDate < book.startDate) {
+    errors.push(`A data ${book.status === STATUS.READ ? 'de término' : 'em que parou'} é anterior à de início.`);
+  }
+  const pages = Number(book.pages) || 0;
+  if (book.status === STATUS.READING && pages && Number(book.currentPage) > pages) {
+    errors.push(`A página atual passa do total de ${pages} páginas.`);
   }
   return errors;
 }
@@ -151,6 +171,33 @@ export function upsertBook(state, input, nowTs = new Date().toISOString()) {
 
 export function removeBook(state, id) {
   return { ...state, books: state.books.filter((b) => b.id !== id) };
+}
+
+/** Recoloca um livro excluído (botão Desfazer), na mesma posição de antes. */
+export function restoreBook(state, book, index) {
+  if (state.books.some((b) => b.id === book.id)) return state;
+  const books = [...state.books];
+  books.splice(Math.min(Math.max(index, 0), books.length), 0, book);
+  return { ...state, books };
+}
+
+/** Nova leitura de um livro já lido: um novo registro, começando hoje. */
+export function startReread(state, id, today, nowTs = new Date().toISOString()) {
+  const original = state.books.find((b) => b.id === id);
+  if (!original) throw new Error('Livro não encontrado.');
+  return upsertBook(state, {
+    id: newId(),
+    title: original.title,
+    authors: original.authors,
+    pages: original.pages,
+    cover: original.cover,
+    isbn: original.isbn,
+    format: original.format,
+    genre: original.genre,
+    status: STATUS.READING,
+    startDate: today,
+    reread: true,
+  }, nowTs);
 }
 
 export function getGoal(state, year) {

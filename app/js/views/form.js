@@ -1,6 +1,6 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
-import { cover, esc, icon, plural } from '../ui.js';
+import { cover, esc, icon, plural, progressOf } from '../ui.js';
 
 function segmented(options, current, action, label) {
   const buttons = options.map(([value, text]) => `
@@ -39,7 +39,14 @@ function lookupBlock(ui) {
     </section>`;
 }
 
-function readingSummary(d) {
+export function readingSummary(d) {
+  if (d.status === STATUS.READING) {
+    const p = progressOf(d);
+    return p?.pct !== null && p ? `<p class="muted small">Você está em <strong class="accent">${p.pct}%</strong> do livro</p>` : '';
+  }
+  if (d.status === STATUS.DROPPED) {
+    return isIsoDate(d.endDate) ? `<p class="muted small">Fica registrado em ${yearOf(d.endDate)}, sem contar para a meta</p>` : '';
+  }
   if (d.status !== STATUS.READ || !isIsoDate(d.endDate)) return '';
   const year = yearOf(d.endDate);
   if (isIsoDate(d.startDate) && d.startDate <= d.endDate) {
@@ -87,6 +94,13 @@ export function formView({ state, ui, isEdit }) {
         <div class="field"><label for="f-title">Título</label><input id="f-title" type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
         <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
         <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+        <div class="cover-edit">
+          ${cover(d, { size: 'sm' })}
+          <span class="cover-edit-actions">
+            <label class="btn-outline sm file-btn">${d.cover ? 'Trocar capa' : 'Adicionar foto da capa'}<input type="file" accept="image/*" class="sr-only" data-cover-photo></label>
+            ${d.cover ? '<button type="button" class="btn-text small" data-action="remove-cover">Remover capa</button>' : '<span class="muted small">Tire uma foto ou escolha da galeria</span>'}
+          </span>
+        </div>
       </section>
 
       <section class="field-group">
@@ -98,10 +112,12 @@ export function formView({ state, ui, isEdit }) {
       <section class="field-group">
         <span class="label">Período de leitura</span>
         <div class="two-cols">
-          <div class="field"><label for="f-start">Início</label><input id="f-start" type="date" value="${esc(d.startDate || '')}" data-field="startDate" data-rerender></div>
-          ${d.status === STATUS.READ ? `<div class="field"><label for="f-end">Término</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate" data-rerender></div>` : ''}
+          <div class="field"><label for="f-start">Início</label><input id="f-start" type="date" value="${esc(d.startDate || '')}" data-field="startDate"></div>
+          ${d.status === STATUS.READ || d.status === STATUS.DROPPED ? `<div class="field"><label for="f-end">${d.status === STATUS.READ ? 'Término' : 'Parei em'}</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate"></div>` : ''}
         </div>
-        ${readingSummary(d)}
+        ${d.status === STATUS.READING || d.status === STATUS.DROPPED ? `
+        <div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>` : ''}
+        <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
       </section>` : ''}
 
       <section class="field-group">
@@ -126,13 +142,20 @@ export function formView({ state, ui, isEdit }) {
         <span class="switch${d.favorite ? ' is-on' : ''}"><span class="switch-knob"></span></span>
       </button>` : ''}
 
+      ${d.status === STATUS.DROPPED ? `
       <section class="field-group">
-        <label class="label" for="f-notes">Anotações</label>
+        <label class="label" for="f-drop">Por que abandonei</label>
+        <textarea id="f-drop" rows="3" maxlength="10000" placeholder="Não prendeu, não era o momento, conteúdo fraco…" data-field="dropReason">${esc(d.dropReason || '')}</textarea>
+      </section>` : ''}
+
+      <section class="field-group">
+        <label class="label" for="f-notes">${d.status === STATUS.DROPPED ? 'Observações' : 'Anotações'}</label>
         <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
       </section>
 
       ${errors}
       <button type="submit" class="btn-primary">Salvar livro</button>
+      ${isEdit && ui.original?.status === STATUS.READ ? `<button type="button" class="btn-ghost" data-action="reread">Ler de novo</button>` : ''}
       ${isEdit ? `<button type="button" class="btn-danger" data-action="delete-book">${icon('trash', { size: 18 })}Excluir livro</button>` : ''}
     </form>`;
 }

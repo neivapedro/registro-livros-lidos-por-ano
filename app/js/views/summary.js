@@ -1,6 +1,6 @@
 import { daysInclusive, monthInitial, monthName, monthOf, yearOf } from '../dates.js';
 import { FORMATS, getGoal } from '../store.js';
-import { goalStreak, monthsMetInYear, yearStats, yearsWithData } from '../stats.js';
+import { droppedInYear, goalStreak, monthsMetInYear, yearStats, yearsWithData } from '../stats.js';
 import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
 import { yearSelect } from './home.js';
 
@@ -122,6 +122,17 @@ function yearCompare(state, today, selectedYear) {
   return `<section class="card"><div class="section-head"><h2>Comparativo entre anos</h2></div>${html}<p class="muted small">${note}</p></section>`;
 }
 
+function droppedCard(state, year) {
+  const list = droppedInYear(state.books, year);
+  if (!list.length) return '';
+  const rows = list.map((b) => `
+    <a class="dropped-row" href="#/livro/${encodeURIComponent(b.id)}">
+      <span class="strong-ish">${esc(b.title)}</span>
+      ${b.dropReason ? `<span class="muted small">${esc(b.dropReason)}</span>` : ''}
+    </a>`).join('');
+  return `<section class="card"><div class="section-head"><h2>Abandonados</h2><span class="muted small">${plural(list.length, 'livro', 'livros')} · não contam na meta</span></div>${rows}</section>`;
+}
+
 export function summaryView({ state, year, today }) {
   const currentYear = yearOf(today);
   const s = yearStats(state.books, year, getGoal(state, year), today);
@@ -129,7 +140,7 @@ export function summaryView({ state, year, today }) {
   return `
     <header class="top">
       <a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>
-      ${yearSelect(yearsWithData(state.books, currentYear), year, 'summary-year')}
+      ${yearSelect(yearsWithData(state.books, currentYear), year, 'summary-year', { withAll: true })}
     </header>
     <div class="page-title">
       <span class="eyebrow">Resumo do ano</span>
@@ -145,6 +156,7 @@ export function summaryView({ state, year, today }) {
     ${formatSplit(s)}
     ${genreBars(s)}
     ${authorRank(s)}
+    ${droppedCard(state, year)}
     ${yearCompare(state, today, year)}
     ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
 }

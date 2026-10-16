@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createEmptyState, upsertBook } from '../app/js/store.js';
 import {
-  booksReadInYear, countByStatus, filterBooks, goalStreak, monthlyTarget, monthsMetInYear, splitAuthors, yearStats, yearsWithData,
+  allTimeStats, booksReadInYear, countByStatus, droppedInYear, filterBooks, goalStreak, monthlyTarget, monthsMetInYear, splitAuthors, yearStats, yearsWithData,
 } from '../app/js/stats.js';
 
 const TODAY = '2026-10-16';
@@ -19,6 +19,8 @@ const read = (title, endDate, extra = {}) => ({ title, status: 'lido', endDate, 
 
 test('monthlyTarget', () => {
   assert.equal(monthlyTarget(12), 1);
+  assert.equal(monthlyTarget(13), 1);
+  assert.equal(monthlyTarget(17), 1);
   assert.equal(monthlyTarget(6), 1);
   assert.equal(monthlyTarget(18), 2);
   assert.equal(monthlyTarget(24), 2);
@@ -110,7 +112,7 @@ test('yearsWithData inclui o ano atual e ordena do mais recente', () => {
 test('booksReadInYear e countByStatus', () => {
   const books = build([read('a', '2026-01-01'), read('b', '2026-03-01'), { title: 'c', status: 'quero' }]);
   assert.deepEqual(booksReadInYear(books, 2026).map((b) => b.title), ['b', 'a']);
-  assert.deepEqual(countByStatus(books), { quero: 1, lendo: 0, lido: 2 });
+  assert.deepEqual(countByStatus(books), { quero: 1, lendo: 0, lido: 2, abandonado: 0 });
 });
 
 test('filterBooks combina texto (sem acento) e filtros', () => {
@@ -126,4 +128,47 @@ test('filterBooks combina texto (sem acento) e filtros', () => {
   assert.deepEqual(filterBooks(books, { minRating: '5' }).map((b) => b.title), ['Sapiens']);
   assert.deepEqual(filterBooks(books, { status: 'quero' }).map((b) => b.title), ['O Modelo Toyota']);
   assert.equal(filterBooks(books, {}).length, 3);
+});
+
+test('livros abandonados não contam para meta, nota nem sequência', () => {
+  const books = build([
+    read('Lido', '2026-03-10', { rating: 4 }),
+    { title: 'Larguei', status: 'abandonado', startDate: '2026-04-01', endDate: '2026-04-20', dropReason: 'Não prendeu' },
+  ]);
+  const s = yearStats(books, 2026, 12, TODAY);
+  assert.equal(s.count, 1);
+  assert.equal(s.avgRating, 4);
+  assert.deepEqual(droppedInYear(books, 2026).map((b) => b.title), ['Larguei']);
+  assert.deepEqual(droppedInYear(books, 2025), []);
+});
+
+test('allTimeStats soma todos os anos', () => {
+  const books = build([
+    read('a', '2024-02-01', { pages: 100, rating: 5, authors: 'X', genre: 'Gestão' }),
+    read('b', '2024-05-01', { pages: 200, rating: 3, authors: 'X', genre: 'Gestão', format: 'kindle' }),
+    read('c', '2025-07-01', { pages: 300, rating: 4, authors: 'Y', genre: 'Ficção', reread: true }),
+    read('d', '2026-01-01', { authors: 'Z' }),
+    { title: 'e', status: 'abandonado', endDate: '2026-02-01' },
+  ]);
+  const s = allTimeStats(books, TODAY);
+  assert.equal(s.count, 4);
+  assert.equal(s.pages, 600);
+  assert.equal(s.avgRating, 4);
+  assert.deepEqual(s.years, [{ year: 2026, count: 1 }, { year: 2025, count: 1 }, { year: 2024, count: 2 }]);
+  assert.equal(s.avgPerYear, 1.5);
+  assert.deepEqual(s.bestYear, { year: 2024, count: 2 });
+  assert.deepEqual(s.authors[0], { label: 'X', count: 2 });
+  assert.deepEqual(s.genres[0], { label: 'Gestão', count: 2 });
+  assert.deepEqual(s.formats, { fisico: 3, kindle: 1 });
+  assert.equal(s.rereads, 1);
+  assert.equal(s.dropped, 1);
+});
+
+test('allTimeStats no primeiro ano e sem livros', () => {
+  const first = allTimeStats(build([read('a', '2026-01-01'), read('b', '2026-02-01')]), TODAY);
+  assert.equal(first.avgPerYear, 2);
+  assert.deepEqual(first.years, [{ year: 2026, count: 2 }]);
+  const empty = allTimeStats([], TODAY);
+  assert.equal(empty.count, 0);
+  assert.equal(empty.bestYear, null);
 });

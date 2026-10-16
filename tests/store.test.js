@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   STATUS, FORMATS, STORAGE_KEY, allGenres, createEmptyState, getGoal, loadState, normalizeBook, parseBackup,
-  removeBook, saveState, serializeBackup, setGoal, upsertBook, validateBook,
+  removeBook, restoreBook, saveState, serializeBackup, setGoal, startReread, upsertBook, validateBook,
 } from '../app/js/store.js';
 
 const NOW = '2026-10-16T12:00:00.000Z';
@@ -135,4 +135,62 @@ test('backup com livros repetidos ou inválidos é limpo', () => {
   assert.equal(state.books.length, 1);
   assert.deepEqual(state.goals, { 2026: 10 });
   assert.equal(state.books[0].status, STATUS.WANT);
+});
+
+test('status Abandonei guarda data em que parou, página e motivo', () => {
+  const b = normalizeBook({
+    title: 'X', status: 'abandonado', startDate: '2026-04-01', endDate: '2026-04-20',
+    pages: 300, currentPage: 90, dropReason: '  Não prendeu  ', rating: 3, favorite: true,
+  });
+  assert.equal(b.endDate, '2026-04-20');
+  assert.equal(b.currentPage, 90);
+  assert.equal(b.dropReason, 'Não prendeu');
+  assert.equal(b.rating, null);
+  assert.equal(b.favorite, false);
+  assert.equal(normalizeBook({ title: 'X', status: 'lido', dropReason: 'x' }).dropReason, '');
+  assert.match(validateBook({ title: 'X', status: 'abandonado', startDate: '2026-05-01', endDate: '2026-04-01' })[0], /em que parou/);
+});
+
+test('página atual só vale para Lendo/Abandonei e não passa do total', () => {
+  assert.equal(normalizeBook({ title: 'X', status: 'lendo', pages: 200, currentPage: '120' }).currentPage, 120);
+  assert.equal(normalizeBook({ title: 'X', status: 'lendo', pages: 200, currentPage: 250 }).currentPage, null);
+  assert.equal(normalizeBook({ title: 'X', status: 'lido', endDate: '2026-01-01', currentPage: 10 }).currentPage, null);
+  assert.match(validateBook({ title: 'X', status: 'lendo', pages: 200, currentPage: 250 })[0], /passa do total/);
+});
+
+test('capa por foto aceita só imagem em data URL dentro do limite', () => {
+  const jpg = 'data:image/jpeg;base64,/9j/4AAQSkZJRgABAQ==';
+  assert.equal(normalizeBook({ title: 'X', cover: jpg }).cover, jpg);
+  assert.equal(normalizeBook({ title: 'X', cover: 'data:text/html;base64,PHNjcmlwdD4=' }).cover, null);
+  assert.equal(normalizeBook({ title: 'X', cover: `data:image/jpeg;base64,${'A'.repeat(500000)}` }).cover, null);
+  assert.equal(normalizeBook({ title: 'X', cover: 'data:image/png;base64,abc"onerror=x' }).cover, null);
+});
+
+test('restoreBook desfaz a exclusão na mesma posição', () => {
+  let state = createEmptyState();
+  for (const id of ['a', 'b', 'c']) ({ state } = upsertBook(state, { id, title: id }));
+  const book = state.books[1];
+  const removed = removeBook(state, 'b');
+  const back = restoreBook(removed, book, 1);
+  assert.deepEqual(back.books.map((b) => b.id), ['a', 'b', 'c']);
+  assert.equal(restoreBook(back, book, 1), back);
+});
+
+test('startReread cria nova leitura do mesmo livro', () => {
+  let state = createEmptyState();
+  ({ state } = upsertBook(state, {
+    id: 'a', title: 'A Meta', authors: 'Goldratt', pages: 384, cover: 'https://x/c.jpg', status: 'lido',
+    endDate: '2025-05-01', rating: 5, favorite: true, notes: 'anotação', genre: 'Gestão',
+  }));
+  const { state: next, book } = startReread(state, 'a', '2026-10-16');
+  assert.equal(next.books.length, 2);
+  assert.notEqual(book.id, 'a');
+  assert.equal(book.title, 'A Meta');
+  assert.equal(book.status, STATUS.READING);
+  assert.equal(book.startDate, '2026-10-16');
+  assert.equal(book.reread, true);
+  assert.equal(book.rating, null);
+  assert.equal(book.notes, '');
+  assert.equal(book.cover, 'https://x/c.jpg');
+  assert.equal(next.books.find((b) => b.id === 'a').favorite, true);
 });
