@@ -20,8 +20,8 @@ export const DEFAULT_GENRES = [
 
 const MAX_TEXT = 300;
 const MAX_NOTES = 10000;
-// Capa tirada pelo celular: imagem já reduzida pelo app (cerca de 30 KB).
-const MAX_COVER_DATA = 400000;
+// Capa tirada pelo celular: imagem já reduzida pelo app (cerca de 50 KB).
+const MAX_COVER_DATA = 600000;
 const COVER_DATA_RE = /^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/;
 
 export function createEmptyState() {

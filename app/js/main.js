@@ -6,7 +6,7 @@ import {
   STATUS, FORMATS, STORAGE_KEY, createEmptyState, getGoal, loadState, newId, parseBackup,
   removeBook, restoreBook, saveState, serializeBackup, setGoal, startReread, upsertBook, validateBook,
 } from './store.js';
-import { esc } from './ui.js';
+import { esc, icon, largeCoverUrl } from './ui.js';
 import { allTimeView } from './views/alltime.js';
 import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
@@ -113,6 +113,7 @@ function render() {
   const route = parseRoute();
   if (route.key !== currentKey) {
     ui.editingProgress = null;
+    closeCoverViewer();
     previousKey = currentKey;
     currentKey = route.key;
     enterRoute(route);
@@ -328,6 +329,41 @@ function onLookupInput(value) {
   lookupTimer = setTimeout(runLookup, 450);
 }
 
+// ---------- Capa ampliada ----------
+
+function closeCoverViewer() {
+  document.querySelector('.cover-viewer')?.remove();
+  document.body.classList.remove('viewer-open');
+}
+
+/** Mostra a capa em tela cheia; tenta a versão grande e, se falhar, usa a original. */
+function openCoverViewer(src, title) {
+  if (!src) return;
+  closeCoverViewer();
+  const viewer = document.createElement('div');
+  viewer.className = 'cover-viewer';
+  viewer.setAttribute('role', 'dialog');
+  viewer.setAttribute('aria-modal', 'true');
+  viewer.setAttribute('aria-label', `Capa de ${title}`);
+  viewer.innerHTML = `
+    <button type="button" class="cover-viewer-close" aria-label="Fechar">${icon('close', { size: 22, stroke: 2 })}</button>
+    <img class="cover-viewer-img" alt="Capa de ${esc(title)}">
+    <p class="cover-viewer-hint">Toque fora da capa para fechar · use dois dedos para aproximar</p>`;
+  const img = viewer.querySelector('img');
+  const large = largeCoverUrl(src);
+  img.addEventListener('error', () => {
+    if (img.src !== src) img.src = src;
+  });
+  img.src = large || src;
+  img.referrerPolicy = 'no-referrer';
+  viewer.addEventListener('click', (e) => {
+    if (e.target !== img) closeCoverViewer();
+  });
+  document.body.appendChild(viewer);
+  document.body.classList.add('viewer-open');
+  viewer.querySelector('.cover-viewer-close').focus();
+}
+
 // ---------- Progresso da leitura (cartão do Início) ----------
 
 /** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. */
@@ -419,6 +455,9 @@ const actions = {
     if (d.status === STATUS.READING && !d.startDate) d.startDate = todayIso();
     if ((d.status === STATUS.READ || d.status === STATUS.DROPPED) && !d.endDate) d.endDate = todayIso();
     render();
+  },
+  'zoom-cover'() {
+    if (ui.draft?.cover) openCoverViewer(ui.draft.cover, ui.draft.title || 'livro');
   },
   'remove-cover'() {
     ui.draft.cover = null;
@@ -561,6 +600,7 @@ document.addEventListener('change', (e) => {
 });
 
 document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeCoverViewer();
   if (e.key !== 'Enter') return;
   if ('lookup' in e.target.dataset) {
     e.preventDefault();

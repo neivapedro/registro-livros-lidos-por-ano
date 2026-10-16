@@ -95,7 +95,9 @@ export function formView({ state, ui, isEdit }) {
         <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
         <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
         <div class="cover-edit">
-          ${cover(d, { size: 'sm' })}
+          ${d.cover
+    ? `<button type="button" class="cover-zoom" data-action="zoom-cover" aria-label="Ver capa ampliada">${cover(d, { size: 'sm' })}<span class="cover-zoom-hint" aria-hidden="true">${icon('search', { size: 12, stroke: 2.4 })}</span></button>`
+    : cover(d, { size: 'sm' })}
           <span class="cover-edit-actions">
             <label class="btn-outline sm file-btn">${d.cover ? 'Trocar capa' : 'Adicionar foto da capa'}<input type="file" accept="image/*" class="sr-only" data-cover-photo></label>
             ${d.cover ? '<button type="button" class="btn-text small" data-action="remove-cover">Remover capa</button>' : '<span class="muted small">Tire uma foto ou escolha da galeria</span>'}

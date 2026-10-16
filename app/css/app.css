@@ -406,6 +406,32 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .cover-edit { display: flex; align-items: center; gap: 14px; }
 .cover-edit-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 .cover-edit .btn-text { padding: 0; min-height: 32px; }
+.cover-zoom { position: relative; border: 0; padding: 0; background: none; border-radius: 5px; flex-shrink: 0; }
+.cover-zoom-hint {
+  position: absolute; right: -6px; bottom: -6px; width: 24px; height: 24px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+body.viewer-open { overflow: hidden; }
+.cover-viewer {
+  position: fixed; inset: 0; z-index: 30;
+  background: rgba(8, 7, 6, 0.96);
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+  padding: calc(64px + var(--safe-t)) 20px calc(24px + var(--safe-b));
+  animation: fade .2s ease;
+}
+@keyframes fade { from { opacity: 0; } to { opacity: 1; } }
+.cover-viewer-img {
+  max-width: 100%; max-height: calc(100dvh - 160px - var(--safe-t) - var(--safe-b));
+  object-fit: contain; border-radius: 8px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  touch-action: pinch-zoom;
+}
+.cover-viewer-close {
+  position: absolute; top: calc(14px + var(--safe-t)); right: 16px;
+  width: 44px; height: 44px; border-radius: 999px; border: 0;
+  background: #241B16; color: var(--text); display: flex; align-items: center; justify-content: center;
+}
+.cover-viewer-hint { font-size: 12px; color: var(--muted); text-align: center; }
 
 .chips-wrap { display: flex; flex-wrap: wrap; gap: 8px; }
 .chip-btn {

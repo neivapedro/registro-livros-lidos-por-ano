@@ -17,3 +17,15 @@ test('progresso no Kindle vem da porcentagem', () => {
 test('esc protege texto vindo de dados', () => {
   assert.equal(esc('<b>"A" & \'B\'</b>'), '&lt;b&gt;&quot;A&quot; &amp; &#39;B&#39;&lt;/b&gt;');
 });
+
+test('largeCoverUrl pede a versão grande da capa', async () => {
+  const { largeCoverUrl } = await import('../app/js/ui.js');
+  assert.equal(largeCoverUrl('https://covers.openlibrary.org/b/id/123-M.jpg'), 'https://covers.openlibrary.org/b/id/123-L.jpg');
+  const g = new URL(largeCoverUrl('https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1&source=gbs_api'));
+  assert.equal(g.searchParams.get('fife'), 'w800');
+  assert.equal(g.searchParams.get('zoom'), null);
+  assert.equal(g.searchParams.get('id'), 'abc');
+  assert.equal(largeCoverUrl('data:image/jpeg;base64,AAAA'), 'data:image/jpeg;base64,AAAA');
+  assert.equal(largeCoverUrl('https://exemplo.com/capa.jpg'), 'https://exemplo.com/capa.jpg');
+  assert.equal(largeCoverUrl(null), null);
+});

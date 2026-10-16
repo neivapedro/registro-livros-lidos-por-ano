@@ -1,9 +1,9 @@
 // Capa pela foto: reduz a imagem escolhida (câmera ou galeria) para guardar no celular.
-// Uma capa fica com cerca de 20 KB, o bastante para a tela e leve para o armazenamento.
+// Uma capa fica com cerca de 50 KB: dá para ler o texto da capa ampliada e ainda é leve.
 
-const MAX_W = 270;
-const MAX_H = 405;
-const QUALITY = 0.72;
+const MAX_W = 480;
+const MAX_H = 720;
+const QUALITY = 0.75;
 
 async function loadImage(file) {
   if (typeof createImageBitmap === 'function') {
