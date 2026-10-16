@@ -6,6 +6,8 @@ import { cover, decimal, esc, icon, num, plural, emptyState, progressBar } from 
 const RING_C = 2 * Math.PI * 56;
 
 export function yearSelect(years, selected, action, { withAll = false } = {}) {
+  // O ano escolhido sempre aparece, mesmo que tenha ficado sem livros.
+  if (typeof selected === 'number' && !years.includes(selected)) years = [...years, selected].sort((a, b) => b - a);
   let options = years.map((y) => `<option value="${y}"${y === selected ? ' selected' : ''}>${y}</option>`).join('');
   if (withAll) options += `<option value="todos"${selected === 'todos' ? ' selected' : ''}>Todos os anos</option>`;
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
@@ -65,7 +67,7 @@ function progressEditor(b) {
       <label class="progress-edit-label" for="progress-input">${esc(label)}</label>
       <div class="progress-edit-row">
         <span class="progress-edit-field">
-          <input id="progress-input" type="number" inputmode="${kindle ? 'decimal' : 'numeric'}" min="0" max="${kindle ? 100 : b.pages || 20000}"
+          <input id="progress-input" type="number" inputmode="numeric" min="0" max="${kindle ? 100 : b.pages || 20000}"
             value="${esc(value ?? '')}" placeholder="${kindle ? '0 a 100' : 'Página'}" enterkeyhint="done">
           <span class="progress-edit-suffix">${kindle ? '%' : 'pág.'}</span>
         </span>

@@ -106,7 +106,7 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
 }
 
 /** Problemas que impedem salvar o livro, em texto para mostrar na tela. */
-export function validateBook(book) {
+export function validateBook(book, today = null) {
   const errors = [];
   if (!text(book.title)) errors.push('Informe o título do livro.');
   if (book.status === STATUS.READ && !isIsoDate(book.endDate)) {
@@ -116,6 +116,12 @@ export function validateBook(book) {
     errors.push('Data de início inválida.');
   }
   const finished = book.status === STATUS.READ || book.status === STATUS.DROPPED;
+  if (today && book.status !== STATUS.WANT && isIsoDate(book.startDate) && book.startDate > today) {
+    errors.push('A data de início não pode estar no futuro.');
+  }
+  if (today && finished && isIsoDate(book.endDate) && book.endDate > today) {
+    errors.push(`A data ${book.status === STATUS.READ ? 'de término' : 'em que parou'} não pode estar no futuro.`);
+  }
   if (finished && isIsoDate(book.startDate) && isIsoDate(book.endDate) && book.endDate < book.startDate) {
     errors.push(`A data ${book.status === STATUS.READ ? 'de término' : 'em que parou'} é anterior à de início.`);
   }
@@ -123,7 +129,8 @@ export function validateBook(book) {
   if (book.format === FORMATS.KINDLE && Number(book.currentPercent) > 100) {
     errors.push('A porcentagem vai de 0 a 100.');
   }
-  if (book.format !== FORMATS.KINDLE && book.status === STATUS.READING && pages && Number(book.currentPage) > pages) {
+  const tracksPage = book.status === STATUS.READING || book.status === STATUS.DROPPED;
+  if (book.format !== FORMATS.KINDLE && tracksPage && pages && Number(book.currentPage) > pages) {
     errors.push(`A página atual passa do total de ${pages} páginas.`);
   }
   return errors;
