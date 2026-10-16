@@ -1,0 +1,138 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  STATUS, FORMATS, STORAGE_KEY, allGenres, createEmptyState, getGoal, loadState, normalizeBook, parseBackup,
+  removeBook, saveState, serializeBackup, setGoal, upsertBook, validateBook,
+} from '../app/js/store.js';
+
+const NOW = '2026-10-16T12:00:00.000Z';
+
+function memoryStorage() {
+  const data = new Map();
+  return {
+    getItem: (k) => (data.has(k) ? data.get(k) : null),
+    setItem: (k, v) => data.set(k, String(v)),
+    removeItem: (k) => data.delete(k),
+    data,
+  };
+}
+
+test('normalizeBook limpa campos e aplica padrões', () => {
+  const b = normalizeBook({
+    title: '  A Meta  ', authors: 'Eliyahu M. Goldratt', pages: '384', status: 'lido',
+    startDate: '2026-09-03', endDate: '2026-09-21', rating: 5, favorite: true,
+    cover: 'http://books.google.com/x.jpg', format: 'qualquer',
+  }, NOW);
+  assert.equal(b.title, 'A Meta');
+  assert.equal(b.pages, 384);
+  assert.equal(b.cover, 'https://books.google.com/x.jpg');
+  assert.equal(b.format, FORMATS.PHYSICAL);
+  assert.equal(b.favorite, true);
+  assert.equal(b.createdAt, NOW);
+  assert.ok(b.id);
+});
+
+test('normalizeBook descarta dados que não combinam com o status', () => {
+  const want = normalizeBook({ title: 'X', status: 'quero', startDate: '2026-01-01', endDate: '2026-01-02', rating: 4, favorite: true });
+  assert.equal(want.startDate, null);
+  assert.equal(want.endDate, null);
+  assert.equal(want.rating, null);
+  assert.equal(want.favorite, false);
+  const reading = normalizeBook({ title: 'X', status: 'lendo', startDate: '2026-01-01', endDate: '2026-01-02' });
+  assert.equal(reading.startDate, '2026-01-01');
+  assert.equal(reading.endDate, null);
+});
+
+test('normalizeBook rejeita livro sem título e URLs inseguras', () => {
+  assert.equal(normalizeBook({ title: '   ' }), null);
+  assert.equal(normalizeBook(null), null);
+  assert.equal(normalizeBook({ title: 'X', cover: 'javascript:alert(1)' }).cover, null);
+  assert.equal(normalizeBook({ title: 'X', rating: 9, status: 'lido' }).rating, null);
+});
+
+test('validateBook', () => {
+  assert.deepEqual(validateBook({ title: 'X', status: 'quero' }), []);
+  assert.equal(validateBook({ title: '', status: 'quero' }).length, 1);
+  assert.match(validateBook({ title: 'X', status: 'lido', endDate: null })[0], /terminou/);
+  assert.match(validateBook({ title: 'X', status: 'lido', startDate: '2026-09-10', endDate: '2026-09-01' })[0], /anterior/);
+});
+
+test('upsertBook cria, atualiza e mantém um único favorito por ano', () => {
+  let state = createEmptyState();
+  ({ state } = upsertBook(state, { id: 'a', title: 'A', status: 'lido', endDate: '2026-03-01', favorite: true }, NOW));
+  ({ state } = upsertBook(state, { id: 'b', title: 'B', status: 'lido', endDate: '2025-03-01', favorite: true }, NOW));
+  ({ state } = upsertBook(state, { id: 'c', title: 'C', status: 'lido', endDate: '2026-05-01', favorite: true }, NOW));
+  const fav = Object.fromEntries(state.books.map((b) => [b.id, b.favorite]));
+  assert.deepEqual(fav, { a: false, b: true, c: true });
+
+  const created = state.books.find((b) => b.id === 'c').createdAt;
+  ({ state } = upsertBook(state, { id: 'c', title: 'C editado', status: 'lido', endDate: '2026-05-01' }, '2026-10-17T00:00:00.000Z'));
+  const c = state.books.find((b) => b.id === 'c');
+  assert.equal(c.title, 'C editado');
+  assert.equal(c.createdAt, created);
+  assert.equal(state.books.length, 3);
+});
+
+test('upsertBook guarda gêneros novos para reutilizar', () => {
+  const { state } = upsertBook(createEmptyState(), { title: 'X', genre: 'Engenharia' });
+  assert.deepEqual(state.customGenres, ['Engenharia']);
+  assert.ok(allGenres(state).includes('Engenharia'));
+  assert.ok(allGenres(state).includes('Gestão'));
+});
+
+test('removeBook', () => {
+  const { state } = upsertBook(createEmptyState(), { id: 'a', title: 'A' });
+  assert.equal(removeBook(state, 'a').books.length, 0);
+});
+
+test('metas por ano com padrão de 12', () => {
+  let state = createEmptyState();
+  assert.equal(getGoal(state, 2026), 12);
+  state = setGoal(state, 2026, 15);
+  assert.equal(getGoal(state, 2026), 15);
+  assert.equal(getGoal(state, 2027), 12);
+  assert.equal(setGoal(state, 2026, 0), state);
+});
+
+test('salvar e carregar do armazenamento', () => {
+  const storage = memoryStorage();
+  const { state } = upsertBook(createEmptyState(), { id: 'a', title: 'A', status: 'lido', endDate: '2026-01-10' });
+  assert.equal(saveState(storage, state), true);
+  assert.deepEqual(loadState(storage), state);
+});
+
+test('carregar dado corrompido não quebra o app', () => {
+  const storage = memoryStorage();
+  storage.setItem(STORAGE_KEY, '{quebrado');
+  assert.deepEqual(loadState(storage), createEmptyState());
+});
+
+test('saveState devolve false quando o navegador recusa', () => {
+  const storage = { setItem() { throw new Error('QuotaExceededError'); } };
+  assert.equal(saveState(storage, createEmptyState()), false);
+});
+
+test('backup: ida e volta preserva os dados', () => {
+  let state = createEmptyState();
+  ({ state } = upsertBook(state, { id: 'a', title: 'A Meta', status: 'lido', endDate: '2026-09-21', rating: 5 }, NOW));
+  state = setGoal(state, 2026, 12);
+  const text = serializeBackup(state, NOW);
+  assert.deepEqual(parseBackup(text), state);
+});
+
+test('backup inválido gera mensagem clara', () => {
+  assert.throws(() => parseBackup('não é json'), /backup válido/);
+  assert.throws(() => parseBackup(JSON.stringify({ app: 'outro', data: {} })), /backup válido/);
+  assert.throws(() => parseBackup(JSON.stringify({ app: 'leituras', schemaVersion: 99, data: {} })), /versão mais nova/);
+});
+
+test('backup com livros repetidos ou inválidos é limpo', () => {
+  const text = JSON.stringify({
+    app: 'leituras', schemaVersion: 1,
+    data: { books: [{ id: 'a', title: 'A' }, { id: 'a', title: 'A de novo' }, { title: '' }, 'lixo'], goals: { 2026: 10, abc: 5 } },
+  });
+  const state = parseBackup(text);
+  assert.equal(state.books.length, 1);
+  assert.deepEqual(state.goals, { 2026: 10 });
+  assert.equal(state.books[0].status, STATUS.WANT);
+});
