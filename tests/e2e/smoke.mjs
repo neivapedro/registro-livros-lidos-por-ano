@@ -273,6 +273,24 @@ try {
   assert.match(await page.getAttribute('.reading .cover-img', 'src'), /^data:image\/jpeg/);
   assert.match(await page.textContent('.reading .progress'), /36% · pág\. 120 de 336/);
 
+  step('progresso em % no Kindle');
+  await page.click('.nav-add');
+  await onPage('novo');
+  await page.fill('#f-title', 'Livro no Kindle');
+  await page.click('[data-action="set-status"][data-value="lendo"]');
+  await page.click('[data-action="set-format"][data-value="kindle"]');
+  assert.match(await page.textContent('label[for="f-current"]'), /Progresso no Kindle \(%\)/);
+  await page.fill('#f-current', '2');
+  assert.match(await page.textContent('#reading-summary'), /2%/);
+  await page.click('.btn-primary');
+  await onPage('inicio');
+  const kindleCard = page.locator('.reading:has-text("Livro no Kindle")');
+  assert.match(await kindleCard.locator('.progress').textContent(), /2% · no Kindle/);
+  promptAnswer = '45';
+  await kindleCard.locator('[data-action="update-page"]').click();
+  await page.waitForFunction(() => /45% · no Kindle/.test(document.body.textContent));
+  await shot('16-inicio-kindle');
+
   step('abandonei');
   await page.click('.nav-add');
   await onPage('novo');

@@ -90,7 +90,9 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
     status,
     startDate: status === STATUS.WANT ? null : startDate,
     endDate: finished ? endDate : null,
-    currentPage: tracksPage ? intIn(raw.currentPage, 0, pages || 20000) : null,
+    // Kindle mostra o avanço em %, livro físico em página.
+    currentPage: tracksPage && raw.format !== FORMATS.KINDLE ? intIn(raw.currentPage, 0, pages || 20000) : null,
+    currentPercent: tracksPage && raw.format === FORMATS.KINDLE ? intIn(raw.currentPercent, 0, 100) : null,
     format: raw.format === FORMATS.KINDLE ? FORMATS.KINDLE : FORMATS.PHYSICAL,
     genre: text(raw.genre, 60) || null,
     rating: status === STATUS.READ ? intIn(raw.rating, 1, 5) : null,
@@ -118,7 +120,10 @@ export function validateBook(book) {
     errors.push(`A data ${book.status === STATUS.READ ? 'de término' : 'em que parou'} é anterior à de início.`);
   }
   const pages = Number(book.pages) || 0;
-  if (book.status === STATUS.READING && pages && Number(book.currentPage) > pages) {
+  if (book.format === FORMATS.KINDLE && Number(book.currentPercent) > 100) {
+    errors.push('A porcentagem vai de 0 a 100.');
+  }
+  if (book.format !== FORMATS.KINDLE && book.status === STATUS.READING && pages && Number(book.currentPage) > pages) {
     errors.push(`A página atual passa do total de ${pages} páginas.`);
   }
   return errors;

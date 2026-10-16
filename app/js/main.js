@@ -71,7 +71,7 @@ function blankDraft(status) {
     startDate: status === STATUS.READING ? today : null,
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
-    currentPage: null, dropReason: '', reread: false,
+    currentPage: null, currentPercent: null, dropReason: '', reread: false,
   };
 }
 
@@ -392,6 +392,22 @@ const actions = {
   'update-page'(el) {
     const book = state.books.find((b) => b.id === el.dataset.id);
     if (!book) return;
+    if (book.format === FORMATS.KINDLE) {
+      const answer = window.prompt('Quantos % do livro o Kindle mostra? (0 a 100)', book.currentPercent ?? '');
+      if (answer === null || answer.trim() === '') return;
+      const pct = Number(answer.trim().replace('%', '').replace(',', '.'));
+      if (!Number.isFinite(pct) || pct < 0 || pct > 100) {
+        toast('Informe uma porcentagem entre 0 e 100.');
+        return;
+      }
+      if (Math.round(pct) === 100) {
+        go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+        return;
+      }
+      persist(upsertBook(state, { ...book, currentPercent: Math.round(pct) }).state, 'Progresso atualizado.');
+      render();
+      return;
+    }
     const total = book.pages ? ` de ${book.pages}` : '';
     const answer = window.prompt(`Em que página você está${total}?`, book.currentPage ?? '');
     if (answer === null || answer.trim() === '') return;
@@ -495,7 +511,7 @@ document.addEventListener('input', (e) => {
     ui.draft[t.dataset.field] = t.type === 'number' ? (t.value === '' ? null : Number(t.value)) : t.value;
     // Atualiza só o resumo (dias, %): redesenhar o formulário tiraria o foco do campo.
     const summary = document.getElementById('reading-summary');
-    if (summary && ['startDate', 'endDate', 'currentPage', 'pages'].includes(t.dataset.field)) {
+    if (summary && ['startDate', 'endDate', 'currentPage', 'currentPercent', 'pages'].includes(t.dataset.field)) {
       summary.innerHTML = readingSummary(ui.draft);
     }
   }

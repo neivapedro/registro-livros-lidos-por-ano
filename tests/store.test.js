@@ -194,3 +194,16 @@ test('startReread cria nova leitura do mesmo livro', () => {
   assert.equal(book.cover, 'https://x/c.jpg');
   assert.equal(next.books.find((b) => b.id === 'a').favorite, true);
 });
+
+test('Kindle guarda o avanço em %, livro físico em página', () => {
+  const kindle = normalizeBook({ title: 'X', status: 'lendo', format: 'kindle', currentPercent: '45', currentPage: 120 });
+  assert.equal(kindle.currentPercent, 45);
+  assert.equal(kindle.currentPage, null);
+  const fisico = normalizeBook({ title: 'X', status: 'lendo', format: 'fisico', currentPercent: 45, currentPage: 120 });
+  assert.equal(fisico.currentPercent, null);
+  assert.equal(fisico.currentPage, 120);
+  assert.equal(normalizeBook({ title: 'X', status: 'lendo', format: 'kindle', currentPercent: 140 }).currentPercent, null);
+  assert.equal(normalizeBook({ title: 'X', status: 'lido', format: 'kindle', endDate: '2026-01-01', currentPercent: 50 }).currentPercent, null);
+  assert.match(validateBook({ title: 'X', status: 'lendo', format: 'kindle', currentPercent: 140 })[0], /0 a 100/);
+  assert.deepEqual(validateBook({ title: 'X', status: 'lendo', format: 'kindle', pages: 100, currentPage: 500, currentPercent: 30 }), []);
+});

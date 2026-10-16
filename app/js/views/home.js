@@ -50,6 +50,12 @@ function statTiles(stats) {
     </section>`;
 }
 
+function updateLabel(b) {
+  const kindle = b.format === 'kindle';
+  const has = kindle ? b.currentPercent != null : b.currentPage != null;
+  return `${has ? 'Atualizar' : 'Informar'} ${kindle ? '%' : 'página'}`;
+}
+
 function readingNow(books) {
   if (!books.length) return '';
   const cards = books.map((b) => `
@@ -66,8 +72,8 @@ function readingNow(books) {
       <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
       </div>
       <div class="reading-progress">
-        ${progressBar(b) || '<span class="muted small">Registre a página em que você está</span>'}
-        <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${b.currentPage != null ? 'Atualizar página' : 'Informar página'}</button>
+        ${progressBar(b) || `<span class="muted small">${b.format === 'kindle' ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`}
+        <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${updateLabel(b)}</button>
       </div>
     </div>`).join('');
   return `
