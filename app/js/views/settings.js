@@ -2,7 +2,7 @@ import { daysSince, formatBR, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
 import { esc, icon, plural } from '../ui.js';
 
-export const APP_VERSION = '1.0.0';
+export const APP_VERSION = '1.1.0';
 
 function stepper(label, value, action, hint) {
   return `

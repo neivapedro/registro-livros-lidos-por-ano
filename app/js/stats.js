@@ -136,7 +136,7 @@ export function countByStatus(books) {
 }
 
 function fold(s) {
-  return (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  return (s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 }
 
 /**
