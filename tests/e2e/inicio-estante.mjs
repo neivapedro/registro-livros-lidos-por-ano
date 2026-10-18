@@ -212,7 +212,7 @@ try {
   for (const title of drawn) assert.ok(['O Gerente Minuto', 'Pai Rico, Pai Pobre', 'Essencialismo'].includes(title), `sorteou fora do filtro: ${title}`);
   assert.ok(drawn.size >= 2, 'sortear de novo troca o livro');
   // Gêneros do filtro: só os que existem na fila.
-  assert.deepEqual(await page.locator('[data-draw="genre"] option').allTextContents(), ['Todos os gêneros', 'Ficção', 'Gestão']);
+  assert.deepEqual(await page.locator('[data-draw="genre"] option').allTextContents(), ['Gênero', 'Ficção', 'Gestão']);
   await page.selectOption('[data-draw="format"]', 'kindle');
   await page.waitForSelector('.draw-panel:has-text("Nenhum livro da fila")');
   await page.selectOption('[data-draw="genre"]', 'Ficção');

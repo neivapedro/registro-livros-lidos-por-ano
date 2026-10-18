@@ -61,8 +61,8 @@ function drawPanel(books, draw) {
     <section class="card draw-panel" aria-label="Sortear um livro da fila">
       <div class="section-head"><h2>Sortear da fila</h2><button type="button" class="btn-text small" data-action="draw-close">Fechar</button></div>
       <div class="filters filters-2">
-        ${drawSelect('genre', 'Gênero', [['', 'Todos os gêneros'], ...genres.map((g) => [g, g])], draw.genre)}
-        ${drawSelect('format', 'Formato', [['', 'Todos os formatos'], ...Object.entries(FORMAT_LABELS)], draw.format)}
+        ${drawSelect('genre', 'Gênero', [['', 'Gênero'], ...genres.map((g) => [g, g])], draw.genre)}
+        ${drawSelect('format', 'Formato', [['', 'Formato'], ...Object.entries(FORMAT_LABELS)], draw.format)}
       </div>
       ${result}
     </section>`;

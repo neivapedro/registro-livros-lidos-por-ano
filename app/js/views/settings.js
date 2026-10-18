@@ -65,7 +65,7 @@ export function settingsView({ state, ui, today }) {
     <section class="card">
       <h2>Meta de leitura</h2>
       ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
-      ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Usada automaticamente em cada ano novo')}
+      ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
       ${pageGoalSettings(state, year)}
     </section>
 
