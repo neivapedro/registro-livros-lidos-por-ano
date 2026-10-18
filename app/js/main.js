@@ -1,4 +1,9 @@
 import { searchBooks } from './books-api.js';
+import { booksToCsv, csvFileName } from './csv.js';
+import { readGoogleKey, removeGoogleKey, saveGoogleKey } from './prefs.js';
+import { addTags, removeTag } from './tags.js';
+import { MAX_UP_NEXT } from './store.js';
+import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { isIsoDate, todayIso, yearOf } from './dates.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
@@ -706,6 +711,180 @@ document.addEventListener('submit', (e) => {
     e.preventDefault();
     saveProgress(progressForm.dataset.id, progressForm.querySelector('input')?.value);
   }
+});
+
+// ---------- Fila, etiquetas, série, planilha e chave do Google (v1.3) ----------
+// Bloco próprio: ações novas entram no mesmo objeto `actions` usado pelos cliques.
+
+Object.assign(ui, { draw: null, groupSeries: false, tagInput: '', googleKey: readGoogleKey(localStorage) });
+
+/** Sorteia (de novo) com os filtros do painel, evitando repetir o último. */
+function drawNext() {
+  const picked = drawBook(state.books, ui.draw, Math.random, ui.draw.id);
+  ui.draw.id = picked?.id || null;
+}
+
+/** Leva o texto digitado no campo de etiqueta para o livro. Devolve true se acrescentou algo. */
+function commitTagInput() {
+  const value = document.querySelector('[data-tag-input]')?.value ?? ui.tagInput;
+  ui.tagInput = '';
+  if (!ui.draft || !String(value).trim()) return false;
+  ui.draft.tags = addTags(ui.draft.tags, value);
+  return true;
+}
+
+function focusTagInput() {
+  const input = document.getElementById('f-tag');
+  if (!input) return;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+async function exportCsv() {
+  const name = csvFileName(todayIso());
+  const file = new File([booksToCsv(state.books)], name, { type: 'text/csv;charset=utf-8' });
+  const shared = isIOS() && await shareFile(file, 'Planilha do Leituras');
+  if (!shared) downloadBlob(file, name);
+  toast('Planilha exportada.');
+}
+
+function saveGoogleKeyFromInput() {
+  const result = saveGoogleKey(localStorage, document.querySelector('[data-gkey]')?.value);
+  if (!result.key) {
+    toast('Cole a chave antes de salvar.');
+    return;
+  }
+  if (!result.ok) {
+    toast('Não foi possível salvar a chave neste aparelho.');
+    return;
+  }
+  ui.googleKey = result.key;
+  render();
+  if (result.warning) {
+    toast('Chave salva, mas ela não parece uma chave do Google (começa com AIza e tem 39 caracteres). Confira se colou inteira.', { duration: 7000 });
+  } else {
+    toast('Chave salva. A busca vai consultar também o Google Books.');
+  }
+}
+
+Object.assign(actions, {
+  'toggle-next'(el) {
+    const { state: next, full } = toggleUpNext(state, el.dataset.id);
+    if (full) {
+      toast(`Limite de ${MAX_UP_NEXT} próximas`);
+      return;
+    }
+    persist(next);
+    render();
+  },
+  'move-next'(el) {
+    const { id, delta } = el.dataset;
+    persist(moveUpNext(state, id, Number(delta)));
+    render();
+    // Mantém o foco no mesmo botão (quem usa leitor de tela continua de onde estava).
+    const again = document.querySelector(`[data-action="move-next"][data-delta="${delta}"][data-id="${CSS.escape(id)}"]`);
+    (again && !again.disabled ? again : document.querySelector(`[data-action="move-next"][data-id="${CSS.escape(id)}"]:not([disabled])`))?.focus();
+  },
+  'draw-open'() {
+    ui.draw = { genre: '', format: '', id: null };
+    drawNext();
+    render();
+  },
+  'draw-again'() {
+    if (!ui.draw) return;
+    drawNext();
+    render();
+  },
+  'draw-close'() {
+    ui.draw = null;
+    render();
+  },
+  'draw-start'(el) {
+    ui.draw = null;
+    actions['start-reading'](el);
+  },
+  'toggle-group-series'() {
+    ui.groupSeries = !ui.groupSeries;
+    render();
+  },
+  'add-tag'(el) {
+    if (!ui.draft) return;
+    ui.draft.tags = addTags(ui.draft.tags, el.dataset.value);
+    render();
+  },
+  'remove-tag'(el) {
+    if (!ui.draft) return;
+    ui.draft.tags = removeTag(ui.draft.tags, el.dataset.value);
+    render();
+    focusTagInput();
+  },
+  'add-tag-input'() {
+    commitTagInput();
+    render();
+    focusTagInput();
+  },
+  'clear-target-date'() {
+    if (!ui.draft) return;
+    ui.draft.targetDate = null;
+    render();
+  },
+  'export-csv'() { exportCsv(); },
+  'save-gkey'() { saveGoogleKeyFromInput(); },
+  'remove-gkey'() {
+    removeGoogleKey(localStorage);
+    ui.googleKey = '';
+    render();
+    toast('Chave removida. A busca volta a usar BrasilAPI e Open Library.');
+  },
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!('tagInput' in t.dataset) || !ui.draft) return;
+  // Vírgula fecha a etiqueta: o que vem antes entra no livro, o resto continua no campo.
+  if (t.value.includes(',')) {
+    const cut = t.value.lastIndexOf(',');
+    ui.draft.tags = addTags(ui.draft.tags, t.value.slice(0, cut));
+    ui.tagInput = t.value.slice(cut + 1).trimStart();
+    render();
+    focusTagInput();
+  } else {
+    ui.tagInput = t.value;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if ('tagInput' in e.target.dataset) {
+    // Enter num campo de texto enviaria o formulário: aqui ele só acrescenta a etiqueta.
+    e.preventDefault();
+    commitTagInput();
+    render();
+    focusTagInput();
+  } else if ('gkey' in e.target.dataset) {
+    e.preventDefault();
+    saveGoogleKeyFromInput();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (!t.dataset.draw || !ui.draw) return;
+  ui.draw[t.dataset.draw] = t.value;
+  ui.draw.id = null;
+  drawNext();
+  render();
+});
+
+// Antes do salvar (fase de captura): etiqueta digitada e não confirmada também vale.
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('[data-submit="save-book"]')) commitTagInput();
+}, true);
+
+// Mudou de tela: o texto de etiqueta pela metade e o painel de sorteio não acompanham.
+window.addEventListener('hashchange', () => {
+  ui.tagInput = '';
+  ui.draw = null;
 });
 
 // Capa que não carrega (offline, link quebrado): fica a capa desenhada.

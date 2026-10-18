@@ -141,19 +141,20 @@ function fold(s) {
 
 /**
  * Filtros da tela de busca. Campos vazios não filtram.
- * { q, status, year, genre, format, minRating }
+ * { q, status, year, genre, format, minRating, tag }
  */
 export function filterBooks(books, filters) {
   const q = fold(filters.q).trim();
   const year = filters.year ? Number(filters.year) : null;
   const minRating = filters.minRating ? Number(filters.minRating) : 0;
   return books
-    .filter((b) => !q || fold(`${b.title} ${b.authors} ${b.notes}`).includes(q))
+    .filter((b) => !q || fold(`${b.title} ${b.authors} ${b.notes} ${b.series || ''} ${(b.tags || []).join(' ')}`).includes(q))
     .filter((b) => !filters.status || b.status === filters.status)
     .filter((b) => !year || (b.endDate && yearOf(b.endDate) === year))
     .filter((b) => !filters.genre || b.genre === filters.genre)
     .filter((b) => !filters.format || b.format === filters.format)
     .filter((b) => !minRating || (b.rating || 0) >= minRating)
+    .filter((b) => !filters.tag || (b.tags || []).includes(filters.tag))
     .sort((a, b) => (b.endDate || b.startDate || b.createdAt).localeCompare(a.endDate || a.startDate || a.createdAt));
 }
 

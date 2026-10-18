@@ -1,6 +1,7 @@
 import { daysInclusive, monthInitial, monthName, monthOf, yearOf } from '../dates.js';
 import { FORMATS, getGoal } from '../store.js';
 import { droppedInYear, goalStreak, monthsMetInYear, yearStats, yearsWithData } from '../stats.js';
+import { topTagsInYear } from '../tags.js';
 import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
 import { yearSelect } from './home.js';
 
@@ -133,6 +134,14 @@ function droppedCard(state, year) {
   return `<section class="card"><div class="section-head"><h2>Abandonados</h2><span class="muted small">${plural(list.length, 'livro', 'livros')} · não contam na meta</span></div>${rows}</section>`;
 }
 
+// Etiquetas dos livros lidos no ano (as criadas pela própria pessoa).
+function tagsCard(state, year) {
+  const list = topTagsInYear(state.books, year);
+  if (!list.length) return '';
+  const chips = list.map((t) => `<span class="tag-count"><span class="tag-count-name">${esc(t.label)}</span><span class="tag-count-n">${t.count}</span></span>`).join('');
+  return `<section class="card"><h2>Etiquetas mais usadas</h2><div class="chips-wrap" aria-label="Etiquetas e quantidade de livros">${chips}</div></section>`;
+}
+
 export function summaryView({ state, year, today }) {
   const currentYear = yearOf(today);
   const s = yearStats(state.books, year, getGoal(state, year), today);
@@ -157,6 +166,7 @@ export function summaryView({ state, year, today }) {
     ${genreBars(s)}
     ${authorRank(s)}
     ${droppedCard(state, year)}
+    ${tagsCard(state, year)}
     ${yearCompare(state, today, year)}
     ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
 }

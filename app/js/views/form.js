@@ -1,5 +1,7 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
-import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
+import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
+import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags } from '../store.js';
+import { hasTag } from '../tags.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 
 function segmented(options, current, action, label) {
@@ -53,6 +55,62 @@ export function readingSummary(d) {
     return `<p class="muted small">Lido em <strong class="accent">${plural(daysInclusive(d.startDate, d.endDate), 'dia', 'dias')}</strong> · entra no registro de ${year}</p>`;
   }
   return `<p class="muted small">Entra no registro de ${year}</p>`;
+}
+
+// "Quero terminar até": opcional, só enquanto está lendo.
+function targetDateField(d) {
+  return `
+        <div class="field target-field">
+          <label for="f-target">Quero terminar até <span class="faint">(opcional)</span></label>
+          <span class="target-row">
+            <input id="f-target" type="date" value="${esc(d.targetDate || '')}" data-field="targetDate">
+            ${d.targetDate ? '<button type="button" class="btn-text small" data-action="clear-target-date">Limpar</button>' : ''}
+          </span>
+        </div>`;
+}
+
+/** Série e número; no livro já salvo, o próximo volume e quantos foram lidos. */
+function seriesFields(state, d, isEdit) {
+  const names = seriesNames(state.books).map((n) => `<option value="${esc(n)}"></option>`).join('');
+  let info = '';
+  if (isEdit && d.series && String(d.series).trim()) {
+    const s = seriesInfo(state.books, d);
+    const lines = [];
+    if (s.next) {
+      lines.push(`Próximo da série: <a href="#/livro/${encodeURIComponent(s.next.id)}">nº ${esc(formatSeriesNumber(s.next.seriesNumber))} — ${esc(s.next.title)}</a>`);
+    }
+    if (s.total > 1) lines.push(`Você leu ${s.read} de ${s.total} cadastrados nesta série`);
+    info = lines.length ? `<div class="series-info">${lines.map((l) => `<p class="muted small">${l}</p>`).join('')}</div>` : '';
+  }
+  return `
+      <section class="field-group">
+        <span class="label">Série</span>
+        <div class="series-cols">
+          <div class="field"><label for="f-series">Nome da série</label><input id="f-series" type="text" maxlength="120" list="series-names" autocomplete="off" value="${esc(d.series || '')}" data-field="series" placeholder="Ex.: Duna"></div>
+          <div class="field"><label for="f-series-n">Nº</label><input id="f-series-n" type="text" inputmode="decimal" maxlength="8" value="${esc(formatSeriesNumber(d.seriesNumber))}" data-field="seriesNumber" placeholder="1"></div>
+        </div>
+        <datalist id="series-names">${names}</datalist>
+        ${info}
+      </section>`;
+}
+
+/** Etiquetas livres: as do livro (com ×), campo para criar e as já usadas em outros livros. */
+function tagsField(state, ui, d) {
+  const tags = d.tags || [];
+  const current = tags.map((t) => `
+    <span class="tag-chip">${esc(t)}<button type="button" class="tag-x" data-action="remove-tag" data-value="${esc(t)}" aria-label="Remover etiqueta ${esc(t)}">${icon('close', { size: 14, stroke: 2.2 })}</button></span>`).join('');
+  const used = allTags(state).filter((t) => !hasTag(tags, t)).slice(0, 16);
+  const usedChips = used.map((t) => `<button type="button" class="chip-btn sm" data-action="add-tag" data-value="${esc(t)}">+ ${esc(t)}</button>`).join('');
+  return `
+      <section class="field-group">
+        <label class="label" for="f-tag">Etiquetas</label>
+        ${tags.length ? `<div class="chips-wrap">${current}</div>` : ''}
+        <div class="tag-input">
+          <input id="f-tag" type="text" maxlength="40" autocomplete="off" autocapitalize="none" enterkeyhint="done" placeholder="Nova etiqueta" value="${esc(ui.tagInput || '')}" data-tag-input>
+          <button type="button" class="chip-btn" data-action="add-tag-input">Adicionar</button>
+        </div>
+        ${used.length ? `<span class="muted small">Usadas antes</span><div class="chips-wrap">${usedChips}</div>` : '<span class="muted small">Toque em Adicionar, Enter ou vírgula para incluir.</span>'}
+      </section>`;
 }
 
 export function formView({ state, ui, isEdit }) {
@@ -121,6 +179,7 @@ export function formView({ state, ui, isEdit }) {
         ${d.format === FORMATS.KINDLE
     ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
     : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`}` : ''}
+        ${d.status === STATUS.READING ? targetDateField(d) : ''}
         <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
       </section>` : ''}
 
@@ -133,6 +192,8 @@ export function formView({ state, ui, isEdit }) {
         <span class="label">Gênero</span>
         <div class="chips-wrap">${genreChips}${newGenre}</div>
       </section>
+      ${seriesFields(state, d, isEdit)}
+      ${tagsField(state, ui, d)}
 
       ${d.status === STATUS.READ ? `
       <section class="field-group">
