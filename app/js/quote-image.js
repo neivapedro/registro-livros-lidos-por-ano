@@ -12,25 +12,53 @@ const SERIF = '"Instrument Serif", Georgia, serif';
 const SANS = 'Manrope, system-ui, sans-serif';
 
 /**
+ * Quantos caracteres do começo de `chars` cabem em maxWidth (pelo menos 1).
+ * Dobra o tamanho e depois faz busca binária: poucas medições mesmo numa
+ * "palavra" de 5000 letras (antes, uma por letra a cada linha travava a tela).
+ */
+function fittingChars(chars, maxWidth, measure) {
+  const fits = (n) => measure(chars.slice(0, n).join('')) <= maxWidth;
+  let lo = 1;
+  while (lo * 2 < chars.length && fits(lo * 2)) lo *= 2;
+  let hi = Math.min(lo * 2, chars.length);
+  while (hi - lo > 1) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (fits(mid)) lo = mid;
+    else hi = mid;
+  }
+  return lo;
+}
+
+/** Tira o último caractere sem partir emoji (par de surrogates) ao meio. */
+function dropLastChar(text) {
+  return Array.from(text).slice(0, -1).join('');
+}
+
+/**
  * Quebra o texto em linhas que caibam em maxWidth. measure(texto) devolve a largura.
  * Respeita as quebras de linha do texto; palavra maior que a linha é cortada.
+ * Com maxLines, para assim que passar desse número de linhas (o resto não caberia mesmo).
  */
-export function wrapLines(text, maxWidth, measure) {
+export function wrapLines(text, maxWidth, measure, maxLines = Infinity) {
   const lines = [];
   for (const paragraph of String(text).replace(/\r/g, '').split('\n')) {
     const words = paragraph.split(/\s+/).filter(Boolean);
     let line = '';
     for (let word of words) {
-      // Palavra sozinha que não cabe: corta em pedaços.
-      while (measure(word) > maxWidth && word.length > 1) {
-        if (line) {
-          lines.push(line);
-          line = '';
+      if (lines.length > maxLines) return lines;
+      // Palavra sozinha que não cabe: corta em pedaços (por caractere, sem partir emoji).
+      if (measure(word) > maxWidth) {
+        let chars = Array.from(word);
+        while (chars.length > 1 && lines.length <= maxLines && measure(chars.join('')) > maxWidth) {
+          if (line) {
+            lines.push(line);
+            line = '';
+          }
+          const cut = fittingChars(chars, maxWidth, measure);
+          lines.push(chars.slice(0, cut).join(''));
+          chars = chars.slice(cut);
         }
-        let cut = word.length - 1;
-        while (cut > 1 && measure(word.slice(0, cut)) > maxWidth) cut -= 1;
-        lines.push(word.slice(0, cut));
-        word = word.slice(cut);
+        word = chars.join('');
       }
       const candidate = line ? `${line} ${word}` : word;
       if (line && measure(candidate) > maxWidth) {
@@ -52,16 +80,16 @@ export function wrapLines(text, maxWidth, measure) {
  * Devolve { size, lines, lineHeight, truncated }.
  */
 export function fitQuote(text, { maxWidth, maxHeight, maxSize = 76, minSize = 36, leading = 1.28 }, measureAt) {
+  const linesFor = (size) => Math.max(1, Math.floor(maxHeight / (size * leading)));
   for (let size = maxSize; size >= minSize; size -= 2) {
-    const lines = wrapLines(text, maxWidth, (t) => measureAt(t, size));
+    const lines = wrapLines(text, maxWidth, (t) => measureAt(t, size), linesFor(size));
     if (lines.length * size * leading <= maxHeight) return { size, lines, lineHeight: size * leading, truncated: false };
   }
   const size = minSize;
-  const all = wrapLines(text, maxWidth, (t) => measureAt(t, size));
-  const max = Math.max(1, Math.floor(maxHeight / (size * leading)));
-  const lines = all.slice(0, max);
+  const max = linesFor(size);
+  const lines = wrapLines(text, maxWidth, (t) => measureAt(t, size), max).slice(0, max);
   let last = lines[max - 1] || '';
-  while (last && measureAt(`${last}…`, size) > maxWidth) last = last.slice(0, -1);
+  while (last && measureAt(`${last}…`, size) > maxWidth) last = dropLastChar(last);
   lines[max - 1] = `${last.replace(/[\s.,;:!?–—-]+$/, '')}…`;
   return { size, lines, lineHeight: size * leading, truncated: true };
 }
@@ -90,7 +118,7 @@ function fitLine(ctx, text, maxWidth, size, fontFn, min = 24) {
 function clip(ctx, text, maxWidth) {
   if (ctx.measureText(text).width <= maxWidth) return text;
   let t = text;
-  while (t && ctx.measureText(`${t}…`).width > maxWidth) t = t.slice(0, -1);
+  while (t && ctx.measureText(`${t}…`).width > maxWidth) t = dropLastChar(t);
   return `${t.trimEnd()}…`;
 }
 
@@ -143,7 +171,7 @@ export async function renderQuoteImage(quote, book) {
   ctx.fillText(clip(ctx, book.title, maxW - markW), PAD, 940);
 
   const author = (book.authors || '').split(',')[0].trim();
-  const meta = [author, quotePosition(quote)].filter(Boolean).join(' · ').toUpperCase();
+  const meta = [author, quotePosition(quote, book)].filter(Boolean).join(' · ').toUpperCase();
   if (meta) {
     ctx.font = `700 24px ${SANS}`;
     ctx.letterSpacing = '4px';

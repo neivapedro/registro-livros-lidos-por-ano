@@ -4,7 +4,7 @@ import {
   diarySummary, editEntry, entriesNewestFirst, entryLine, entryParts, removeEntry, restoreEntry, syncPosition,
 } from '../app/js/diary.js';
 import {
-  buildQuote, countQuotes, fold, quoteFileName, quotePosition, quotesNewestFirst, removeQuote, restoreQuote,
+  buildQuote, countQuotes, fold, quoteFileName, quotePosition, quoteSavedDay, quotesNewestFirst, removeQuote, restoreQuote,
   searchQuotes, upsertQuote,
 } from '../app/js/quotes.js';
 import { fitQuote, wrapLines } from '../app/js/quote-image.js';
@@ -197,4 +197,66 @@ test('tamanho da letra: o maior que cabe; texto enorme é cortado com reticênci
   assert.ok(huge.lines.length * huge.lineHeight <= 500);
   assert.match(huge.lines.at(-1), /…$/);
   assert.ok(at(huge.lines.at(-1), 36) <= 800);
+});
+
+// ---------- Correções do QA ----------
+
+test('imagem: palavra enorme (5000 letras, sem espaço) quebra com poucas medições', () => {
+  let calls = 0;
+  const counted = (t) => {
+    calls += 1;
+    return t.length * 10;
+  };
+  const lines = wrapLines('a'.repeat(5000), 500, counted);
+  assert.equal(lines.length, 100);
+  assert.ok(lines.every((l) => l.length === 50));
+  // Antes: ~12 milhões de medições (travava a tela no iPhone).
+  assert.ok(calls < 5000, `${calls} medições`);
+  calls = 0;
+  const fit = fitQuote('b'.repeat(5000), { maxWidth: 888, maxHeight: 560, maxSize: 84, minSize: 36 }, (t, size) => {
+    calls += 1;
+    return t.length * size * 0.5;
+  });
+  assert.equal(fit.truncated, true);
+  assert.ok(calls < 50000, `${calls} medições`);
+});
+
+test('imagem: palavra cortada não parte emoji ao meio', () => {
+  const byChar = (t) => Array.from(t).length * 10;
+  const lines = wrapLines('📚'.repeat(12), 50, byChar);
+  assert.deepEqual(lines, ['📚📚📚📚📚', '📚📚📚📚📚', '📚📚']);
+  const fit = fitQuote('📚'.repeat(400), { maxWidth: 100, maxHeight: 100, maxSize: 40, minSize: 36 }, (t) => Array.from(t).length * 10);
+  for (const line of fit.lines) assert.ok(!/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/.test(line), line);
+});
+
+test('posição do trecho em livro que mudou de formato: vale a do formato atual', () => {
+  const both = { page: 63, percent: 30 };
+  assert.equal(quotePosition(both, kindle([])), '30%');
+  assert.equal(quotePosition(both, physical([])), 'p. 63');
+  // Só a do formato antigo: mostra a que existe.
+  assert.equal(quotePosition({ page: 63, percent: null }, kindle([])), 'p. 63');
+  assert.equal(quotePosition({ page: null, percent: 30 }, physical([])), '30%');
+});
+
+test('trecho: livro com 500 trechos não aceita mais um (não some calado ao salvar)', () => {
+  const quotes = Array.from({ length: 500 }, (_, i) => ({ id: `q${i}`, text: `t${i}`, page: null, percent: null, note: '', createdAt: NOW }));
+  const book = physical([], { quotes });
+  assert.match(buildQuote(book, { text: 'mais um' }, { id: 'novo', nowTs: NOW }).error, /500 trechos/);
+  // Corrigir um que já existe continua possível.
+  assert.equal(buildQuote(book, { text: 'corrigido' }, { existing: quotes[0], id: 'x', nowTs: NOW }).quote.text, 'corrigido');
+});
+
+test('trecho: dia em que foi salvo é o do fuso do aparelho, não o de Greenwich', () => {
+  const tz = process.env.TZ;
+  process.env.TZ = 'America/Sao_Paulo';
+  try {
+    // 22h30 de 16/10 em São Paulo = 01h30 de 17/10 em UTC.
+    assert.equal(quoteSavedDay({ createdAt: '2026-10-17T01:30:00.000Z' }), '2026-10-16');
+    assert.equal(quoteSavedDay({ createdAt: '2026-10-16T12:00:00.000Z' }), '2026-10-16');
+    assert.equal(quoteSavedDay({ createdAt: 'lixo' }), '');
+    assert.equal(quoteSavedDay({}), '');
+  } finally {
+    if (tz === undefined) delete process.env.TZ;
+    else process.env.TZ = tz;
+  }
 });

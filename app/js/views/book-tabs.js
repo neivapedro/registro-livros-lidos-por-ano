@@ -4,7 +4,7 @@
 import { formatShort } from '../dates.js';
 import { diarySummary, entriesNewestFirst, entryDate, entryParts } from '../diary.js';
 import { UNITS } from '../journal.js';
-import { quotePosition, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
+import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
 import { emptyState, esc, num, plural } from '../ui.js';
 
 export const BOOK_TABS = ['dados', 'diario', 'trechos'];
@@ -153,9 +153,10 @@ function quoteForm(book, quote) {
     </form>`;
 }
 
-function quoteCard(quote) {
-  const position = quotePosition(quote);
-  const saved = quote.createdAt ? `salvo em ${formatShort(quote.createdAt.slice(0, 10))} ${quote.createdAt.slice(0, 4)}` : '';
+function quoteCard(book, quote) {
+  const position = quotePosition(quote, book);
+  const day = quoteSavedDay(quote);
+  const saved = day ? `salvo em ${formatShort(day)} ${day.slice(0, 4)}` : '';
   const meta = [position ? `<span class="accent">${esc(position)}</span>` : '', saved ? esc(saved) : ''].filter(Boolean).join(' · ');
   return `
     <article class="quote-card">
@@ -176,7 +177,7 @@ function quotesTab(book, ui) {
   const form = ui.quoteForm;
   const adding = form && !form.id;
   const addButton = '<button type="button" class="btn-outline sm" data-action="quote-new">+ Trecho</button>';
-  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q) : quoteCard(q))).join('');
+  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q) : quoteCard(book, q))).join('');
   const body = !quotes.length && !adding
     ? emptyState('Nenhum trecho salvo', 'Guarde aqui as frases que marcaram você neste livro.', addButton)
     : `${adding ? quoteForm(book, null) : ''}<div class="quote-list">${list}</div>`;

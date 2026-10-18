@@ -2,7 +2,8 @@
 // Cada livro guarda em book.quotes { id, text, page, percent, note, createdAt }.
 // Funções puras: devolvem uma lista nova, sem alterar a original.
 
-import { FORMATS } from './store.js';
+import { toIso } from './dates.js';
+import { FORMATS, MAX_QUOTES } from './store.js';
 
 const MAX_QUOTE = 5000;
 const MAX_NOTE = 10000;
@@ -17,10 +18,16 @@ export function quotesNewestFirst(book) {
   return [...(book.quotes || [])].sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
 }
 
-/** "p. 123", "45%" ou '' (sem posição). */
-export function quotePosition(quote) {
-  if (quote.page !== null && quote.page !== undefined) return `p. ${quote.page}`;
-  if (quote.percent !== null && quote.percent !== undefined) return `${quote.percent}%`;
+/**
+ * "p. 123", "45%" ou '' (sem posição). Livro que mudou de formato pode ter as duas:
+ * com o livro, vale a do formato atual (a que a pessoa acabou de informar).
+ */
+export function quotePosition(quote, book = null) {
+  const page = quote.page ?? null;
+  const percent = quote.percent ?? null;
+  if (book && quoteUsesPercent(book) && percent !== null) return `${percent}%`;
+  if (page !== null) return `p. ${page}`;
+  if (percent !== null) return `${percent}%`;
   return '';
 }
 
@@ -30,12 +37,25 @@ export function quoteUsesPercent(book) {
 }
 
 /**
+ * Dia em que o trecho foi salvo ('AAAA-MM-DD'), no fuso do aparelho.
+ * createdAt está em UTC: às 22h no Brasil já é o dia seguinte em Greenwich.
+ */
+export function quoteSavedDay(quote) {
+  const d = new Date(quote.createdAt ?? '');
+  return Number.isNaN(d.getTime()) ? '' : toIso(d);
+}
+
+/**
  * Lê o formulário { text, position, note } e devolve { quote } pronto para salvar
  * ou { error }. `existing` é o trecho sendo corrigido (mantém id e data).
  */
 export function buildQuote(book, input, { existing = null, id, nowTs }) {
   const text = String(input.text ?? '').trim().slice(0, MAX_QUOTE);
   if (!text) return { error: 'Escreva o trecho.' };
+  // O armazenamento guarda no máximo MAX_QUOTES por livro: o excedente sumiria sem aviso.
+  if (!existing && (book.quotes?.length || 0) >= MAX_QUOTES) {
+    return { error: `Este livro já tem ${MAX_QUOTES} trechos, o máximo. Exclua algum para salvar outro.` };
+  }
   const percent = quoteUsesPercent(book);
   const raw = String(input.position ?? '').trim().replace('%', '').replace(',', '.');
   let value = null;
