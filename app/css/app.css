@@ -332,6 +332,10 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .seg-btn.is-on { background: var(--accent); color: var(--on-accent); }
+/* 320px: "Abandonei" não cabia no botão marcado do Status (4 opções). */
+@media (max-width: 359px) {
+  .segmented .seg-btn { padding-inline: 2px; font-size: 12px; }
+}
 .seg-count { font-size: 12px; opacity: 0.75; }
 .tabs-4 .seg-btn { flex-direction: column; gap: 0; font-size: 13px; min-height: 52px; line-height: 1.2; padding: 4px 2px; }
 .drop-reason { margin: -6px 0 4px; padding: 10px 14px; border-radius: 0 0 16px 16px; background: var(--surface-2); font-size: 14px; color: var(--text-soft); display: flex; flex-direction: column; gap: 4px; }

@@ -26,6 +26,7 @@ const SHELL = [
   './js/journal.js',
   './js/quote-image.js',
   './js/quotes.js',
+  './js/rescue.js',
   './js/timer.js',
   './js/timer-stats.js',
   './js/milestones.js',
