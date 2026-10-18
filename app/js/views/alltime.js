@@ -1,4 +1,5 @@
 import { yearOf } from '../dates.js';
+import { countQuotes } from '../quotes.js';
 import { FORMATS } from '../store.js';
 import { allTimeStats, yearsWithData } from '../stats.js';
 import { decimal, emptyState, esc, icon, num, plural } from '../ui.js';
@@ -21,7 +22,13 @@ function ranking(title, list) {
   return `<section class="card"><h2>${title}</h2>${rows}</section>`;
 }
 
+/** Atalho para a tela de trechos salvos (#/trechos). */
+function quotesLink(n) {
+  return `<a class="card quotes-link" href="#/trechos"><span class="strong-ish">Trechos salvos (${n})</span>${icon('chevronRight', { size: 18, stroke: 2, cls: 'accent' })}</a>`;
+}
+
 export function allTimeView({ state, today }) {
+  const nQuotes = countQuotes(state.books);
   const currentYear = yearOf(today);
   const s = allTimeStats(state.books, today);
   const header = `
@@ -34,7 +41,7 @@ export function allTimeView({ state, today }) {
       <h1 class="display">Sua história <em>de leitor</em></h1>
     </div>`;
   if (!s.count) {
-    return `${header}${emptyState('Nenhum livro concluído ainda', 'Seus números de todos os anos aparecem aqui.')}`;
+    return `${header}${emptyState('Nenhum livro concluído ainda', 'Seus números de todos os anos aparecem aqui.')}${nQuotes ? quotesLink(nQuotes) : ''}`;
   }
   const phys = s.formats[FORMATS.PHYSICAL];
   const kin = s.formats[FORMATS.KINDLE];
@@ -69,5 +76,6 @@ export function allTimeView({ state, today }) {
     </section>
     ${ranking('Gêneros mais lidos', s.genres)}
     ${ranking('Autores mais lidos', s.authors)}
-    ${extras ? `<p class="muted small center-text">${extras}</p>` : ''}`;
+    ${extras ? `<p class="muted small center-text">${extras}</p>` : ''}
+    ${quotesLink(nQuotes)}`;
 }

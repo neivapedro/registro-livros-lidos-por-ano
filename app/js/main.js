@@ -1,15 +1,20 @@
 import { searchBooks } from './books-api.js';
-import { isIsoDate, todayIso, yearOf } from './dates.js';
+import { formatShort, isIsoDate, todayIso, yearOf } from './dates.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
+import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
 import { closeOnFinish, recordProgress, unitOf, UNITS } from './journal.js';
+import { renderQuoteImage } from './quote-image.js';
+import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
 import { renderRetroImage } from './share-image.js';
 import {
   STATUS, FORMATS, createEmptyState, getGoal, newId, openStoredState, parseBackup,
   removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
 import { esc, icon, largeCoverUrl } from './ui.js';
+import { allQuotesResults, allQuotesView } from './views/all-quotes.js';
 import { allTimeView } from './views/alltime.js';
+import { BOOK_TABS } from './views/book-tabs.js';
 import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
@@ -113,6 +118,7 @@ function enterRoute(route) {
       }
     }
   }
+  if (route.name === 'novo' || route.name === 'livro') enterBookNotes(route);
   if (route.name === 'retro') ui.retroSlide = 0;
   if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
@@ -171,14 +177,19 @@ function render() {
     case 'ajustes':
       html = settingsView(ctx);
       break;
+    case 'trechos':
+      html = allQuotesView(ctx);
+      break;
     default:
       html = homeView(ctx);
   }
   root.innerHTML = html;
   root.dataset.page = route.name;
   document.body.classList.toggle('no-nav', !showNav);
+  // Trechos salvos se abre a partir do Resumo (Todos os anos).
+  const navName = route.name === 'trechos' ? 'resumo' : route.name;
   for (const link of nav.querySelectorAll('[data-nav]')) {
-    const on = link.dataset.nav === route.name || (link.dataset.nav === 'inicio' && !['estante', 'resumo', 'buscar'].includes(route.name));
+    const on = link.dataset.nav === navName || (link.dataset.nav === 'inicio' && !['estante', 'resumo', 'buscar'].includes(navName));
     link.classList.toggle('is-on', on);
     if (on) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
@@ -463,6 +474,113 @@ function saveProgress(bookId, raw) {
   render();
 }
 
+// ---------- Diário e trechos (abas do livro) ----------
+
+// Último registro do diário ou trecho excluído, para o Desfazer.
+let lastNoteDeleted = null;
+
+/** Ao abrir um livro: aba Dados, ou a pedida no endereço (#/livro/id?aba=trechos). */
+function enterBookNotes(route) {
+  const tab = route.query.get('aba');
+  ui.bookTab = route.name === 'livro' && BOOK_TABS.includes(tab) ? tab : 'dados';
+  ui.diaryEdit = null;
+  ui.quoteForm = null;
+}
+
+function currentBook() {
+  return state.books.find((b) => b.id === ui.draft?.id) || null;
+}
+
+/**
+ * Grava diário/trechos direto no livro salvo: mudanças ainda não salvas em Dados
+ * ficam só no rascunho. O rascunho recebe as mesmas listas, para que o Salvar
+ * de Dados depois não desfaça o que foi feito aqui.
+ */
+function saveBookNotes(bookId, patch, message) {
+  const book = state.books.find((b) => b.id === bookId);
+  if (!book) return;
+  const { state: next, book: saved } = upsertBook(state, { ...book, ...patch });
+  persist(next, message);
+  if (ui.draft?.id !== bookId) return;
+  for (const key of Object.keys(patch)) {
+    if (key === 'journal' || key === 'quotes' || ui.draft[key] === ui.original?.[key]) ui.draft[key] = saved[key];
+  }
+  ui.original = saved;
+}
+
+function saveDiaryEntry(form) {
+  const book = currentBook();
+  if (!book) return;
+  const before = (book.journal || []).find((e) => e.date === form.dataset.date);
+  const result = editEntry(book, form.dataset.date, Object.fromEntries(new FormData(form)), todayIso());
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  ui.diaryEdit = null;
+  // Corrigiu o último dia: a página (ou %) atual do livro acompanha.
+  saveBookNotes(book.id, { journal: result.journal, ...syncPosition(book, before, result.entry, result.journal) }, 'Registro corrigido.');
+  render();
+}
+
+function saveQuote(form) {
+  const book = currentBook();
+  if (!book) return;
+  const existing = (book.quotes || []).find((q) => q.id === form.dataset.id) || null;
+  const result = buildQuote(book, Object.fromEntries(new FormData(form)), { existing, id: newId(), nowTs: new Date().toISOString() });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  ui.quoteForm = null;
+  saveBookNotes(book.id, { quotes: upsertQuote(book.quotes, result.quote) }, existing ? 'Trecho atualizado.' : 'Trecho salvo.');
+  render();
+}
+
+/** Imagem 1080×1080 do trecho: menu de compartilhar do celular; sem ele, baixa o arquivo. */
+async function shareQuoteImage(quoteId) {
+  const book = currentBook();
+  const quote = book?.quotes?.find((q) => q.id === quoteId);
+  if (!quote) return;
+  toast('Gerando imagem…', { sticky: true });
+  try {
+    const blob = await renderQuoteImage(quote, book);
+    const name = quoteFileName(book);
+    const file = new File([blob], name, { type: 'image/png' });
+    hideToast();
+    if (await shareFile(file, `Trecho de ${book.title}`)) return;
+    downloadBlob(file, name);
+    toast('Imagem salva.');
+  } catch {
+    toast('Não foi possível gerar a imagem.');
+  }
+}
+
+/** Abre um formulário inline e põe o cursor no campo indicado. */
+function openNotesForm(fieldId) {
+  render();
+  const field = document.getElementById(fieldId);
+  field?.focus();
+  field?.closest('form')?.scrollIntoView({ block: 'nearest' });
+}
+
+document.addEventListener('submit', (e) => {
+  const diary = e.target.closest('[data-diary-form]');
+  const quote = e.target.closest('[data-quote-form]');
+  if (!diary && !quote) return;
+  e.preventDefault();
+  if (diary) saveDiaryEntry(diary);
+  else saveQuote(quote);
+});
+
+// Busca dos trechos: redesenha só a lista, para não tirar o foco do campo.
+document.addEventListener('input', (e) => {
+  if (!('quotesQ' in e.target.dataset)) return;
+  ui.quotesQuery = e.target.value;
+  const el = document.getElementById('quotes-results');
+  if (el) el.innerHTML = allQuotesResults(state, ui.quotesQuery);
+});
+
 // ---------- Ações ----------
 
 function saveBook() {
@@ -637,6 +755,68 @@ const actions = {
     go('#/inicio');
   },
   reload() { window.location.reload(); },
+
+  // ---------- Diário e trechos (abas do livro) ----------
+  'book-tab'(el) {
+    ui.bookTab = el.dataset.tab;
+    ui.diaryEdit = null;
+    ui.quoteForm = null;
+    render();
+  },
+  'book-save'() {
+    // Volta para Dados: se houver erro no formulário, ele aparece lá.
+    ui.bookTab = 'dados';
+    saveBook();
+  },
+  'diary-edit'(el) {
+    ui.diaryEdit = el.dataset.date;
+    openNotesForm('d-to');
+  },
+  'diary-cancel'() {
+    ui.diaryEdit = null;
+    render();
+  },
+  'diary-delete'(el) {
+    const book = currentBook();
+    const entry = book?.journal?.find((e) => e.date === el.dataset.date);
+    if (!entry) return;
+    lastNoteDeleted = { bookId: book.id, entry };
+    ui.diaryEdit = null;
+    saveBookNotes(book.id, { journal: removeEntry(book, entry.date) });
+    render();
+    toast(`Registro de ${formatShort(entry.date)} excluído.`, { actionLabel: 'Desfazer', action: 'notes-undo', duration: 7000 });
+  },
+  'quote-new'() {
+    ui.quoteForm = { id: null };
+    openNotesForm('q-text');
+  },
+  'quote-edit'(el) {
+    ui.quoteForm = { id: el.dataset.id };
+    openNotesForm('q-text');
+  },
+  'quote-cancel'() {
+    ui.quoteForm = null;
+    render();
+  },
+  'quote-delete'(el) {
+    const book = currentBook();
+    const index = (book?.quotes || []).findIndex((q) => q.id === el.dataset.id);
+    if (index < 0) return;
+    lastNoteDeleted = { bookId: book.id, quote: book.quotes[index], index };
+    saveBookNotes(book.id, { quotes: removeQuote(book.quotes, el.dataset.id) });
+    render();
+    toast('Trecho excluído.', { actionLabel: 'Desfazer', action: 'notes-undo', duration: 7000 });
+  },
+  'quote-share'(el) { shareQuoteImage(el.dataset.id); },
+  'notes-undo'() {
+    const d = lastNoteDeleted;
+    const book = d && state.books.find((b) => b.id === d.bookId);
+    if (!book) return;
+    lastNoteDeleted = null;
+    const patch = d.entry ? { journal: restoreEntry(book, d.entry) } : { quotes: restoreQuote(book.quotes, d.quote, d.index) };
+    saveBookNotes(book.id, patch, d.entry ? 'Registro restaurado.' : 'Trecho restaurado.');
+    render();
+  },
 };
 
 document.addEventListener('click', (e) => {

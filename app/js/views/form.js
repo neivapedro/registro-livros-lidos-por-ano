@@ -1,6 +1,7 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
 import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
+import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
 
 function segmented(options, current, action, label) {
   const buttons = options.map(([value, text]) => `
@@ -55,7 +56,9 @@ export function readingSummary(d) {
   return `<p class="muted small">Entra no registro de ${year}</p>`;
 }
 
-export function formView({ state, ui, isEdit }) {
+export function formView({ state, ui, isEdit, today }) {
+  // Livro já salvo tem as abas Diário e Trechos (views/book-tabs.js).
+  if (isEdit && ui.bookTab && ui.bookTab !== 'dados') return bookTabScreen({ state, ui, today });
   const d = ui.draft;
   const genres = allGenres(state);
   if (d.genre && !genres.includes(d.genre)) genres.push(d.genre);
@@ -85,6 +88,7 @@ export function formView({ state, ui, isEdit }) {
       <h1 class="form-title">${isEdit ? 'Editar livro' : 'Adicionar livro'}</h1>
       <button type="submit" form="book-form" class="btn-text accent strong">Salvar</button>
     </header>
+    ${isEdit ? bookTabBar(storedBook(state, ui), 'dados') : ''}
     <form id="book-form" class="form" data-submit="save-book" novalidate>
       ${showLookup ? lookupBlock(ui) : ''}
       ${pickedCard}
