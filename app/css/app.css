@@ -781,3 +781,135 @@ textarea::placeholder { color: var(--faint); }
 .gkey-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 600; }
 .gkey-status.is-on { color: var(--accent); }
 .gkey .two-cols .btn-ghost { min-height: 52px; }
+/* ---------- Estatísticas: calendário, gráficos tocáveis e meta de páginas (1.3) ---------- */
+
+:root {
+  /* Tons do mapa de leitura: do cinza do cartão ao caramelo. */
+  --heat-0: var(--surface-2);
+  --heat-1: #4A3526;
+  --heat-2: #74512F;
+  --heat-3: #A36D40;
+  --heat-4: var(--accent);
+}
+
+/* Alternador compacto (Ano | Mês, Livros | Páginas). */
+.seg-mini { padding: 3px; border-radius: 14px; flex-shrink: 0; }
+.seg-mini .seg-btn { min-height: 44px; padding: 0 14px; font-size: 13px; border-radius: 11px; }
+.card > .seg-mini { align-self: flex-start; }
+.cal-head { align-items: center; }
+
+/* Mapa do ano: duas metades (jan–jun, jul–dez), o SVG estica até a largura do cartão. */
+.heatmap { display: flex; flex-direction: column; gap: 10px; }
+.hm-half { display: flex; flex-direction: column; gap: 4px; }
+.hm-months { position: relative; height: 14px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.hm-month { position: absolute; top: 0; }
+.hm-svg { display: block; width: 100%; height: auto; touch-action: manipulation; cursor: pointer; }
+.hm-l0 { fill: var(--heat-0); background: var(--heat-0); }
+.hm-l1 { fill: var(--heat-1); background: var(--heat-1); }
+.hm-l2 { fill: var(--heat-2); background: var(--heat-2); }
+.hm-l3 { fill: var(--heat-3); background: var(--heat-3); }
+.hm-l4 { fill: var(--heat-4); background: var(--heat-4); }
+.hm-future { opacity: 0.4; }
+.hm-dot { fill: var(--text); pointer-events: none; }
+.hm-sel { fill: none; stroke: var(--text); stroke-width: 1.6; pointer-events: none; }
+.hm-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; }
+.hm-scale { display: inline-flex; align-items: center; gap: 3px; }
+.hm-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; position: relative; }
+.hm-key-dot::after { content: ''; position: absolute; inset: 3px; border-radius: 999px; background: var(--text); }
+.hm-scale .hm-key-dot { margin-right: 3px; }
+
+/* Grade do mês, com a capa no dia em que o livro foi concluído. */
+.cal-month { display: flex; flex-direction: column; gap: 10px; }
+.cal-month-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-month-name { font-family: var(--serif); font-size: 24px; }
+.cal-nav:disabled { opacity: 0.35; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--faint); padding-bottom: 2px; }
+.cal-cell {
+  position: relative; min-width: 0; aspect-ratio: 5 / 7; padding: 0; border: 1px solid transparent;
+  border-radius: 8px; background: transparent; color: var(--text-soft);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow: hidden;
+}
+.cal-cell.is-out { visibility: hidden; }
+.cal-cell.has-read { background: rgba(208, 140, 79, 0.16); }
+.cal-cell.is-today .cal-num { color: var(--accent); font-weight: 800; }
+.cal-cell.is-sel { border-color: var(--text); }
+.cal-num { font-size: 11px; font-weight: 600; line-height: 1; padding-top: 4px; }
+.cal-cell.has-book .cal-num { position: absolute; top: 2px; left: 3px; z-index: 1; padding: 1px 3px; border-radius: 4px; background: rgba(14, 12, 11, 0.7); color: var(--text); font-size: 10px; }
+.cal-cover { position: absolute; inset: 2px; display: block; }
+.cal-cover .cover { width: 100%; height: 100%; border-radius: 5px; box-shadow: none; padding: 14px 3px 3px; }
+/* Capa desenhada (sem imagem): título bem pequeno, para não virar um bloco liso. */
+.cal-cover .cover-title { font-size: 8px; line-height: 1.05; -webkit-line-clamp: 4; }
+.cal-cover .cover-author { display: none; }
+.cal-more { position: absolute; right: 1px; bottom: 1px; padding: 0 3px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 800; }
+.cal-drop { position: absolute; right: 3px; bottom: 3px; color: var(--danger); }
+.cal-detail .cal-drop { position: static; flex-shrink: 0; }
+
+.cal-detail { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; }
+.cal-detail.muted { background: transparent; padding: 0 2px; }
+.cal-detail-line { display: inline-flex; align-items: center; gap: 6px; color: var(--text-soft); font-size: 13px; }
+.cal-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.cal-note { padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* Barras tocáveis: cada coluna ocupa a mesma largura e abre a Buscar filtrada. */
+.bar-col { flex: 1 1 0; min-width: 0; }
+button.bar-col { padding: 0; border: 0; background: transparent; color: inherit; border-radius: 8px; }
+button.bar-col:active { background: var(--surface-2); }
+/* "bar empty" herdava o estilo do estado vazio (.empty): borda tracejada e preenchimento. */
+.bar.empty { display: block; padding: 0; border: 0; border-radius: 6px 6px 3px 3px; }
+.bars-rating .bar-label { font-size: 10px; }
+.hbar-list { display: flex; flex-direction: column; gap: 4px; }
+.hbar-btn { width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: inherit; text-align: left; justify-content: center; }
+.hbar-btn > span { display: flex; }
+.hbar-btn .hbar-track { display: block; }
+.hbar-btn .hbar-fill { display: block; }
+.hbar-btn.is-empty { opacity: 0.55; }
+.hbar-btn:active .hbar-track { background: var(--line-strong); }
+
+.split-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; }
+.split-legend-tap { gap: 4px 10px; }
+.split-tap {
+  min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: inherit;
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; text-align: left;
+}
+
+/* Buscar: chip do filtro que veio de um gráfico. */
+.filter-chip {
+  display: flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%;
+  padding-left: 14px; border-radius: 999px; background: var(--surface-warm); border: 1px solid var(--accent); color: var(--accent);
+  font-size: 13px; font-weight: 700;
+}
+.filter-chip-text { min-width: 0; overflow-wrap: anywhere; padding: 6px 0; }
+.filter-chip-x { width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; }
+
+/* Todos os anos: dois anos lado a lado. */
+.cmp2-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+.cmp2-head { padding-bottom: 4px; }
+.cmp2-pick { min-width: 0; }
+.cmp2-pick select { width: 100%; }
+.cmp2-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cmp2-value { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.cmp2-track { height: 4px; border-radius: 999px; background: var(--surface-2); }
+.cmp2-fill { display: block; height: 4px; border-radius: 999px; background: #8C7F75; }
+.cmp2-row .cmp2-cell:nth-child(2) .cmp2-fill { background: var(--accent); }
+.cmp2-label { overflow-wrap: anywhere; }
+
+/* Início: linha fina da meta de páginas no cartão da meta. */
+.hero:has(.hero-pages) { flex-wrap: wrap; row-gap: 16px; }
+/* O texto da meta continua ao lado do anel; só a linha de páginas desce. */
+.hero:has(.hero-pages) .hero-text { flex: 1 1 0; }
+.hero-pages { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.hero-pages-track { display: block; height: 4px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.hero-pages-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent-hover); }
+.hero-pages-text { font-size: 13px; color: var(--text-soft); font-weight: 600; }
+
+/* Ajustes: meta de páginas opcional. */
+.page-goal { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.page-goal-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-goal-field {
+  flex: 1 1 140px; min-width: 0; height: 48px; display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-strong);
+}
+.page-goal-field:focus-within { border-color: var(--accent); }
+.page-goal-field input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 18px; font-weight: 800; }
+.page-goal .btn-outline { min-height: 48px; }

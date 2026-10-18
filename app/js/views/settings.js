@@ -2,6 +2,7 @@ import { daysSince, formatBR, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
 import { monthlyTarget } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
+import { pageGoalSettings } from './charts.js';
 
 export const APP_VERSION = '1.2.4';
 
@@ -65,6 +66,7 @@ export function settingsView({ state, ui, today }) {
       <h2>Meta de leitura</h2>
       ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
       ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Usada automaticamente em cada ano novo')}
+      ${pageGoalSettings(state, year)}
     </section>
 
     <section class="card">

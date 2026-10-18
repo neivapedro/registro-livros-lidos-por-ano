@@ -5,6 +5,7 @@ import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js
 import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
 import { timerBanner, timerButton } from './timer.js';
 import { firstUpNext } from '../upnext.js';
+import { pageGoalHero } from './charts.js';
 
 const RING_C = 2 * Math.PI * 56;
 
@@ -16,7 +17,7 @@ export function yearSelect(years, selected, action, { withAll = false } = {}) {
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
 }
 
-function hero(stats, streak, isCurrentYear) {
+function hero(stats, streak, isCurrentYear, pagesLine = '') {
   const dash = (RING_C * stats.progress).toFixed(1);
   const pct = Math.round(stats.progress * 100);
   let line;
@@ -42,6 +43,7 @@ function hero(stats, streak, isCurrentYear) {
         <span class="muted small">${line}</span>
         ${streakChip}
       </div>
+      ${pagesLine}
     </section>`;
 }
 
@@ -175,7 +177,7 @@ export function homeView({ state, ui, year, today }) {
       </div>
     </header>
     ${timerBanner(state.books, ui?.session)}
-    ${hero(stats, streak, year === currentYear)}
+    ${hero(stats, streak, year === currentYear, pageGoalHero(state, stats, today))}
     ${statTiles(stats)}
     ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session, today) : ''}
     ${year === currentYear && !reading.length ? nextUpCard(state) : ''}

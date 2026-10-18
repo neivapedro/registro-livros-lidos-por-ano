@@ -3,6 +3,7 @@ import { countQuotes } from '../quotes.js';
 import { FORMATS } from '../store.js';
 import { allTimeStats, yearsWithData } from '../stats.js';
 import { decimal, emptyState, esc, icon, num, plural } from '../ui.js';
+import { yearPairCompare } from './charts.js';
 import { yearSelect } from './home.js';
 
 function yearBars(s) {
@@ -27,7 +28,7 @@ function quotesLink(n) {
   return `<a class="card quotes-link" href="#/trechos"><span class="strong-ish">Trechos salvos (${n})</span>${icon('chevronRight', { size: 18, stroke: 2, cls: 'accent' })}</a>`;
 }
 
-export function allTimeView({ state, today }) {
+export function allTimeView({ state, ui, today }) {
   const nQuotes = countQuotes(state.books);
   const currentYear = yearOf(today);
   const s = allTimeStats(state.books, today);
@@ -64,6 +65,7 @@ export function allTimeView({ state, today }) {
       <span class="muted small">${plural(s.bestYear.count, 'livro lido', 'livros lidos')}</span>
     </section>` : ''}
     <section class="card"><h2>Livros por ano</h2>${yearBars(s)}</section>
+    ${yearPairCompare({ state, ui: ui || {}, today })}
     <section class="card">
       <h2>Formato</h2>
       <div class="split" role="img" aria-label="${phys} físicos e ${kin} no Kindle">
