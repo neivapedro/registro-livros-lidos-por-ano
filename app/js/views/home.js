@@ -1,7 +1,7 @@
 import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
-import { cover, decimal, esc, icon, num, plural, emptyState, progressBar } from '../ui.js';
+import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
 
 const RING_C = 2 * Math.PI * 56;
 
@@ -113,7 +113,7 @@ function readGrid(stats) {
   const items = stats.books.slice(0, 6).map((b) => `
     <a class="grid-book" href="#/livro/${encodeURIComponent(b.id)}">
       <span class="grid-cover">${cover(b, { size: 'fill' })}${b.favorite ? `<span class="fav-badge">${icon('heart', { size: 12, label: 'Favorito do ano' })}</span>` : ''}</span>
-      <span class="grid-meta"><span class="grid-month">${esc(formatShort(b.endDate))}</span>${b.rating ? `<span class="grid-rating">${icon('star', { size: 11 })}${b.rating}</span>` : ''}</span>
+      <span class="grid-meta"><span class="grid-month">${esc(formatShort(b.endDate))}</span>${b.rating ? `<span class="grid-rating" aria-label="Nota ${formatRating(b.rating)}">${icon('star', { size: 11 })}${formatRating(b.rating)}</span>` : ''}</span>
     </a>`).join('');
   return `<section class="section">${head}<div class="book-grid">${items}</div></section>`;
 }

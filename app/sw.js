@@ -13,6 +13,8 @@ const SHELL = [
   './js/books-api.js',
   './js/cover-photo.js',
   './js/dates.js',
+  './js/db.js',
+  './js/journal.js',
   './js/share-image.js',
   './js/stats.js',
   './js/store.js',

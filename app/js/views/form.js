@@ -1,6 +1,6 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
 import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
-import { cover, esc, icon, plural, progressOf } from '../ui.js';
+import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 
 function segmented(options, current, action, label) {
   const buttons = options.map(([value, text]) => `
@@ -65,10 +65,10 @@ export function formView({ state, ui, isEdit }) {
     ? `<span class="new-genre"><label class="sr-only" for="new-genre">Novo gênero</label><input id="new-genre" type="text" maxlength="60" placeholder="Novo gênero" data-new-genre><button type="button" class="chip-btn is-on" data-action="add-genre">OK</button></span>`
     : '<button type="button" class="chip-btn chip-dashed" data-action="open-genre">+ Novo</button>';
 
+  // Duas áreas por estrela: metade esquerda = n - 0,5; direita = n. Tocar na nota atual apaga.
+  const hit = (value, side) => `<button type="button" class="star-hit ${side}" data-action="set-rating" data-value="${value}" aria-label="${ratingLabel(value)}" aria-pressed="${d.rating === value}"></button>`;
   const starButtons = [1, 2, 3, 4, 5].map((n) => `
-    <button type="button" class="star-btn" data-action="set-rating" data-value="${n}" aria-label="${plural(n, 'estrela', 'estrelas')}" aria-pressed="${d.rating === n}">
-      ${icon('star', { size: 26, cls: d.rating && n <= d.rating ? 'star-on' : 'star-off' })}
-    </button>`).join('');
+    <span class="star-slot">${starIcon(n, d.rating, { size: 26 })}${hit(n - 0.5, 'left')}${hit(n, 'right')}</span>`).join('');
 
   const errors = ui.formErrors?.length
     ? `<div class="form-errors" role="alert">${ui.formErrors.map((e) => `<p>${esc(e)}</p>`).join('')}</div>`
@@ -137,7 +137,7 @@ export function formView({ state, ui, isEdit }) {
       ${d.status === STATUS.READ ? `
       <section class="field-group">
         <span class="label">Sua nota</span>
-        <div class="star-row">${starButtons}</div>
+        <div class="star-row" role="group" aria-label="Nota">${starButtons}<span class="star-value" aria-hidden="true">${d.rating ? formatRating(d.rating) : ''}</span></div>
       </section>
 
       <button type="button" class="card toggle-row" data-action="toggle-fav" aria-pressed="${d.favorite}">

@@ -32,7 +32,7 @@ export function searchView({ state, ui, today }) {
       ${select('year', 'Ano', [['', 'Ano'], ...years.map((y) => [y, y])], f.year)}
       ${select('genre', 'Gênero', [['', 'Gênero'], ...allGenres(state).map((g) => [g, g])], f.genre)}
       ${select('format', 'Formato', [['', 'Formato'], ...Object.entries(FORMAT_LABELS)], f.format)}
-      ${select('minRating', 'Nota mínima', [['', 'Nota'], ['5', '★ 5'], ['4', '★ 4+'], ['3', '★ 3+']], f.minRating)}
+      ${select('minRating', 'Nota mínima', [['', 'Nota'], ['5', '★ 5'], ['4.5', '★ 4,5+'], ['4', '★ 4+'], ['3.5', '★ 3,5+'], ['3', '★ 3+']], f.minRating)}
       ${hasFilters ? '<button type="button" class="btn-text accent small" data-action="clear-filters">Limpar</button>' : ''}
     </div>
     <div id="search-results" class="list">${searchResults(state, f)}</div>`;

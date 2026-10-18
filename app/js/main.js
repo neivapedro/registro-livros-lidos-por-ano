@@ -1,10 +1,12 @@
 import { searchBooks } from './books-api.js';
-import { todayIso, yearOf } from './dates.js';
+import { isIsoDate, todayIso, yearOf } from './dates.js';
 import { photoToCover } from './cover-photo.js';
+import * as db from './db.js';
+import { closeOnFinish, recordProgress, unitOf, UNITS } from './journal.js';
 import { renderRetroImage } from './share-image.js';
 import {
-  STATUS, FORMATS, STORAGE_KEY, createEmptyState, getGoal, loadState, newId, parseBackup,
-  removeBook, restoreBook, saveState, serializeBackup, setGoal, startReread, upsertBook, validateBook,
+  STATUS, FORMATS, createEmptyState, getGoal, newId, openStoredState, parseBackup,
+  removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
 import { esc, icon, largeCoverUrl } from './ui.js';
 import { allTimeView } from './views/alltime.js';
@@ -20,7 +22,11 @@ const root = document.getElementById('app');
 const nav = document.getElementById('nav');
 const toastEl = document.getElementById('toast');
 
-let state = loadState(localStorage);
+// Preenchido em boot(), antes da primeira tela.
+let state = createEmptyState();
+// Onde gravar: 'kv' (IndexedDB), 'legacy' (localStorage antigo) ou null (não gravar). Veja openStoredState.
+let backend = null;
+let ready = false;
 
 const ui = {
   year: yearOf(todayIso()),
@@ -36,6 +42,7 @@ const ui = {
   finishing: false,
   original: null,
   editingProgress: null,
+  storageInfo: null,
 };
 
 let lastDeleted = null;
@@ -73,6 +80,7 @@ function blankDraft(status) {
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
     currentPage: null, currentPercent: null, dropReason: '', reread: false,
+    series: '', seriesNumber: null, tags: [], targetDate: null, quotes: [], journal: [],
   };
 }
 
@@ -106,10 +114,12 @@ function enterRoute(route) {
     }
   }
   if (route.name === 'retro') ui.retroSlide = 0;
+  if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
 }
 
 function render() {
+  if (!ready) return;
   const route = parseRoute();
   if (route.key !== currentKey) {
     ui.editingProgress = null;
@@ -178,14 +188,34 @@ function render() {
 
 // ---------- Persistência ----------
 
-let persistRequested = false;
+const SAVE_FAILED = 'Não foi possível salvar neste aparelho. Exporte um backup agora.';
+const LOAD_FAILED = 'Não foi possível abrir seus dados agora. Feche o app e abra de novo.';
 
+let persistRequested = false;
+let queued = null;
+let writing = null;
+// Avisa as outras abas (ou o app instalado aberto ao lado) que os dados mudaram.
+const channel = 'BroadcastChannel' in window ? new BroadcastChannel('leituras') : null;
+
+/** Grava em segundo plano, um estado por vez; se vários se acumulam, grava só o último. */
+async function flushSaves() {
+  while (queued) {
+    const snapshot = queued;
+    queued = null;
+    if (await writeStoredState(backend, db, localStorage, snapshot)) {
+      channel?.postMessage({ type: 'saved' });
+    } else {
+      toast(backend ? SAVE_FAILED : LOAD_FAILED, { sticky: !backend });
+    }
+  }
+  writing = null;
+}
+
+/** Troca o estado na hora (a tela já pode redesenhar) e grava no aparelho em seguida. */
 function persist(next, message) {
   state = next;
-  if (!saveState(localStorage, state)) {
-    toast('Não foi possível salvar neste aparelho. Exporte um backup agora.');
-    return;
-  }
+  queued = state;
+  writing ||= flushSaves();
   if (message) toast(message);
   if (!persistRequested && navigator.storage?.persist) {
     persistRequested = true;
@@ -193,13 +223,24 @@ function persist(next, message) {
   }
 }
 
-// Outra aba (ou o app instalado) alterou os dados: recarrega.
-window.addEventListener('storage', (e) => {
-  if (e.key === STORAGE_KEY) {
-    state = loadState(localStorage);
-    render();
-  }
+async function loadFromStorage() {
+  const opened = await openStoredState(db, localStorage);
+  state = opened.state;
+  backend = opened.backend;
+  if (opened.error) toast(LOAD_FAILED, { sticky: true });
+}
+
+channel?.addEventListener('message', async (e) => {
+  if (e.data?.type !== 'saved' || writing) return;
+  await loadFromStorage();
+  render();
 });
+
+/** Espaço usado e proteção contra limpeza, para a tela de Ajustes. */
+async function refreshStorageInfo() {
+  ui.storageInfo = await db.storageInfo();
+  if (parseRoute().name === 'ajustes') render();
+}
 
 // ---------- Avisos ----------
 
@@ -366,6 +407,13 @@ function openCoverViewer(src, title) {
 
 // ---------- Progresso da leitura (cartão do Início) ----------
 
+/** Livro com a nova posição e o diário atualizado (registro automático e silencioso). */
+function withProgress(book, value) {
+  const unit = unitOf(book);
+  const journal = recordProgress(book, value, unit, todayIso());
+  return unit === UNITS.PERCENT ? { ...book, currentPercent: value, journal } : { ...book, currentPage: value, journal };
+}
+
 /** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. */
 function saveProgress(bookId, raw) {
   const book = state.books.find((b) => b.id === bookId);
@@ -386,7 +434,7 @@ function saveProgress(bookId, raw) {
       go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
       return;
     }
-    persist(upsertBook(state, { ...book, currentPercent: Math.round(value) }).state, 'Progresso atualizado.');
+    persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
     render();
     return;
   }
@@ -399,7 +447,7 @@ function saveProgress(bookId, raw) {
     go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
     return;
   }
-  persist(upsertBook(state, { ...book, currentPage: value }).state, 'Página atualizada.');
+  persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
   render();
 }
 
@@ -416,12 +464,35 @@ function saveBook() {
     return;
   }
   const isNew = !d.id;
-  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId() });
+  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId(), journal: journalOnSave(d, ui.original) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   go(ui.backHref);
+}
+
+/**
+ * Diário ao salvar o formulário. Livro novo não ganha entrada: a página informada
+ * no cadastro é o ponto de partida, não leitura feita hoje.
+ */
+function journalOnSave(d, original) {
+  const journal = d.journal || [];
+  if (!original) return journal;
+  const today = todayIso();
+  if (d.status === STATUS.READ) {
+    if (original.status === STATUS.READ) return journal;
+    // Conclusão: registra no dia do término informado, se não for no futuro nem antes do diário.
+    const last = journal[journal.length - 1]?.date || '';
+    const day = isIsoDate(d.endDate) && d.endDate <= today && d.endDate >= last ? d.endDate : today;
+    return closeOnFinish({ ...d, currentPage: original.currentPage, currentPercent: original.currentPercent }, day);
+  }
+  if (d.status !== STATUS.READING && d.status !== STATUS.DROPPED) return journal;
+  const unit = unitOf(d);
+  const field = unit === UNITS.PERCENT ? 'currentPercent' : 'currentPage';
+  const value = d[field];
+  if (value === null || value === undefined || value === '' || Number(value) === original[field]) return journal;
+  return recordProgress({ ...d, [field]: original[field] }, Number(value), unit, today);
 }
 
 function changeGoal(el, isDefault) {
@@ -643,7 +714,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     }
     // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
     const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
-    if (busy) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
+    if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
     else window.location.reload();
   });
   navigator.serviceWorker.register('./sw.js').then((registration) => {
@@ -654,4 +725,16 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   }).catch(() => {});
 }
 
-render();
+// Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
+async function boot() {
+  try {
+    await loadFromStorage();
+  } catch {
+    backend = null;
+    toast(LOAD_FAILED, { sticky: true });
+  }
+  ready = true;
+  render();
+}
+
+boot();

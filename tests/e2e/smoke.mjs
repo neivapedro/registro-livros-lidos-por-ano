@@ -79,12 +79,28 @@ const seed = {
 };
 
 const browser = await playwright.chromium.launch();
-const context = await browser.newContext({
+const contextOptions = {
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR',
   acceptDownloads: true,
-});
+};
+const context = await browser.newContext(contextOptions);
 const page = await context.newPage();
 await page.clock.setFixedTime(new Date('2026-10-16T12:00:00'));
+
+// Os dados ficam no IndexedDB: lê e grava pelo próprio db.js do app.
+const STATE_KEY = 'state';
+const readState = (p = page) => p.evaluate(async (key) => (await import('/js/db.js')).getItem(key), STATE_KEY);
+const writeState = (data, p = page) => p.evaluate(async ([key, d]) => (await import('/js/db.js')).setItem(key, d), [STATE_KEY, data]);
+/** Espera a gravação (assíncrona) chegar ao aparelho. */
+async function waitState(predicate, p = page) {
+  let last;
+  for (let i = 0; i < 50; i += 1) {
+    last = await readState(p);
+    if (last && predicate(last)) return last;
+    await p.waitForTimeout(100);
+  }
+  throw new Error(`Estado salvo não chegou ao esperado: ${JSON.stringify(last)?.slice(0, 300)}`);
+}
 const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`); });
@@ -98,6 +114,27 @@ const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 
 try {
+  step('migração dos dados do localStorage (versão 1.2) para o IndexedDB');
+  {
+    const ctx = await browser.newContext(contextOptions);
+    const p = await ctx.newPage();
+    await p.clock.setFixedTime(new Date('2026-10-16T12:00:00'));
+    p.on('pageerror', (e) => errors.push(`pageerror (migração): ${e.message}`));
+    await p.goto(`${BASE}manifest.webmanifest`);
+    await p.evaluate((data) => localStorage.setItem('leituras:v1', JSON.stringify(data)), seed);
+    await p.goto(BASE);
+    await p.waitForSelector('.hero');
+    assert.match(await p.textContent('.ring-center'), /9\s*de 12 livros/);
+    assert.equal(await p.locator('.grid-book').count(), 6);
+    assert.equal(await p.evaluate(() => localStorage.getItem('leituras:v1')), null, 'chave antiga removida');
+    const migrated = await readState(p);
+    assert.deepEqual(migrated, seed, 'cópia idêntica no IndexedDB');
+    await p.reload();
+    await p.waitForSelector('.hero');
+    assert.match(await p.textContent('.ring-center'), /9\s*de 12 livros/);
+    await ctx.close();
+  }
+
   step('app vazio');
   await page.goto(BASE);
   await page.waitForSelector('.hero');
@@ -137,16 +174,16 @@ try {
   await page.click('text=Cancelar');
 
   step('dados de exemplo');
-  const existing = await page.evaluate(() => JSON.parse(localStorage.getItem('leituras:v1')));
-  await page.evaluate((data) => localStorage.setItem('leituras:v1', JSON.stringify(data)), {
-    ...seed, books: [...existing.books, ...seed.books],
-  });
+  const existing = await waitState((s) => s.books.length === 1);
+  assert.equal(existing.books[0].rating, 5);
+  await writeState({ ...seed, books: [...existing.books, ...seed.books] });
   await page.reload();
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /10\s*de 12/);
   assert.match(await page.textContent('.hero'), /10 meses seguidos/);
   await shot('04-inicio');
   assert.equal(await page.locator('.banner').count(), 0, 'sem aviso de backup na tela inicial');
+  assert.doesNotMatch(await page.textContent('#app'), /Espaço usado|Proteção contra limpeza/, 'nada de armazenamento na tela inicial');
   for (const width of [390, 375, 320]) {
     await page.setViewportSize({ width, height: 844 });
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
@@ -161,10 +198,24 @@ try {
   await page.click('.reading .btn-outline');
   await onPage('livro');
   assert.equal(await page.locator('.seg-btn.is-on').first().textContent(), 'Lido');
-  await page.click('[data-action="set-rating"][data-value="4"]');
+  // Meia estrela: metade esquerda da 5ª estrela = 4,5.
+  await page.click('[data-action="set-rating"][data-value="4.5"]');
+  assert.equal(await page.getAttribute('[data-action="set-rating"][data-value="4.5"]', 'aria-pressed'), 'true');
+  assert.equal(await page.getAttribute('[data-action="set-rating"][data-value="4.5"]', 'aria-label'), '4,5 estrelas');
+  assert.equal(await page.locator('.star-row .star-half').count(), 1);
+  assert.equal(await page.locator('.star-row .star-on').count(), 4);
+  await page.locator('.star-row').scrollIntoViewIfNeeded();
+  await page.screenshot({ path: join(SHOTS, '03b-meia-estrela.png') });
+  await page.setViewportSize({ width: 320, height: 844 });
+  const formOverflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+  assert.ok(formOverflow <= 0, `formulário com ${formOverflow}px sobrando à direita em 320px`);
+  await page.setViewportSize({ width: 390, height: 844 });
   await page.click('.btn-primary');
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /11\s*de 12/);
+  assert.match(await page.textContent('.grid-book >> nth=0'), /4,5/);
+  const finished = (await waitState((s) => s.books.some((b) => b.id === 'r1' && b.status === 'lido'))).books.find((b) => b.id === 'r1');
+  assert.equal(finished.rating, 4.5);
   assert.match(await page.textContent('.hero'), /11 meses seguidos/);
 
   step('estante');
@@ -221,6 +272,8 @@ try {
 
   step('ajustes, meta e backup');
   await page.goto(`${BASE}#/ajustes`);
+  await page.waitForSelector('.storage-info');
+  assert.match(await page.textContent('.storage-info'), /Espaço usado: .+ MB · Proteção contra limpeza automática: (ativa|não ativa)/);
   await page.click('[data-action="goal-year"][data-delta="1"]');
   assert.equal((await page.textContent('.step-value')).trim(), '13');
   const backupDownload = page.waitForEvent('download');
@@ -230,6 +283,7 @@ try {
   await backup.saveAs(backupPath);
   const parsed = JSON.parse(readFileSync(backupPath, 'utf8'));
   assert.equal(parsed.app, 'leituras');
+  assert.equal(parsed.schemaVersion, 2);
   assert.equal(parsed.data.books.length, 14);
   await shot('10-ajustes');
 
@@ -239,7 +293,7 @@ try {
   assert.match(await page.textContent('.ring-center'), /0\s*de 12/);
   await page.goto(`${BASE}#/ajustes`);
   await page.setInputFiles('[data-import]', backupPath);
-  await page.waitForFunction(() => JSON.parse(localStorage.getItem('leituras:v1')).books.length === 14);
+  await waitState((s) => s.books.length === 14);
   await page.goto(`${BASE}#/inicio`);
   assert.match(await page.textContent('.ring-center'), /11\s*de 13/);
 
@@ -262,6 +316,13 @@ try {
   await page.waitForSelector('.reading .progress');
   assert.match(await page.textContent('.reading .progress'), /Na pág\. 120 · informe o total/);
   await shot('11-inicio-progresso');
+  // Diário de leitura: registrado sozinho, sem nada na tela.
+  const withJournal = await waitState((s) => s.books.some((b) => b.id === 'w1' && b.journal?.length));
+  assert.deepEqual(withJournal.books.find((b) => b.id === 'w1').journal,
+    [{ date: '2026-10-16', from: 0, to: 120, unit: 'page', note: '' }]);
+  // O Kindle concluído antes fechou o dia em 100%.
+  assert.deepEqual(withJournal.books.find((b) => b.id === 'r1').journal,
+    [{ date: '2026-10-16', from: 0, to: 100, unit: 'percent', note: '' }]);
 
   step('capa pela foto');
   await page.click('.reading-link >> nth=0');
@@ -307,6 +368,9 @@ try {
   await page.press('#progress-input', 'Enter');
   await page.waitForFunction(() => /45% · no Kindle/.test(document.body.textContent));
   assert.equal(await page.locator('.progress-edit').count(), 0);
+  const kindleBook = (await waitState((s) => s.books.some((b) => b.title === 'Livro no Kindle' && b.currentPercent === 45)))
+    .books.find((b) => b.title === 'Livro no Kindle');
+  assert.deepEqual(kindleBook.journal, [{ date: '2026-10-16', from: 2, to: 45, unit: 'percent', note: '' }]);
   await shot('16-inicio-kindle');
 
   step('abandonei');

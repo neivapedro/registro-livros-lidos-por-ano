@@ -26,7 +26,9 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 
 ```
 app/            o app publicado (HTML, CSS e JavaScript puros, sem etapa de build)
-  js/store.js       dados, validação e backup
+  js/store.js       dados, validação, backup e migração do localStorage
+  js/db.js          armazenamento no IndexedDB (com localStorage de reserva)
+  js/journal.js     diário de leitura (páginas lidas por dia)
   js/stats.js       cálculos dos indicadores
   js/books-api.js   busca de livros
   js/views/         telas
