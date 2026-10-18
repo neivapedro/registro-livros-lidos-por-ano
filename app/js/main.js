@@ -710,7 +710,7 @@ const actions = {
   },
   'undo-delete'() {
     if (!lastDeleted) return;
-    persist(restoreBook(state, lastDeleted.book, lastDeleted.index), 'Livro restaurado.');
+    persist(restoreBook(state, lastDeleted.book, lastDeleted.index, lastDeleted.upNextIndex), 'Livro restaurado.');
     lastDeleted = null;
     render();
   },
@@ -746,7 +746,7 @@ const actions = {
     if (!ui.draft?.id) return;
     const index = state.books.findIndex((b) => b.id === ui.draft.id);
     if (index < 0) return;
-    lastDeleted = { book: state.books[index], index };
+    lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
     go(ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
@@ -778,6 +778,9 @@ const actions = {
     if (!window.confirm('Apagar TODOS os livros e ajustes deste celular?')) return;
     if (!window.confirm('Tem certeza? Sem um backup, não será possível recuperar.')) return;
     persist(createEmptyState(), 'Dados apagados.');
+    // Sessão do cronômetro aberta não sobrevive: voltaria do nada se um backup fosse importado depois.
+    ui.timerStop = null;
+    setSession(null);
     go('#/inicio');
   },
   reload() { window.location.reload(); },

@@ -37,7 +37,7 @@ export function currentPosition(book) {
 /**
  * Ritmo em páginas (ou %) por dia de leitura.
  * - Diário: média do avanço nos dias com leitura dos últimos 14 dias.
- * - Sem leitura recente no diário: posição atual ÷ dias desde o início.
+ * - Sem leitura recente no diário: posição atual ÷ dias desde o início (a partir do 2º dia).
  * Devolve { perDay, unit, source: 'journal'|'start' } ou null.
  */
 export function readingPace(book, today, windowDays = PACE_WINDOW_DAYS) {
@@ -51,7 +51,9 @@ export function readingPace(book, today, windowDays = PACE_WINDOW_DAYS) {
     return { perDay: total / recent.length, unit, source: 'journal' };
   }
   const position = currentPosition(book);
-  if (!isIsoDate(book.startDate) || book.startDate > today || position <= 0) return null;
+  // Começou hoje: a página informada no cadastro é o ponto de partida, não leitura do dia
+  // (sem isso, quem cadastra um livro na pág. 200 veria "Ritmo: 200 págs./dia").
+  if (!isIsoDate(book.startDate) || book.startDate >= today || position <= 0) return null;
   return { perDay: position / daysInclusive(book.startDate, today), unit, source: 'start' };
 }
 
