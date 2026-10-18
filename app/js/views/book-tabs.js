@@ -4,6 +4,7 @@
 import { formatShort } from '../dates.js';
 import { diarySummary, entriesNewestFirst, entryDate, entryParts } from '../diary.js';
 import { UNITS } from '../journal.js';
+import { STATUS } from '../store.js';
 import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
 import { emptyState, esc, num, plural } from '../ui.js';
 
@@ -119,8 +120,10 @@ function diaryTab(book, ui, today) {
   const entries = entriesNewestFirst(book);
   const where = quoteUsesPercent(book) ? 'a porcentagem' : 'a página';
   if (!entries.length) {
-    return `<section class="book-tab-panel" role="tabpanel">${emptyState('Nenhum dia registrado ainda',
-      `O diário se preenche sozinho: cada vez que você atualiza ${where} no cartão do Início, o dia fica registrado aqui.`)}</section>`;
+    const hint = book.status === STATUS.WANT
+      ? `Quando começar a ler, cada vez que você atualizar ${where} no cartão do Início, o dia fica registrado aqui.`
+      : `O diário se preenche sozinho: cada vez que você atualiza ${where} no cartão do Início, o dia fica registrado aqui.`;
+    return `<section class="book-tab-panel" role="tabpanel">${emptyState('Nenhum dia registrado ainda', hint)}</section>`;
   }
   const rows = entries.map((e) => (e.date === ui.diaryEdit ? diaryForm(book, e, today) : diaryRow(book, e, today))).join('');
   return `
