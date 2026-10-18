@@ -292,9 +292,11 @@ try {
   await page.click('text=Ver retrospectiva');
   await onPage('retro');
   await page.waitForSelector('.retro');
-  assert.match(await page.textContent('.retro-huge'), /11/);
   await shot('08-retro-1');
-  for (let i = 0; i < 3; i += 1) await page.click('.tap-next');
+  // 1º slide: mosaico de capas; 2º: a contagem. O livro do ano é o último.
+  await page.click('.tap-next');
+  assert.match(await page.textContent('.retro-huge'), /11/);
+  for (let i = 0; i < 12; i += 1) await page.click('.tap-next');
   assert.match(await page.textContent('.slide'), /Livro do ano/);
   assert.match(await page.textContent('.slide'), /A Meta/);
   await shot('08-retro-4');

@@ -18,8 +18,8 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 - **Adicionar livro:** busca por título ou autor (Open Library, preferindo a edição em português) ou por ISBN (BrasilAPI, que consulta CBL, Mercado Editorial, Open Library e Google, junto com a Open Library), ou cadastro manual — se a busca não achar, o ISBN digitado fica guardado no livro; capa pela foto (câmera ou galeria); status (Quero ler / Lendo / Lido / Abandonei, com o motivo), datas, página atual, formato (Físico / Kindle), gênero, nota, favorito do ano e anotações. Livros lidos podem ser lidos de novo (releitura).
 - **Estante:** fila "Quero ler", leituras em andamento, lidos por ano e abandonados.
 - **Buscar:** texto livre (título, autor, anotações) e filtros por status, ano, gênero, formato e nota.
-- **Resumo:** indicadores, favorito do ano, livros por mês com a meta, formatos, gêneros, autores, abandonados e comparativo entre anos. Opção **Todos os anos** com os números da vida toda.
-- **Retrospectiva:** telas em sequência com os números do ano e imagem pronta para salvar ou compartilhar.
+- **Resumo:** indicadores, favorito do ano, livros por mês com a meta, formatos, gêneros, autores, abandonados e comparativo entre anos. Opção **Todos os anos** com os números da vida toda e os **marcos** (1º, 10º, 25º… livro, 1.000 páginas, primeiro livro de 500+ páginas, livro lido em um dia, novos gêneros), com aviso discreto ao concluir um livro que alcança um marco.
+- **Retrospectiva:** a partir de 3 livros no ano, telas em sequência (mosaico de capas, livros, páginas, o mais longo e o mais curto, mês mais forte, maior sequência de leitura, gostos, marcos do ano, perfil de leitor por regras simples e livro do ano) e imagem pronta para salvar ou compartilhar, em formato story ou quadrado.
 - **Ajustes:** meta do ano e dos próximos anos, backup, instruções de instalação.
 
 ## Estrutura

@@ -13,6 +13,7 @@ import { closeOnFinish, recordProgress, unitOf, UNITS } from './journal.js';
 import { renderQuoteImage } from './quote-image.js';
 import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
 import { yearsWithData } from './stats.js';
+import { milestoneMessage, newMilestones } from './milestones.js';
 import { renderRetroImage } from './share-image.js';
 import {
   STATUS, FORMATS, createEmptyState, getGoal, newId, openStoredState, parseBackup,
@@ -347,8 +348,9 @@ async function retroImage(share) {
   const data = retroData(state, year, todayIso());
   toast('Gerando imagem…', { sticky: true });
   try {
-    const blob = await renderRetroImage(data, year);
-    const name = `leituras-${year}.png`;
+    const format = ui.retroFormat === 'square' ? 'square' : 'story';
+    const blob = await renderRetroImage(data, year, format);
+    const name = format === 'square' ? `leituras-${year}-quadrado.png` : `leituras-${year}.png`;
     const file = new File([blob], name, { type: 'image/png' });
     hideToast();
     if ((share || isIOS()) && await shareFile(file, `Minhas leituras de ${year}`)) return;
@@ -616,10 +618,12 @@ function saveBook() {
     return;
   }
   const isNew = !d.id;
+  const booksBefore = state.books;
   const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId(), journal: journalOnSave(d, ui.original) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
+  if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   go(ui.backHref);
 }
@@ -908,6 +912,22 @@ document.addEventListener('submit', (e) => {
   persist(setPageGoal(state, Number(form.dataset.year), goal), 'Meta de páginas salva.');
   render();
 });
+
+// ---------- Marcos e retrospectiva (v1.3) ----------
+
+// Formato da imagem da retrospectiva: 'story' (1080×1920) ou 'square' (1080×1080).
+ui.retroFormat = 'story';
+
+actions['retro-format'] = (el) => {
+  ui.retroFormat = el.dataset.value === 'square' ? 'square' : 'story';
+  render();
+};
+
+/** Livro concluído: se um marco novo apareceu, avisa com o toast (sem pop-up, sem pontos). */
+function celebrateMilestones(booksBefore, booksAfter) {
+  const message = milestoneMessage(newMilestones(booksBefore, booksAfter));
+  if (message) toast(message, { duration: 5000 });
+}
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');

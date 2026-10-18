@@ -5,6 +5,7 @@ import { allTimeStats, yearsWithData } from '../stats.js';
 import { decimal, emptyState, esc, icon, num, plural } from '../ui.js';
 import { yearPairCompare } from './charts.js';
 import { yearSelect } from './home.js';
+import { milestonesSection } from './marcos.js';
 
 function yearBars(s) {
   const max = Math.max(...s.years.map((y) => y.count), 1);
@@ -78,6 +79,7 @@ export function allTimeView({ state, ui, today }) {
     </section>
     ${ranking('Gêneros mais lidos', s.genres)}
     ${ranking('Autores mais lidos', s.authors)}
+    ${milestonesSection(state.books)}
     ${extras ? `<p class="muted small center-text">${extras}</p>` : ''}
     ${quotesLink(nQuotes)}`;
 }

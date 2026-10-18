@@ -913,3 +913,62 @@ button.bar-col:active { background: var(--surface-2); }
 .page-goal-field:focus-within { border-color: var(--accent); }
 .page-goal-field input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 18px; font-weight: 800; }
 .page-goal .btn-outline { min-height: 48px; }
+/* ---------- Marcos e Retrospectiva 2.0 (v1.3) ---------- */
+
+.mile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mile { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 44px; border-top: 1px solid var(--line); }
+.mile:first-child { border-top: 0; padding-top: 0; }
+.mile-icon {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px;
+  background: var(--surface-warm); color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mile-title { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.mile-detail { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+/* Próximos marcos: discretos, sem cor de destaque. */
+.mile.is-next .mile-icon { background: transparent; border: 1px dashed var(--line-strong); color: var(--faint); }
+.mile.is-next .mile-title { color: var(--text-soft); font-weight: 600; }
+.mile.is-next .mile-detail { color: var(--faint); }
+.milestones > .eyebrow { margin-top: 2px; }
+
+/* Nomes longos (gênero, perfil) não podem passar da tela de 320px. */
+.retro-mid { font-size: clamp(44px, 15vw, 64px); overflow-wrap: anywhere; }
+.retro-name { overflow-wrap: anywhere; }
+.retro-mosaic {
+  display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px;
+  width: 100%; max-width: 340px; margin-bottom: 14px;
+}
+.retro-mosaic .cover { padding: 6px; border-radius: 6px; }
+.retro-mosaic .cover-title { font-size: 11px; }
+.retro-mosaic .cover-author { display: none; }
+.retro-note { font-size: 15px; line-height: 1.5; color: var(--text-soft); margin-top: 14px; max-width: 320px; }
+.retro-note strong { color: var(--accent); }
+.retro-note.faint { font-size: 13px; color: var(--faint); }
+.retro-pair { display: flex; align-items: center; gap: 18px; }
+.retro-pair .retro-block { min-width: 0; }
+.retro-title {
+  font-family: var(--serif); font-size: 30px; line-height: 1.05; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.retro-months { display: flex; align-items: flex-end; gap: 6px; height: 64px; margin-top: 22px; }
+.retro-mbar { flex: 1; border-radius: 4px; background: #3A2E26; }
+.retro-mbar.on { background: var(--accent); }
+.retro-miles { gap: 14px; }
+.retro-miles .mile { border-top-color: #2A211A; padding: 12px 0; }
+.retro-miles .mile:first-child { padding-top: 0; }
+.retro-miles .mile-icon { background: #241B16; }
+.retro-miles .mile-title { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.1; }
+.retro-gate { gap: 14px; }
+.retro-gate .retro-line { max-width: 340px; }
+.retro-format-toggle { grid-column: 1 / -1; background: #241B16; border-color: transparent; }
+/* A retrospectiva ocupa a largura toda: com margin auto num flex em coluna ela encolhia
+   até o conteúdo e cada slide ficava de uma largura. Sem a folga da tela sem menu, nada rola. */
+.app[data-page="retro"] > .retro { width: 100%; }
+body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
+/* Telas de 320px: sem ícone nos botões da retrospectiva, para o texto caber numa linha. */
+.retro-actions .icon { flex-shrink: 0; }
+@media (max-width: 359px) {
+  .retro-actions .btn-ghost, .retro-actions .btn-primary { padding: 0 10px; }
+  .retro-actions .btn-ghost .icon, .retro-actions .btn-primary .icon { display: none; }
+}
