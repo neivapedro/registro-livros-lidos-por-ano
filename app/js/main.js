@@ -766,6 +766,9 @@ const actions = {
     if (!window.confirm('Apagar TODOS os livros e ajustes deste celular?')) return;
     if (!window.confirm('Tem certeza? Sem um backup, não será possível recuperar.')) return;
     persist(createEmptyState(), 'Dados apagados.');
+    // Sessão do cronômetro aberta não sobrevive: voltaria do nada se um backup fosse importado depois.
+    ui.timerStop = null;
+    setSession(null);
     go('#/inicio');
   },
   reload() { window.location.reload(); },

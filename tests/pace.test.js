@@ -51,6 +51,12 @@ test('sem diário: posição atual ÷ dias desde o início (contando o primeiro 
   assert.equal(readingPace(physical({ currentPage: 0 }), TODAY), null);
   assert.equal(readingPace(physical({ currentPage: 50, startDate: null }), TODAY), null);
   assert.equal(readingPace(physical({ currentPage: 50, startDate: '2026-10-20' }), TODAY), null, 'início no futuro');
+  // Começou hoje: a página do cadastro é o ponto de partida, não 200 págs. lidas hoje.
+  assert.equal(readingPace(physical({ currentPage: 200, startDate: TODAY }), TODAY), null, 'início hoje');
+  assert.deepEqual(paceLines(physical({ currentPage: 200, startDate: TODAY }), TODAY), { pace: '', target: '' });
+  // Mas com leitura registrada hoje no diário, o ritmo aparece.
+  const today = physical({ currentPage: 230, startDate: TODAY, journal: [entry(TODAY, 200, 230)] });
+  assert.deepEqual(readingPace(today, TODAY), { perDay: 30, unit: 'page', source: 'journal' });
 });
 
 test('quanto falta: físico precisa do total; Kindle usa %', () => {

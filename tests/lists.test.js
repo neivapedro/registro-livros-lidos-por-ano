@@ -7,7 +7,8 @@ import {
 import {
   booksInSeries, formatSeriesNumber, groupBySeries, seriesInfo, seriesLabel, seriesNames,
 } from '../app/js/series.js';
-import { normalizeState, removeBook, upsertBook } from '../app/js/store.js';
+import { allTags, normalizeState, removeBook, restoreBook, upsertBook } from '../app/js/store.js';
+import { filterBooks } from '../app/js/stats.js';
 import { addTags, hasTag, removeTag, tagRanking, topTagsInYear } from '../app/js/tags.js';
 import {
   drawBook, drawCandidates, firstUpNext, moveUpNext, toggleUpNext, wantQueue,
@@ -168,4 +169,35 @@ test('chave do Google: limpa espaços, avisa formato estranho, remove', () => {
   assert.equal(readGoogleKey(broken), '');
   assert.equal(saveGoogleKey(broken, key).ok, false);
   assert.doesNotThrow(() => removeGoogleKey(broken));
+});
+
+test('etiquetas com maiúsculas diferentes em livros diferentes contam como uma só', () => {
+  const books = [
+    { status: 'lido', endDate: '2026-02-01', tags: ['Fantasia'] },
+    { status: 'lido', endDate: '2026-03-01', tags: ['fantasia', 'Clássico'] },
+    { status: 'quero', tags: ['fantasia'] },
+  ];
+  // A grafia mostrada é a mais usada.
+  assert.deepEqual(tagRanking(books), [{ label: 'fantasia', count: 3 }, { label: 'Clássico', count: 1 }]);
+  const year = topTagsInYear(books, 2026);
+  assert.deepEqual(year.map((t) => [t.label.toLowerCase(), t.count]), [['fantasia', 2], ['clássico', 1]]);
+  assert.deepEqual(allTags({ books }), ['fantasia', 'Clássico']);
+  // Filtro da Buscar encontra as duas grafias.
+  const withIds = books.map((b, i) => ({ id: String(i), title: `L${i}`, authors: '', notes: '', createdAt: '2026', ...b }));
+  assert.equal(filterBooks(withIds, { tag: 'fantasia' }).length, 3);
+  assert.equal(filterBooks(withIds, { tag: 'FANTASIA' }).length, 3);
+});
+
+test('desfazer exclusão devolve o livro à mesma posição das próximas', () => {
+  const s = queueState();
+  const index = s.books.findIndex((b) => b.id === 'w3');
+  const book = s.books[index];
+  const removed = removeBook(s, 'w3');
+  assert.deepEqual(removed.upNext, ['w1']);
+  const back = restoreBook(removed, book, index, s.upNext.indexOf('w3'));
+  assert.deepEqual(back.upNext, ['w3', 'w1']);
+  assert.deepEqual(back.books.map((b) => b.id), s.books.map((b) => b.id));
+  // Livro que não estava nas próximas não entra nelas.
+  const plain = restoreBook(removeBook(s, 'w2'), s.books.find((b) => b.id === 'w2'), 1);
+  assert.deepEqual(plain.upNext, ['w3', 'w1']);
 });

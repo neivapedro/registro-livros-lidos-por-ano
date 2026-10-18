@@ -158,7 +158,7 @@ export function filterBooks(books, filters) {
     .filter((b) => !filters.genre || b.genre === filters.genre)
     .filter((b) => !filters.format || b.format === filters.format)
     .filter((b) => !minRating || (b.rating || 0) >= minRating)
-    .filter((b) => !filters.tag || (b.tags || []).includes(filters.tag))
+    .filter((b) => !filters.tag || (b.tags || []).some((t) => t.toLocaleLowerCase('pt-BR') === filters.tag.toLocaleLowerCase('pt-BR')))
     .sort((a, b) => (b.endDate || b.startDate || b.createdAt).localeCompare(a.endDate || a.startDate || a.createdAt));
 }
 

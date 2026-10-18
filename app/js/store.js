@@ -402,15 +402,30 @@ export function allGenres(state) {
   return [...new Set([...DEFAULT_GENRES, ...state.customGenres, ...used])];
 }
 
+/**
+ * Contagem das tags nos livros, sem diferenciar maiúsculas ("Clássico" e "clássico" são a mesma).
+ * Devolve [{ label, count }] da mais usada para a menos usada (empate: ordem alfabética);
+ * o nome mostrado é a grafia mais usada (empate: a que apareceu primeiro).
+ */
+export function countTags(books) {
+  const groups = new Map();
+  for (const b of books) {
+    for (const tag of b.tags || []) {
+      const key = tag.toLocaleLowerCase('pt-BR');
+      const g = groups.get(key) || { count: 0, spellings: new Map() };
+      g.count += 1;
+      g.spellings.set(tag, (g.spellings.get(tag) || 0) + 1);
+      groups.set(key, g);
+    }
+  }
+  return [...groups.values()]
+    .map((g) => ({ label: [...g.spellings.entries()].reduce((a, b) => (b[1] > a[1] ? b : a))[0], count: g.count }))
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
+}
+
 /** Tags usadas nos livros, da mais usada para a menos usada (empate: ordem alfabética). */
 export function allTags(state) {
-  const counts = new Map();
-  for (const b of state.books) {
-    for (const tag of b.tags || []) counts.set(tag, (counts.get(tag) || 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'pt-BR'))
-    .map(([tag]) => tag);
+  return countTags(state.books).map((t) => t.label);
 }
 
 export function loadState(storage) {

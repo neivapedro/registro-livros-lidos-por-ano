@@ -674,6 +674,11 @@ textarea::placeholder { color: var(--faint); }
 .reading-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 6px; }
 .reading-main .reading-link { grid-row: span 2; }
 .reading-main > .btn-outline { width: 100%; }
+/* iPhone SE (320px): com os botões ao lado, o título ficava com uma palavra por linha. */
+@media (max-width: 359px) {
+  .reading-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .reading-main .reading-link { grid-column: 1 / -1; grid-row: auto; }
+}
 .btn-timer {
   min-height: 44px; padding: 0 12px; width: 100%;
   border: 0; border-radius: 14px; background: var(--surface-warm); color: var(--accent);
@@ -722,7 +727,7 @@ textarea::placeholder { color: var(--faint); }
 
 /* Ritmo no cartão "Lendo agora": discreto, só informa. */
 .pace-line { display: flex; flex-direction: column; gap: 2px; margin-top: -4px; font-size: 12px; font-weight: 600; color: var(--muted); }
-.pace-line span { overflow-wrap: anywhere; }
+.pace-line span { overflow-wrap: anywhere; text-wrap: pretty; } /* sem "3" numa linha e "nov" na outra */
 .next-up .btn-primary.sm { min-height: 48px; }
 
 /* Fila "Quero ler": ferramentas numa segunda linha do cartão, para o título não espremer. */
