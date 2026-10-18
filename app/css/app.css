@@ -223,7 +223,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
 }
 .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cover-title { font-family: var(--serif); font-size: 13px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.cover-title { font-family: var(--serif); font-size: 13px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; -webkit-hyphens: auto; hyphens: auto; }
 .cover-author { font-size: 8px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.8; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cover-xs { width: 34px; height: 50px; padding: 0; border-radius: 4px; }
 .cover-sm { width: 48px; height: 72px; padding: 6px; border-radius: 5px; }
@@ -353,13 +353,18 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .filter { position: relative; display: flex; align-items: center; min-width: 0; }
 .filter select {
   appearance: none; -webkit-appearance: none;
-  width: 100%; height: 44px; padding: 0 28px 0 14px; border-radius: 999px;
+  width: 100%; height: 44px; padding: 0 26px 0 12px; border-radius: 999px;
   background: var(--surface); border: 1px solid var(--line-strong);
   font-size: 16px; font-weight: 600; color: var(--text-soft);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .filters .btn-text { justify-content: center; }
-.filter .icon { position: absolute; right: 11px; pointer-events: none; color: var(--muted); }
+.filter .icon { position: absolute; right: 10px; pointer-events: none; color: var(--muted); }
+/* 320–360px: em três colunas os nomes dos filtros ("Gênero", "Formato") ficavam cortados.
+   A fonte fica em 16px (menor que isso o iPhone dá zoom ao tocar). */
+@media (max-width: 374px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ---------- Formulário ---------- */
 
@@ -896,6 +901,15 @@ button.bar-col:active { background: var(--surface-2); }
 .cmp2-head { padding-bottom: 4px; }
 .cmp2-pick { min-width: 0; }
 .cmp2-pick select { width: 100%; }
+/* 320–360px: o ano escolhido ("2026") virava "20…". Coluna dos rótulos mais estreita e menos folga no seletor. */
+@media (max-width: 374px) {
+  .cmp2-row { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .cmp2-pick select { padding: 0 28px 0 12px; }
+  .cmp2-pick .icon { right: 10px; }
+  /* Diário: "págs. registradas" quebrava no meio da palavra. */
+  .diary-summary { gap: 8px; }
+  .diary-summary .tile { padding: 12px 10px; }
+}
 .cmp2-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cmp2-value { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
 .cmp2-track { height: 4px; border-radius: 999px; background: var(--surface-2); }
@@ -945,9 +959,15 @@ button.bar-col:active { background: var(--surface-2); }
 .retro-mid { font-size: clamp(44px, 15vw, 64px); overflow-wrap: anywhere; }
 .retro-name { overflow-wrap: anywhere; }
 .retro-mosaic {
-  display: grid; grid-template-columns: repeat(var(--cols), minmax(0, 1fr)); gap: 8px;
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
   width: 100%; max-width: 340px; margin-bottom: 14px;
+  /* Capas 2:3 em --rows linhas: a altura do mosaico cabe na tela junto do título e dos botões
+     (iPhone SE, 375×667). A última linha incompleta fica centralizada. */
+  max-width: min(340px, calc((100dvh - 360px - var(--safe-t) - var(--safe-b) - (var(--rows) - 1) * 8px) / var(--rows) * 2 / 3 * var(--cols) + (var(--cols) - 1) * 8px));
 }
+.retro-mosaic > .cover { width: calc((100% - (var(--cols) - 1) * 8px) / var(--cols)); container-type: inline-size; }
+/* Capa desenhada pequena demais para o título (telas baixas): fica só a cor. */
+@container (max-width: 44px) { .retro-mosaic .cover-title { display: none; } }
 .retro-mosaic .cover { padding: 6px; border-radius: 6px; }
 .retro-mosaic .cover-title { font-size: 11px; }
 .retro-mosaic .cover-author { display: none; }
@@ -992,4 +1012,13 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   .retro .slide.center .cover-xl .cover-title { font-size: 26px; }
   .retro .slide.center { gap: 10px; }
   .retro .retro-stage { padding: 12px 0; }
+  .retro .slide.gap-lg { gap: 18px; }
+  /* Livro do ano com título longo e anotação: o trecho fica em 2 linhas para caber (375×667). */
+  .retro .retro-quote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
+/* iPhone SE de 1ª geração (320×568): capa menor e sem o trecho no Livro do ano. */
+@media (max-height: 600px) {
+  .retro .slide.center .cover-xl { width: 96px; height: 144px; padding: 10px; }
+  .retro .slide.center .cover-xl .cover-title { font-size: 20px; }
+  .retro .retro-quote { display: none; }
 }

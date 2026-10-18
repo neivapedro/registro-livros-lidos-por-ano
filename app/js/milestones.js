@@ -122,11 +122,21 @@ export function newMilestones(booksBefore, booksAfter) {
   return milestones(booksAfter).filter((m) => !before.has(m.id));
 }
 
+/**
+ * Nome do marco dentro da frase do aviso, depois dos dois-pontos: em minúscula, e o de gênero
+ * sem outros dois-pontos ("Novo gênero: Distopia" vira "primeiro livro de Distopia").
+ */
+function inSentence(title) {
+  const genre = /^Novo gênero: (.+)$/.exec(title);
+  if (genre) return `primeiro livro de ${genre[1]}`;
+  return title.charAt(0).toLocaleLowerCase('pt-BR') + title.slice(1);
+}
+
 /** Texto do aviso: "Marco alcançado: 10º livro" ou "Marcos alcançados: 10º livro e 1.000 páginas". */
 export function milestoneMessage(list) {
   if (!list.length) return '';
-  if (list.length === 1) return `Marco alcançado: ${list[0].title}`;
-  const names = list.slice(0, 2).map((m) => m.title);
+  if (list.length === 1) return `Marco alcançado: ${inSentence(list[0].title)}`;
+  const names = list.slice(0, 2).map((m) => inSentence(m.title));
   const more = list.length - 2;
   return `Marcos alcançados: ${names.join(more ? ', ' : ' e ')}${more ? ` e mais ${more}` : ''}`;
 }

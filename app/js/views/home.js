@@ -27,13 +27,14 @@ function hero(stats, streak, isCurrentYear, pagesLine = '') {
   const streakChip = isCurrentYear && streak.current > 0
     ? `<span class="pill-accent">${icon('flame', { size: 14 })}${streak.current === 1 ? '1 mês na meta' : `${streak.current} meses seguidos`}</span>`
     : `<span class="pill-muted">Meta mensal: ${plural(stats.monthlyTarget, 'livro', 'livros')}</span>`;
+  // Sem livros: sem o arco (com a ponta arredondada, um traço de tamanho zero vira um ponto).
   return `
     <section class="card hero">
       <div class="ring">
         <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="${stats.count} de ${stats.goal} livros da meta">
           <circle cx="66" cy="66" r="56" fill="none" stroke="var(--line-strong)" stroke-width="11"/>
-          <circle cx="66" cy="66" r="56" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
-            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 66 66)" class="ring-progress"/>
+          ${stats.progress > 0 ? `<circle cx="66" cy="66" r="56" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
+            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 66 66)" class="ring-progress"/>` : ''}
         </svg>
         <div class="ring-center"><span class="ring-count">${stats.count}</span><span class="ring-sub">de ${plural(stats.goal, 'livro', 'livros')}</span></div>
       </div>

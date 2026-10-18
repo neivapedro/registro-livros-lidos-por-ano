@@ -263,7 +263,7 @@ export function validateBook(book, today = null) {
     }
   }
   if (Array.isArray(book.tags) && book.tags.length > MAX_TAGS) {
-    errors.push(`Use no máximo ${MAX_TAGS} tags.`);
+    errors.push(`Use no máximo ${MAX_TAGS} etiquetas.`);
   }
   return errors;
 }

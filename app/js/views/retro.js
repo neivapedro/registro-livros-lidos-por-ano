@@ -54,16 +54,19 @@ function mosaicSlide(d, year) {
   const n = d.covers.length;
   // Colunas para o mosaico ficar cheio: 3 → 3, 4 → 2×2, até 9 → 3, acima → 4.
   const cols = n <= 3 ? n : n === 4 ? 2 : n <= 9 ? 3 : 4;
+  // Linhas: a altura das capas acompanha a da tela (iPhone SE), e a última linha fica centralizada.
+  const rows = Math.ceil(n / cols);
   return `
     <div class="slide center">
-      <div class="retro-mosaic" style="--cols:${cols}">${d.covers.map((b) => cover(b, { size: 'fill' })).join('')}</div>
+      <div class="retro-mosaic" style="--cols:${cols};--rows:${rows}">${d.covers.map((b) => cover(b, { size: 'fill' })).join('')}</div>
       <span class="retro-line">Seu <em class="accent">${year}</em> em livros</span>
     </div>`;
 }
 
 function countSlide(d, year) {
   const { s } = d;
-  const goalLine = s.count >= s.goal ? 'Meta cumprida.' : `de ${s.goal} da meta.`;
+  // Mesmo texto da imagem: "7 livros. Meta: 12." (frase nova, com maiúscula).
+  const goalLine = s.count >= s.goal ? 'Meta cumprida.' : `Meta: ${s.goal}.`;
   return `
     <div class="slide">
       <span class="eyebrow">${d.isCurrent ? `Em ${year}, até agora, você leu` : `Em ${year} você leu`}</span>

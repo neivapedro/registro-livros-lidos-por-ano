@@ -135,3 +135,16 @@ test('marcos novos ao concluir um livro e texto do aviso', () => {
   assert.equal(milestoneMessage([]), '');
   assert.deepEqual(newMilestones(after, after), []);
 });
+
+test('aviso do marco: sem dois-pontos duplos nem maiúscula no meio da frase', () => {
+  assert.equal(milestoneMessage([{ title: 'Novo gênero: Distopia' }]), 'Marco alcançado: primeiro livro de Distopia');
+  assert.equal(milestoneMessage([{ title: 'Livro lido em um só dia' }]), 'Marco alcançado: livro lido em um só dia');
+  assert.equal(
+    milestoneMessage([{ title: '10º livro' }, { title: 'Primeiro livro de 500+ páginas' }]),
+    'Marcos alcançados: 10º livro e primeiro livro de 500+ páginas',
+  );
+  assert.equal(
+    milestoneMessage([{ title: '1.000 páginas' }, { title: 'Novo gênero: Poesia' }]),
+    'Marcos alcançados: 1.000 páginas e primeiro livro de Poesia',
+  );
+});

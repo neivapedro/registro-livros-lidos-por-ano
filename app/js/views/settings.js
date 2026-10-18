@@ -92,7 +92,7 @@ ${googleKeyCard(Boolean(ui?.googleKey))}
 
     <section class="card">
       <h2>Sobre</h2>
-      <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via Google Books e Open Library.</p>
+      <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books, com a chave).</p>
       <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>
     </section>`;
 }

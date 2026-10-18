@@ -1126,7 +1126,7 @@ Object.assign(actions, {
   'toggle-next'(el) {
     const { state: next, full } = toggleUpNext(state, el.dataset.id);
     if (full) {
-      toast(`Limite de ${MAX_UP_NEXT} próximas`);
+      toast(`Limite de ${MAX_UP_NEXT} próximas. Tire uma da lista para marcar outra.`);
       return;
     }
     persist(next);
