@@ -54,6 +54,7 @@ test('normalizeGoogleVolume', () => {
     cover: 'https://books.google.com/books/content?id=abc123&printsec=frontcover&img=1&zoom=1&source=gbs_api',
     isbn: '9788521315315',
     year: 2014,
+    lang: '',
   });
   assert.equal(normalizeGoogleVolume({ volumeInfo: {} }), null);
   assert.equal(normalizeGoogleVolume({ id: 'x', volumeInfo: { title: 'Sem capa' } }).cover, null);
@@ -196,7 +197,8 @@ test('busca por título inclui o Google Books quando há chave', async () => {
   ]);
   const { results } = await searchBooks('a meta goldratt', { fetchImpl: impl, googleKey: 'minha chave' });
   assert.deepEqual(results.map((r) => r.source).sort(), ['Google Books', 'Open Library']);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 3, 'Open Library + 2 páginas do Google');
+  assert.ok(calls.some((u) => u.startsWith(GOOGLE) && u.includes('startIndex=20')));
   const google = calls.find((u) => u.startsWith(GOOGLE));
   assert.match(google, /q=a%20meta%20goldratt&/);
   assert.match(google, /langRestrict=pt/);
@@ -395,7 +397,11 @@ test('Google com erro 503 passageiro: tenta de novo e traz o livro', async () =>
   let n = 0;
   const unavailable = () => ({ ok: false, status: 503, json: async () => ({}) });
   const { impl } = fakeFetch([
-    [GOOGLE, () => { n += 1; return n === 1 ? unavailable() : ok({ items: [googleItem] }); }],
+    [GOOGLE, (url) => {
+      if (url.includes('startIndex')) return ok({});
+      n += 1;
+      return n === 1 ? unavailable() : ok({ items: [googleItem] });
+    }],
     [OL, () => ok({ docs: [] })],
   ]);
   const { results, failed } = await searchBooks('a meta goldratt', { fetchImpl: impl, googleKey: 'k' });
@@ -416,4 +422,20 @@ test('joinAuthors: até 3 nomes; coletânea vira "e outros"', () => {
   assert.equal(joinAuthors(['A', ' B ', '', 'C']), 'A, B, C');
   assert.equal(joinAuthors(['Joel Jota', 'Ana', 'Bia', 'Caio', 'Duda']), 'Joel Jota, Ana, Bia e outros');
   assert.equal(joinAuthors(undefined), '');
+});
+
+test('ordem: no empate, edição em português antes da estrangeira', () => {
+  const r = (title, lang) => ({ title, authors: 'Itamar Vieira Junior', source: 'Google Books', lang });
+  assert.deepEqual(rankResults([r('Crooked Plow', 'en'), r('Salvar el fuego', 'es'), r('Torto Arado', 'pt-BR')], 'itamar vieira')
+    .map((x) => x.title), ['Torto Arado', 'Crooked Plow', 'Salvar el fuego']);
+});
+
+test('segunda página do Google com erro não marca a busca como falha', async () => {
+  const { impl } = fakeFetch([
+    [GOOGLE, (url) => (url.includes('startIndex') ? { ok: false, status: 400, json: async () => ({}) } : ok({ items: [googleItem] }))],
+    [OL, () => ok({ docs: [] })],
+  ]);
+  const { results, failed } = await searchBooks('a meta', { fetchImpl: impl, googleKey: 'k' });
+  assert.equal(failed, false);
+  assert.equal(results.length, 1);
 });

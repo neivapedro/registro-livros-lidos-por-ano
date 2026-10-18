@@ -22,6 +22,10 @@ const OPEN_LIBRARY_FIELDS = [
 /** Tempo máximo de cada fonte (ms). Passado isso, ela conta como falha. */
 export const SOURCE_TIMEOUT_MS = 8000;
 const RETRIES_ON_5XX = 2;
+// O Google devolve no máximo 20 por consulta e ordena mal por autor: pede 2 páginas
+// em paralelo para o livro certo ter mais chance de vir (a lista é reordenada depois).
+const GOOGLE_PAGE = 20;
+const GOOGLE_PAGES = 2;
 const RETRY_DELAY_MS = 300;
 /** Quantos resultados a busca mostra. */
 export const RESULT_LIMIT = 15;
@@ -110,6 +114,7 @@ export function normalizeGoogleVolume(item) {
     cover: toHttps(links.thumbnail || links.smallThumbnail),
     isbn: pickIsbn(ids),
     year: info.publishedDate ? Number(String(info.publishedDate).slice(0, 4)) || null : null,
+    lang: String(info.language || '').toLowerCase(),
   };
 }
 
@@ -174,7 +179,7 @@ const words = (s) => foldText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 2
  * Põe primeiro o que combina com o que foi digitado. O Google devolve muito livro
  * sem relação (para "Joel Jota", o livro dele vinha em 7º, atrás de coletâneas).
  * Pontos: todas as palavras no autor (busca por autor) > todas no título ou no
- * título + autor > alguma palavra. Empate mantém a ordem das fontes.
+ * título + autor > alguma palavra. No empate, edição em português primeiro; depois a ordem das fontes.
  */
 export function rankResults(results, query) {
   const q = words(query);
@@ -195,7 +200,8 @@ export function rankResults(results, query) {
   // ela pode mostrar a edição em português com outro título ("The Goal" → "A Meta").
   const noise = (x) => x.s === 0 && x.r.source === 'Google Books';
   const relevant = scored.some((x) => x.s > 0) ? scored.filter((x) => !noise(x)) : scored;
-  return relevant.sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r);
+  const pt = (r) => (r.lang ? r.lang.startsWith('pt') : r.source !== 'Google Books');
+  return relevant.sort((a, b) => b.s - a.s || pt(b.r) - pt(a.r) || a.i - b.i).map((x) => x.r);
 }
 
 /** Junta as listas intercalando as fontes (na ordem dada) e removendo repetidos. */
@@ -257,9 +263,10 @@ function openLibraryUrl(param) {
   return `${OPEN_LIBRARY_URL}?${param}&limit=10&fields=${OPEN_LIBRARY_FIELDS}`;
 }
 
-function googleUrl(query, { portuguese, key }) {
+function googleUrl(query, { portuguese, key, start = 0 }) {
   const lang = portuguese ? '&langRestrict=pt' : '';
-  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=40&printType=books${lang}&key=${encodeURIComponent(key)}`;
+  const page = start ? `&startIndex=${start}` : '';
+  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=${GOOGLE_PAGE}${page}&printType=books${lang}&key=${encodeURIComponent(key)}`;
 }
 
 /**
@@ -271,11 +278,12 @@ async function runSources(fetchImpl, sources, opts) {
     sources.map((s) => getJson(fetchImpl, s.url, opts).then((data) => (data ? s.parse(data) : []))),
   );
   const lists = settled.map((s) => (s.status === 'fulfilled' ? s.value : []));
-  const rejected = settled.filter((s) => s.status === 'rejected').length;
+  const main = sources.map((src, i) => ({ src, ok: settled[i].status === 'fulfilled' })).filter((x) => !x.src.optional);
+  const rejected = main.filter((x) => !x.ok).length;
   return {
     results: mergeResults(lists, Infinity),
-    failed: rejected === sources.length,
-    partial: rejected > 0,
+    failed: rejected === main.length,
+    partial: rejected > 0 || settled.some((x) => x.status === 'rejected'),
   };
 }
 
@@ -300,7 +308,11 @@ async function searchText(fetchImpl, q, googleKey, opts) {
   const build = (portuguese) => {
     const olParam = portuguese ? `q=${encodeURIComponent(`${q} language:por`)}&lang=pt` : `q=${encodeURIComponent(q)}`;
     const sources = [{ url: openLibraryUrl(olParam), parse: parseOpenLibrary }];
-    if (googleKey) sources.push({ url: googleUrl(q, { portuguese, key: googleKey }), parse: parseGoogle });
+    if (googleKey) {
+      for (let p = 0; p < GOOGLE_PAGES; p += 1) {
+        sources.push({ url: googleUrl(q, { portuguese, key: googleKey, start: p * GOOGLE_PAGE }), parse: parseGoogle, optional: p > 0 });
+      }
+    }
     return sources;
   };
   const ranked = (outcome) => ({ ...outcome, results: rankResults(outcome.results, q).slice(0, RESULT_LIMIT) });
