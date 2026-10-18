@@ -12,7 +12,7 @@ export function allQuotesResults(state, query) {
   if (!found.length) return emptyState('Nenhum trecho encontrado', 'Tente outra palavra do trecho, do título ou do autor.');
   const count = query.trim() ? plural(found.length, 'trecho encontrado', 'trechos encontrados') : plural(found.length, 'trecho', 'trechos');
   return `<p class="muted small">${count}</p>${found.map(({ quote, book }) => {
-    const source = [book.authors.split(',')[0].trim(), quotePosition(quote)].filter(Boolean).join(' · ');
+    const source = [book.authors.split(',')[0].trim(), quotePosition(quote, book)].filter(Boolean).join(' · ');
     return `
     <a class="quote-card quote-link" href="#/livro/${encodeURIComponent(book.id)}?aba=trechos">
       <blockquote class="quote-text">${esc(quote.text)}</blockquote>
