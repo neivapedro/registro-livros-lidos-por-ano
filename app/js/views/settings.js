@@ -29,6 +29,25 @@ export function storageLine(info) {
   return parts.length ? `<p class="muted small storage-info">${parts.join(' · ')}</p>` : '';
 }
 
+/** Chave opcional do Google Books (guardada fora do backup; veja prefs.js). */
+function googleKeyCard(hasKey) {
+  return `
+    <section class="card gkey">
+      <h2>Busca de livros</h2>
+      <p class="muted small">Opcional: com uma chave gratuita do Google Books a busca por título encontra mais livros brasileiros.</p>
+      <div class="field">
+        <label for="gb-key">Chave do Google Books</label>
+        <input id="gb-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AIza…)" data-gkey>
+      </div>
+      <p class="small gkey-status${hasKey ? ' is-on' : ''}" role="status">${hasKey ? `${icon('check', { size: 14, stroke: 2.4 })}Chave configurada` : 'Sem chave — usando BrasilAPI e Open Library'}</p>
+      <div class="two-cols">
+        <button type="button" class="btn-primary sm" data-action="save-gkey">Salvar</button>
+        <button type="button" class="btn-ghost" data-action="remove-gkey"${hasKey ? '' : ' disabled'}>Remover</button>
+      </div>
+      <p class="muted small">A chave fica só neste aparelho e não vai para o backup.</p>
+    </section>`;
+}
+
 export function settingsView({ state, ui, today }) {
   const year = yearOf(today);
   const goal = getGoal(state, year);
@@ -55,7 +74,10 @@ export function settingsView({ state, ui, today }) {
       ${storageLine(ui?.storageInfo)}
       <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
       <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
+      <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
+      <p class="muted small">A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.</p>
     </section>
+${googleKeyCard(Boolean(ui?.googleKey))}
 
     <section class="card">
       <h2>Instalar no celular</h2>

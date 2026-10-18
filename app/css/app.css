@@ -718,3 +718,66 @@ textarea::placeholder { color: var(--faint); }
   .timer .cover-xl { width: 120px; height: 180px; padding: 12px; }
   .timer .cover-xl .cover-title { font-size: 24px; }
 }
+/* ---------- v1.3: ritmo, próximas, sorteio, etiquetas, série, planilha e chave do Google ---------- */
+
+/* Ritmo no cartão "Lendo agora": discreto, só informa. */
+.pace-line { display: flex; flex-direction: column; gap: 2px; margin-top: -4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pace-line span { overflow-wrap: anywhere; }
+.next-up .btn-primary.sm { min-height: 48px; }
+
+/* Fila "Quero ler": ferramentas numa segunda linha do cartão, para o título não espremer. */
+.book-row:has(> .row-tools) { flex-wrap: wrap; }
+.row-tools { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.row-tools .chip-btn:last-child { margin-left: auto; }
+.next-pos { font-family: var(--serif); font-size: 22px; color: var(--accent); min-width: 28px; }
+.icon-btn.sm { background: var(--surface-2); border-color: transparent; }
+.icon-btn:disabled, .chip-btn:disabled, .btn-ghost:disabled { opacity: 0.35; cursor: default; }
+.icon.flip { transform: rotate(180deg); }
+.chip-btn.sm { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; }
+.list-head { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+.list-head .small { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.list-tools { display: flex; justify-content: flex-end; }
+
+/* Sorteio */
+.draw-open { gap: 10px; }
+.draw-panel { gap: 12px; }
+.filters.filters-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.draw-result { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 18px; background: #221D19; border: 1px solid var(--accent); }
+.draw-result .reading-text { flex: 1; }
+.draw-panel .two-cols .btn-ghost, .draw-panel .two-cols .btn-primary { min-height: 52px; padding: 0 10px; }
+
+/* Etiquetas e série nas listas */
+.chip.chip-tag { background: transparent; border: 1px solid var(--line-strong); color: var(--text-soft); }
+.chip.chip-series { background: var(--surface-warm); color: var(--accent); }
+
+/* Formulário: data alvo, série e etiquetas */
+.target-row { display: flex; align-items: center; gap: 8px; }
+.target-row input { flex: 1; min-width: 0; }
+.target-row .btn-text { padding: 0 4px; flex-shrink: 0; }
+.series-cols { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; }
+.series-info { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.series-info a { font-weight: 700; }
+.tag-chip {
+  display: inline-flex; align-items: center; max-width: 100%; min-height: 44px; padding-left: 14px; border-radius: 999px;
+  background: var(--surface-warm); border: 1px solid var(--accent); color: var(--accent); font-size: 13px; font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.tag-x { width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; }
+.tag-input { display: flex; gap: 8px; align-items: center; }
+.tag-input input {
+  flex: 1; min-width: 0; height: 48px; padding: 0 14px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line); outline: none; font-weight: 600;
+}
+.tag-input input:focus { border-color: var(--accent); }
+.tag-input input::placeholder { color: var(--faint); font-weight: 500; }
+.tag-input .chip-btn { min-height: 48px; flex-shrink: 0; }
+
+/* Resumo: etiquetas mais usadas */
+.tag-count { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 6px 6px 12px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
+.tag-count-name { min-width: 0; overflow-wrap: anywhere; }
+.tag-count-n { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: var(--surface-warm); color: var(--accent); font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Ajustes: chave do Google Books */
+.gkey-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 600; }
+.gkey-status.is-on { color: var(--accent); }
+.gkey .two-cols .btn-ghost { min-height: 52px; }

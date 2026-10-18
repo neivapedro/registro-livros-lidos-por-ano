@@ -1,8 +1,10 @@
 import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
+import { paceLines } from '../pace.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
 import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
 import { timerBanner, timerButton } from './timer.js';
+import { firstUpNext } from '../upnext.js';
 
 const RING_C = 2 * Math.PI * 56;
 
@@ -78,7 +80,7 @@ function progressEditor(b) {
     </form>`;
 }
 
-function readingNow(books, editingId, session) {
+function readingNow(books, editingId, session, today) {
   if (!books.length) return '';
   const cards = books.map((b) => `
     <div class="card reading">
@@ -98,12 +100,41 @@ function readingNow(books, editingId, session) {
       <div class="reading-progress">
         ${progressBar(b) || `<span class="muted small">${b.format === 'kindle' ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`}
         <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${updateLabel(b)}</button>
-      </div>`}
+      </div>${paceInfo(b, today)}`}
     </div>`).join('');
   return `
     <section class="section">
       <div class="section-head"><h2>Lendo agora</h2><span class="muted small">${plural(books.length, 'livro', 'livros')}</span></div>
       ${cards}
+    </section>`;
+}
+
+// Ritmo e previsão: só informa, sem cobrar (nunca "atrasado").
+function paceInfo(b, today) {
+  const { pace, target } = paceLines(b, today);
+  if (!pace && !target) return '';
+  return `<p class="pace-line">${[pace, target].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join('')}</p>`;
+}
+
+// Sem leitura em andamento: sugere o primeiro da lista de próximas.
+function nextUpCard(state) {
+  const b = firstUpNext(state);
+  if (!b) return '';
+  return `
+    <section class="section">
+      <div class="section-head"><h2>Próxima leitura</h2><a class="link" href="#/estante?aba=quero">Ver fila</a></div>
+      <div class="card reading next-up">
+        <div class="reading-main">
+          <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}">
+            ${cover(b, { size: 'md' })}
+            <span class="reading-text">
+              <span class="serif-title">${esc(b.title)}</span>
+              <span class="muted small">${esc(b.authors || 'Autor não informado')}</span>
+            </span>
+          </a>
+        </div>
+        <button type="button" class="btn-primary sm" data-action="start-reading" data-id="${esc(b.id)}">Começar a ler</button>
+      </div>
     </section>`;
 }
 
@@ -146,7 +177,8 @@ export function homeView({ state, ui, year, today }) {
     ${timerBanner(state.books, ui?.session)}
     ${hero(stats, streak, year === currentYear)}
     ${statTiles(stats)}
-    ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session) : ''}
+    ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session, today) : ''}
+    ${year === currentYear && !reading.length ? nextUpCard(state) : ''}
     ${readGrid(stats)}
     ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;
 }

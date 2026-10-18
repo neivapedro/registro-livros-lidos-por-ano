@@ -1,6 +1,7 @@
 // Peças de interface reutilizadas pelas telas. Todo texto vindo de dados passa por esc().
 
 import { formatShort } from './dates.js';
+import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -177,6 +178,8 @@ export function bookRow(book, { action = '' } = {}) {
   if (book.reread) meta.push(chip('Releitura'));
   meta.push(chip(FORMAT_LABELS[book.format]));
   if (book.genre) meta.push(chip(book.genre));
+  if (book.series) meta.push(chip(seriesLabel(book), 'chip-series'));
+  for (const tag of book.tags || []) meta.push(chip(tag, 'chip-tag'));
   return `
     <div class="book-row">
       <a class="book-row-link" href="#/livro/${encodeURIComponent(book.id)}">
