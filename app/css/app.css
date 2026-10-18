@@ -667,3 +667,54 @@ textarea::placeholder { color: var(--faint); }
 .quote-source { display: flex; flex-direction: column; gap: 2px; }
 .quote-book { font-size: 14px; font-weight: 700; color: var(--text-soft); overflow-wrap: anywhere; }
 .quotes-link { flex-direction: row; justify-content: space-between; align-items: center; min-height: 56px; padding: 14px 18px; }
+
+/* ---------- Cronômetro de leitura ---------- */
+
+/* Cartão "Lendo agora": Concluir e Ler agora empilhados ao lado da capa. */
+.reading-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 6px; }
+.reading-main .reading-link { grid-row: span 2; }
+.reading-main > .btn-outline { width: 100%; }
+.btn-timer {
+  min-height: 44px; padding: 0 12px; width: 100%;
+  border: 0; border-radius: 14px; background: var(--surface-warm); color: var(--accent);
+  font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0;
+}
+.btn-timer.is-running { background: var(--accent); color: var(--on-accent); }
+
+.timer-banner {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px;
+  border-radius: 18px; background: var(--surface-warm); border: 1px solid rgba(208, 140, 79, 0.35); color: var(--text);
+}
+.timer-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--accent); flex-shrink: 0; animation: timer-pulse 1.6s ease-in-out infinite; }
+.timer-dot.is-paused { background: var(--muted); animation: none; }
+@keyframes timer-pulse { 50% { opacity: 0.3; } }
+.timer-banner-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 14px; }
+.timer-banner-text strong { white-space: nowrap; }
+.timer-banner-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.timer-banner-go { font-size: 13px; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+
+.app[data-page="ler"] { gap: 22px; }
+.timer { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.timer-book { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+.timer-book .serif-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.timer-clock {
+  margin: 6px 0 0; font-family: var(--serif); font-size: clamp(64px, 22vw, 96px); line-height: 0.9;
+  letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.timer.is-paused .timer-clock { color: var(--muted); }
+.timer-state { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.timer.is-paused .timer-state { color: var(--muted); }
+.timer-controls { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.timer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.timer-actions .btn-ghost { min-height: 56px; font-size: 16px; }
+.timer-text-btn { align-self: center; justify-content: center; }
+.timer-stop { display: flex; flex-direction: column; gap: 10px; }
+.timer-stop-label { font-size: 15px; font-weight: 700; text-align: center; }
+.timer-stop .progress-edit-field { height: 56px; }
+.timer-stop .progress-edit-field input { font-size: 22px; }
+/* Telas baixas (iPhone SE): capa menor para os botões caberem sem rolar. */
+@media (max-height: 700px) {
+  .timer .cover-xl { width: 120px; height: 180px; padding: 12px; }
+  .timer .cover-xl .cover-title { font-size: 24px; }
+}

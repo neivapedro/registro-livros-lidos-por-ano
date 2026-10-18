@@ -1,7 +1,8 @@
 // Diário de leitura: quanto foi lido em cada dia.
-// Cada livro guarda em book.journal entradas { date, from, to, unit, note }:
+// Cada livro guarda em book.journal entradas { date, from, to, unit, note, minutes? }:
 // a posição em que estava no começo do dia (from) e onde parou (to),
 // em páginas (livro físico) ou em % (Kindle). Uma entrada por livro por dia.
+// 'minutes' (opcional) soma as sessões do cronômetro no dia.
 // Funções puras: recebem o livro e devolvem um diário novo, sem alterar o original.
 
 import { yearOf } from './dates.js';
@@ -50,15 +51,39 @@ export function recordProgress(book, newValue, unit, today) {
   if (index >= 0 && journal[index].unit === unit) {
     const entry = journal[index];
     if (entry.to === value) return journal;
-    if (entry.from === value && !entry.note) journal.splice(index, 1);
+    if (entry.from === value && !entry.note && !entry.minutes) journal.splice(index, 1);
     else journal[index] = { ...entry, to: value };
     return journal;
   }
-  // Entrada do dia em outra unidade (o formato mudou): é substituída.
+  // Entrada do dia em outra unidade (o formato mudou): é substituída, mas os minutos ficam.
+  const minutes = index >= 0 ? journal[index].minutes || 0 : 0;
   if (index >= 0) journal.splice(index, 1);
   const from = lastPosition(book, journal.filter((e) => e.date < today), unit);
-  if (value === from) return journal;
-  return insertSorted(journal, { date: today, from, to: value, unit, note: '' });
+  if (value === from && !minutes) return journal;
+  const entry = { date: today, from, to: value, unit, note: '' };
+  return insertSorted(journal, minutes ? { ...entry, minutes } : entry);
+}
+
+/** Teto de minutos num dia (o dia tem 1440). */
+export const MAX_DAY_MINUTES = 1440;
+
+/**
+ * Soma minutos de leitura (cronômetro) à entrada do dia. Sem entrada no dia,
+ * cria uma parada na posição atual (from = to): houve tempo de leitura, mesmo sem avanço.
+ */
+export function addMinutes(book, minutes, today) {
+  const journal = [...(book.journal || [])];
+  const add = Math.round(Number(minutes));
+  if (!Number.isFinite(add) || add <= 0) return journal;
+  const index = journal.findIndex((e) => e.date === today);
+  if (index >= 0) {
+    const entry = journal[index];
+    journal[index] = { ...entry, minutes: Math.min(MAX_DAY_MINUTES, (entry.minutes || 0) + add) };
+    return journal;
+  }
+  const unit = unitOf(book);
+  const at = lastPosition(book, journal.filter((e) => e.date < today), unit);
+  return insertSorted(journal, { date: today, from: at, to: at, unit, note: '', minutes: Math.min(MAX_DAY_MINUTES, add) });
 }
 
 /**

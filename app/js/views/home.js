@@ -2,6 +2,7 @@ import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
 import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
+import { timerBanner, timerButton } from './timer.js';
 
 const RING_C = 2 * Math.PI * 56;
 
@@ -77,7 +78,7 @@ function progressEditor(b) {
     </form>`;
 }
 
-function readingNow(books, editingId) {
+function readingNow(books, editingId, session) {
   if (!books.length) return '';
   const cards = books.map((b) => `
     <div class="card reading">
@@ -91,6 +92,7 @@ function readingNow(books, editingId) {
         </span>
       </a>
       <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
+      ${timerButton(b, session)}
       </div>
       ${editingId === b.id ? progressEditor(b) : `
       <div class="reading-progress">
@@ -141,9 +143,10 @@ export function homeView({ state, ui, year, today }) {
         <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>
       </div>
     </header>
+    ${timerBanner(state.books, ui?.session)}
     ${hero(stats, streak, year === currentYear)}
     ${statTiles(stats)}
-    ${year === currentYear ? readingNow(reading, ui?.editingProgress) : ''}
+    ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session) : ''}
     ${readGrid(stats)}
     ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;
 }

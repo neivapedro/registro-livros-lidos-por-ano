@@ -22,6 +22,12 @@ import { searchResults, searchView } from './views/search.js';
 import { settingsView } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
 import { summaryView } from './views/summary.js';
+import { addMinutes } from './journal.js';
+import {
+  elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
+  sessionMinutes, sessionSummary, startSession, wholeMinutes,
+} from './timer.js';
+import { timerView } from './views/timer.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -179,6 +185,11 @@ function render() {
       break;
     case 'trechos':
       html = allQuotesView(ctx);
+      break;
+    case 'ler':
+      html = timerScreen(route.params[0]);
+      if (html === null) return;
+      showNav = false;
       break;
     default:
       html = homeView(ctx);
@@ -437,7 +448,7 @@ function withProgress(book, value) {
   return unit === UNITS.PERCENT ? { ...book, currentPercent: value, journal } : { ...book, currentPage: value, journal };
 }
 
-/** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. */
+/** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. Devolve o valor aceito (nada se inválido). */
 function saveProgress(bookId, raw) {
   const book = state.books.find((b) => b.id === bookId);
   if (!book) return;
@@ -455,11 +466,11 @@ function saveProgress(bookId, raw) {
     ui.editingProgress = null;
     if (Math.round(value) === 100) {
       go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
-      return;
+      return 100;
     }
     persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
     render();
-    return;
+    return Math.round(value);
   }
   if (!Number.isInteger(value) || value < 0 || (book.pages && value > book.pages)) {
     toast(book.pages ? `Informe uma página entre 0 e ${book.pages}.` : 'Informe um número de página válido.');
@@ -468,10 +479,11 @@ function saveProgress(bookId, raw) {
   ui.editingProgress = null;
   if (book.pages && value === book.pages) {
     go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
-    return;
+    return value;
   }
   persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
   render();
+  return value;
 }
 
 // ---------- Diário e trechos (abas do livro) ----------
@@ -894,6 +906,174 @@ document.addEventListener('error', (e) => {
 }, true);
 
 window.addEventListener('hashchange', render);
+
+// ---------- Cronômetro de leitura ----------
+// A sessão fica no localStorage (fora do estado e do backup: é passageira) e o tempo
+// sai sempre dos horários gravados; o intervalo de 1 s só redesenha o número na tela.
+
+ui.session = loadSession(localStorage);
+// Formulário do "Parar" aberto: { resume } diz se o cronômetro corria antes de parar.
+ui.timerStop = null;
+let timerTicker = null;
+let wakeLock = null;
+let wakeLockPending = false;
+
+function setSession(session) {
+  ui.session = session;
+  saveSession(localStorage, session);
+  syncTicker();
+  syncWakeLock();
+}
+
+/** Livro da sessão aberta, se ainda existe e está em leitura. */
+function sessionBook() {
+  const s = ui.session;
+  return s ? state.books.find((b) => b.id === s.bookId && b.status === STATUS.READING) || null : null;
+}
+
+/** Tela #/ler/:id. Devolve null quando redireciona (sem sessão ou sessão de outro livro). */
+function timerScreen(id) {
+  const book = sessionBook();
+  if (!book) {
+    if (ui.session) setSession(null);
+    go('#/inicio');
+    return null;
+  }
+  if (book.id !== id) {
+    go(`#/ler/${encodeURIComponent(book.id)}`);
+    return null;
+  }
+  syncWakeLock();
+  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop) });
+}
+
+function tickTimer() {
+  if (!ui.session) return;
+  const ms = elapsedMs(ui.session, Date.now());
+  for (const el of document.querySelectorAll('[data-timer-elapsed]')) el.textContent = formatElapsed(ms);
+  for (const el of document.querySelectorAll('[data-timer-minutes]')) el.textContent = `${wholeMinutes(ms)} min`;
+}
+
+// Pausado, o número não muda: o intervalo só existe com o cronômetro correndo.
+function syncTicker() {
+  const running = ui.session && !isPaused(ui.session);
+  if (running && !timerTicker) timerTicker = setInterval(tickTimer, 1000);
+  else if (!running && timerTicker) {
+    clearInterval(timerTicker);
+    timerTicker = null;
+  }
+}
+
+function wantsWakeLock() {
+  return parseRoute().name === 'ler' && Boolean(ui.session) && !isPaused(ui.session) && document.visibilityState === 'visible';
+}
+
+/** Tela acesa só na tela do cronômetro correndo. Sem suporte (iOS antes do 18.4): segue sem. */
+async function syncWakeLock() {
+  if (!wantsWakeLock()) {
+    if (wakeLock) {
+      const lock = wakeLock;
+      wakeLock = null;
+      lock.release().catch(() => {});
+    }
+    return;
+  }
+  if (wakeLock || wakeLockPending || !navigator.wakeLock?.request) return;
+  wakeLockPending = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    // O sistema solta a trava quando o app vai para o segundo plano.
+    lock.addEventListener('release', () => {
+      if (wakeLock === lock) wakeLock = null;
+    });
+    wakeLock = lock;
+  } catch {
+    // Negado (bateria fraca, sem permissão): o cronômetro funciona igual.
+  }
+  wakeLockPending = false;
+  if (!wantsWakeLock()) syncWakeLock();
+}
+
+/** "Parar" → Salvar: grava a posição pelo mesmo caminho do cartão do Início e soma os minutos ao dia. */
+function saveTimerSession(raw) {
+  const book = sessionBook();
+  if (!book) return;
+  const minutes = sessionMinutes(elapsedMs(ui.session, Date.now()));
+  const unit = unitOf(book);
+  const before = (unit === UNITS.PERCENT ? book.currentPercent : book.currentPage) ?? 0;
+  const value = saveProgress(book.id, raw);
+  if (value === undefined) return;
+  ui.timerStop = null;
+  setSession(null);
+  // Sessão de menos de 1 minuto não soma minutos (a posição já foi salva).
+  if (minutes) {
+    const saved = state.books.find((b) => b.id === book.id);
+    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso()) }).state);
+  }
+  // Fim do livro: saveProgress já abriu o Concluir; senão, volta ao Início.
+  if (parseRoute().name === 'ler') go('#/inicio');
+  toast(sessionSummary({ minutes, unit, delta: value - before }), { duration: 5000 });
+}
+
+Object.assign(actions, {
+  'start-timer'(el) {
+    const id = el.dataset.id;
+    const current = sessionBook();
+    // Uma sessão por vez: com outra aberta, leva até ela.
+    if (current && current.id !== id) {
+      toast(`Já há uma leitura em andamento: ${current.title}.`);
+      go(`#/ler/${encodeURIComponent(current.id)}`);
+      return;
+    }
+    if (!current) {
+      ui.timerStop = null;
+      setSession(startSession(id, Date.now()));
+    }
+    go(`#/ler/${encodeURIComponent(id)}`);
+  },
+  'timer-toggle'() {
+    if (!ui.session) return;
+    const now = Date.now();
+    setSession(isPaused(ui.session) ? resumeSession(ui.session, now) : pauseSession(ui.session, now));
+    render();
+  },
+  'timer-stop'() {
+    if (!ui.session) return;
+    // O tempo congela enquanto a pessoa informa onde parou.
+    ui.timerStop = { resume: !isPaused(ui.session) };
+    setSession(pauseSession(ui.session, Date.now()));
+    render();
+    const input = document.getElementById('timer-input');
+    input?.focus();
+    input?.select();
+  },
+  'timer-back'() {
+    if (ui.session && ui.timerStop?.resume) setSession(resumeSession(ui.session, Date.now()));
+    ui.timerStop = null;
+    render();
+  },
+  'timer-cancel'() {
+    if (!window.confirm('Descartar esta sessão? O tempo lido não será salvo.')) return;
+    ui.timerStop = null;
+    setSession(null);
+    go('#/inicio');
+    toast('Sessão descartada.');
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  if (!e.target.closest('[data-timer-form]')) return;
+  e.preventDefault();
+  saveTimerSession(document.getElementById('timer-input')?.value);
+});
+
+window.addEventListener('hashchange', syncWakeLock);
+// Volta do segundo plano: acerta o número na hora e pede a tela acesa de novo.
+document.addEventListener('visibilitychange', () => {
+  tickTimer();
+  syncWakeLock();
+});
+syncTicker();
 
 // ---------- Offline e atualizações ----------
 
