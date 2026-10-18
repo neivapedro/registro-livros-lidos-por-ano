@@ -128,8 +128,15 @@ function normalizeQuotes(value, nowTs) {
   return out;
 }
 
+/** Entrada do diário com 'minutes' só quando há tempo registrado (mantém o formato antigo sem ele). */
+function withMinutes(entry, minutes) {
+  const rest = { ...entry };
+  delete rest.minutes;
+  return minutes > 0 ? { ...rest, minutes: Math.min(1440, minutes) } : rest;
+}
+
 /**
- * Diário de leitura: { date, from, to, unit: 'page'|'percent', note }.
+ * Diário de leitura: { date, from, to, unit: 'page'|'percent', note, minutes? }.
  * Uma entrada por dia, em ordem de data. Dias repetidos viram um só
  * (fica o 'from' da primeira e o 'to' da última). Regras de gravação em journal.js.
  */
@@ -144,11 +151,13 @@ export function normalizeJournal(value) {
     const to = intIn(raw.to, 0, max);
     if (from === null || to === null) continue;
     const note = text(raw.note, MAX_NOTES);
+    // Minutos do cronômetro (opcional): inteiro de 0 a 1440; no mesmo dia, somam.
+    const minutes = intIn(raw.minutes, 0, 1440) || 0;
     const prev = byDate.get(raw.date);
     if (prev && prev.unit === unit) {
-      byDate.set(raw.date, { ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') });
+      byDate.set(raw.date, withMinutes({ ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') }, (prev.minutes || 0) + minutes));
     } else {
-      byDate.set(raw.date, { date: raw.date, from, to, unit, note });
+      byDate.set(raw.date, withMinutes({ date: raw.date, from, to, unit, note }, minutes));
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-MAX_JOURNAL);
