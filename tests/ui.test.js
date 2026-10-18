@@ -21,6 +21,10 @@ test('esc protege texto vindo de dados', () => {
 test('largeCoverUrl pede a versão grande da capa', async () => {
   const { largeCoverUrl } = await import('../app/js/ui.js');
   assert.equal(largeCoverUrl('https://covers.openlibrary.org/b/id/123-M.jpg'), 'https://covers.openlibrary.org/b/id/123-L.jpg');
+  assert.equal(
+    largeCoverUrl('https://covers.openlibrary.org/b/isbn/9788521315316-M.jpg?default=false'),
+    'https://covers.openlibrary.org/b/isbn/9788521315316-L.jpg?default=false',
+  );
   const g = new URL(largeCoverUrl('https://books.google.com/books/content?id=abc&printsec=frontcover&img=1&zoom=1&source=gbs_api'));
   assert.equal(g.searchParams.get('fife'), 'w800');
   assert.equal(g.searchParams.get('zoom'), null);

@@ -39,16 +39,21 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const BASE = `http://localhost:${server.address().port}/`;
 
-const googleFixture = {
-  items: [{
-    id: 'meta1',
-    volumeInfo: {
-      title: 'A Meta', authors: ['Eliyahu M. Goldratt', 'Jeff Cox'], pageCount: 384, publishedDate: '2014',
-      industryIdentifiers: [{ type: 'ISBN_13', identifier: '9788521315316' }],
+// Busca por título: só a Open Library (o Google sem chave vive com a cota esgotada).
+const olFixture = {
+  docs: [
+    {
+      key: '/works/OL1W', title: 'The Goal', author_name: ['Eliyahu M. Goldratt', 'Jeff Cox'], first_publish_year: 1984,
+      editions: { docs: [{ key: '/books/OL1M', title: 'A Meta', language: ['por'], isbn: ['9788521315315'], number_of_pages_median: 384 }] },
     },
-  }],
+    { key: '/works/OL2W', title: 'Necessário, Mas Não Suficiente', author_name: ['Eliyahu M. Goldratt'], number_of_pages_median: 248 },
+  ],
 };
-const olFixture = { docs: [{ key: '/works/OL1W', title: 'Necessário, Mas Não Suficiente', author_name: ['Eliyahu M. Goldratt'], number_of_pages_median: 248 }] };
+// Busca por ISBN: a BrasilAPI conhece este; os outros ISBNs voltam 404.
+const brasilApiFixture = {
+  isbn: '9788535914849', title: 'O Alienista', authors: ['Machado de Assis'], year: 2014, page_count: 96,
+  cover_url: null, provider: 'cbl',
+};
 
 const seed = {
   version: 1,
@@ -89,8 +94,13 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 page.on('console', (m) => { if (m.type() === 'error' && !/Failed to load resource/.test(m.text())) errors.push(`console: ${m.text()}`); });
 page.on('dialog', (d) => d.accept());
-await page.route('https://www.googleapis.com/**', (r) => r.fulfill({ json: googleFixture }));
-await page.route('https://openlibrary.org/**', (r) => r.fulfill({ json: olFixture }));
+await page.route('https://www.googleapis.com/**', (r) => r.fulfill({ status: 429, json: { error: { code: 429 } } }));
+await page.route('https://openlibrary.org/**', (r) => r.fulfill({
+  json: r.request().url().includes('isbn=') ? { docs: [] } : olFixture,
+}));
+await page.route('https://brasilapi.com.br/**', (r) => (r.request().url().endsWith(`/${brasilApiFixture.isbn}`)
+  ? r.fulfill({ json: brasilApiFixture })
+  : r.fulfill({ status: 404, json: { message: 'ISBN não encontrado' } })));
 await page.route('https://covers.openlibrary.org/**', (r) => r.abort());
 
 const shot = (name) => page.screenshot({ path: join(SHOTS, `${name}.png`), fullPage: true });
@@ -128,6 +138,31 @@ try {
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /1\s*de 12/);
   assert.equal(await page.locator('.grid-book').count(), 1);
+
+  step('busca por ISBN');
+  await page.click('.nav-add');
+  await onPage('novo');
+  await page.fill('#lookup', '978-85-359-1484-9');
+  await page.waitForSelector('.result');
+  assert.equal(await page.locator('.result').count(), 1);
+  assert.match(await page.textContent('.result'), /O Alienista/);
+  await page.fill('#lookup', '9788521315315');
+  await page.waitForSelector('.lookup-status:has-text("Não encontrei")');
+  assert.match(await page.textContent('.lookup-status'), /Não encontrei — preencha os dados abaixo\./);
+  assert.match(await page.textContent('.lookup-status'), /9788521315315/);
+  await page.fill('#f-title', 'Livro sem cadastro');
+  await page.locator('#f-title').dispatchEvent('input');
+  await page.click('.btn-primary');
+  await page.waitForSelector('.hero');
+  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('leituras:v1')).books.find((b) => b.title === 'Livro sem cadastro'));
+  assert.equal(saved.isbn, '9788521315315');
+  await page.evaluate(() => {
+    const data = JSON.parse(localStorage.getItem('leituras:v1'));
+    data.books = data.books.filter((b) => b.title !== 'Livro sem cadastro');
+    localStorage.setItem('leituras:v1', JSON.stringify(data));
+  });
+  await page.reload();
+  await page.waitForSelector('.hero');
 
   step('validação');
   await page.click('.nav-add');
