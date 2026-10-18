@@ -5,7 +5,7 @@
 // 'minutes' (opcional) soma as sessões do cronômetro no dia.
 // Funções puras: recebem o livro e devolvem um diário novo, sem alterar o original.
 
-import { yearOf } from './dates.js';
+import { isIsoDate, yearOf } from './dates.js';
 import { FORMATS, STATUS } from './store.js';
 
 export const UNITS = { PAGE: 'page', PERCENT: 'percent' };
@@ -95,6 +95,35 @@ export function closeOnFinish(book, today) {
   const total = unit === UNITS.PERCENT ? 100 : Number(book.pages) || null;
   if (!total) return [...(book.journal || [])];
   return recordProgress(book, total, unit, today);
+}
+
+/**
+ * Diário ao salvar o formulário: d é o livro editado, original o que estava salvo
+ * (null para livro novo), today 'AAAA-MM-DD'. Devolve o diário a gravar.
+ * - Livro novo ou que estava em "Quero ler": sem entrada. A página informada é o
+ *   ponto de partida, não leitura feita hoje (marcar direto como Lido também não
+ *   inventa um dia com o livro inteiro; as páginas entram no ano do término).
+ * - Formato trocado (físico ↔ Kindle): sem entrada; é correção do cadastro, e a
+ *   posição na unidade nova vira o ponto de partida.
+ * - Conclusão: fecha no dia do término informado, se não for no futuro nem antes do diário.
+ * - Lendo/Abandonado com posição nova: registra no dia.
+ */
+export function journalOnSave(d, original, today) {
+  const journal = d.journal || [];
+  if (!original || original.status === STATUS.WANT) return journal;
+  if (unitOf(d) !== unitOf(original)) return journal;
+  if (d.status === STATUS.READ) {
+    if (original.status === STATUS.READ) return journal;
+    const last = journal[journal.length - 1]?.date || '';
+    const day = isIsoDate(d.endDate) && d.endDate <= today && d.endDate >= last ? d.endDate : today;
+    return closeOnFinish({ ...d, currentPage: original.currentPage, currentPercent: original.currentPercent }, day);
+  }
+  if (d.status !== STATUS.READING && d.status !== STATUS.DROPPED) return journal;
+  const unit = unitOf(d);
+  const field = unit === UNITS.PERCENT ? 'currentPercent' : 'currentPage';
+  const value = d[field];
+  if (value === null || value === undefined || value === '' || Number(value) === original[field]) return journal;
+  return recordProgress({ ...d, [field]: original[field] }, Number(value), unit, today);
 }
 
 /** Páginas avançadas numa entrada. Kindle: % convertido em páginas quando o total é conhecido. */

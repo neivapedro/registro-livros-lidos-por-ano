@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  closeOnFinish, entryPages, longestDayStreak, pagesReadInYear, pagesReadPerDay, readingDays, recordProgress, unitOf,
+  closeOnFinish, entryPages, journalOnSave, longestDayStreak, pagesReadInYear, pagesReadPerDay, readingDays, recordProgress, unitOf,
 } from '../app/js/journal.js';
 
 const physical = (extra = {}) => ({ id: 'p', title: 'Físico', format: 'fisico', status: 'lendo', pages: 300, currentPage: null, journal: [], ...extra });
@@ -135,4 +135,39 @@ test('pagesReadInYear: diário quando existe, total do livro no ano do término 
   assert.equal(pagesReadInYear(books, 2026), 200 + 40 + 30 + 50 + 300);
   assert.equal(pagesReadInYear(books, 2025), 500 + 60);
   assert.equal(pagesReadInYear([], 2026), 0);
+});
+
+// ---------- Diário ao salvar o formulário ----------
+
+test('journalOnSave: livro novo e "Quero ler" não ganham entrada (a página informada é o ponto de partida)', () => {
+  assert.deepEqual(journalOnSave(physical({ status: 'lido', endDate: '2026-09-20' }), null, '2026-10-16'), []);
+  const want = physical({ status: 'quero', currentPage: null });
+  assert.deepEqual(journalOnSave({ ...want, status: 'lido', startDate: '2026-09-01', endDate: '2026-09-20' }, want, '2026-10-16'), []);
+  assert.deepEqual(journalOnSave({ ...want, status: 'lendo', currentPage: 50 }, want, '2026-10-16'), []);
+  assert.deepEqual(journalOnSave({ ...want, status: 'abandonado', currentPage: 80, endDate: '2026-10-16' }, want, '2026-10-16'), []);
+});
+
+test('journalOnSave: trocar o formato não conta como leitura do dia', () => {
+  const original = physical({ currentPage: 100, journal: [{ date: '2026-10-10', from: 0, to: 100, unit: 'page', note: '' }] });
+  const toKindle = { ...original, format: 'kindle', currentPage: null, currentPercent: 33 };
+  assert.deepEqual(journalOnSave(toKindle, original, '2026-10-16'), original.journal);
+  // Concluir já no formato novo também não inventa 0 → 100%.
+  const finished = { ...toKindle, status: 'lido', endDate: '2026-10-16' };
+  assert.deepEqual(journalOnSave(finished, original, '2026-10-16'), original.journal);
+  assert.equal(pagesReadInYear([{ ...finished, journal: original.journal }], 2026), 300, 'o resto do livro entra no ano do término');
+});
+
+test('journalOnSave: página nova, conclusão no dia do término e abandono', () => {
+  const original = physical({ currentPage: 50, journal: [{ date: '2026-10-05', from: 0, to: 50, unit: 'page', note: '' }] });
+  assert.deepEqual(journalOnSave({ ...original, currentPage: 80 }, original, '2026-10-16').at(-1),
+    { date: '2026-10-16', from: 50, to: 80, unit: 'page', note: '' });
+  assert.deepEqual(journalOnSave({ ...original, currentPage: 50 }, original, '2026-10-16'), original.journal, 'mesma página');
+  assert.deepEqual(journalOnSave({ ...original, status: 'lido', endDate: '2026-10-10' }, original, '2026-10-16').at(-1),
+    { date: '2026-10-10', from: 50, to: 300, unit: 'page', note: '' });
+  // Término antes da última entrada (ou no futuro): fica no dia de hoje.
+  assert.equal(journalOnSave({ ...original, status: 'lido', endDate: '2026-10-01' }, original, '2026-10-16').at(-1).date, '2026-10-16');
+  assert.deepEqual(journalOnSave({ ...original, status: 'abandonado', currentPage: 60, endDate: '2026-10-16' }, original, '2026-10-16').at(-1),
+    { date: '2026-10-16', from: 50, to: 60, unit: 'page', note: '' });
+  const read = physical({ status: 'lido', journal: original.journal });
+  assert.deepEqual(journalOnSave({ ...read, notes: 'x' }, read, '2026-10-16'), original.journal, 'editar livro lido não mexe no diário');
 });

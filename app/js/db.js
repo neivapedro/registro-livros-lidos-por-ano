@@ -71,6 +71,11 @@ function setMark() {
   }
 }
 
+/** Deixa a marca de que os dados estão no IndexedDB (nova tentativa, se a da gravação falhou). */
+export function markStored() {
+  setMark();
+}
+
 /**
  * Onde os dados ficam: 'indexeddb' ou 'localstorage'.
  * Dá erro se o IndexedDB já guarda os dados mas não abriu agora (tente de novo depois).

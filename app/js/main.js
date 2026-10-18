@@ -4,12 +4,12 @@ import { readGoogleKey, removeGoogleKey, saveGoogleKey } from './prefs.js';
 import { addTags, removeTag } from './tags.js';
 import { MAX_UP_NEXT } from './store.js';
 import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
-import { formatShort, isIsoDate, todayIso, yearOf } from './dates.js';
+import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
-import { closeOnFinish, recordProgress, unitOf, UNITS } from './journal.js';
+import { journalOnSave, recordProgress, unitOf, UNITS } from './journal.js';
 import { renderQuoteImage } from './quote-image.js';
 import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
 import { yearsWithData } from './stats.js';
@@ -227,6 +227,8 @@ const LOAD_FAILED = 'Não foi possível abrir seus dados agora. Feche o app e ab
 let persistRequested = false;
 let queued = null;
 let writing = null;
+// Conta as alterações feitas nesta aba (para não trocá-las por dados lidos antes delas).
+let localChanges = 0;
 // Avisa as outras abas (ou o app instalado aberto ao lado) que os dados mudaram.
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('leituras') : null;
 
@@ -247,6 +249,7 @@ async function flushSaves() {
 /** Troca o estado na hora (a tela já pode redesenhar) e grava no aparelho em seguida. */
 function persist(next, message) {
   state = next;
+  localChanges += 1;
   queued = state;
   writing ||= flushSaves();
   if (message) toast(message);
@@ -256,16 +259,24 @@ function persist(next, message) {
   }
 }
 
-async function loadFromStorage() {
-  const opened = await openStoredState(db, localStorage);
+function applyOpened(opened) {
   state = opened.state;
   backend = opened.backend;
   if (opened.error) toast(LOAD_FAILED, { sticky: true });
 }
 
+async function loadFromStorage() {
+  applyOpened(await openStoredState(db, localStorage));
+}
+
 channel?.addEventListener('message', async (e) => {
   if (e.data?.type !== 'saved' || writing) return;
-  await loadFromStorage();
+  const before = localChanges;
+  const opened = await openStoredState(db, localStorage);
+  // Alterado aqui enquanto lia: fica o desta aba (já indo para o aparelho, e a outra aba
+  // recebe o aviso). Trocar pelo lido apagaria da tela o que acabou de ser salvo.
+  if (localChanges !== before) return;
+  applyOpened(opened);
   render();
 });
 
@@ -619,36 +630,13 @@ function saveBook() {
   }
   const isNew = !d.id;
   const booksBefore = state.books;
-  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId(), journal: journalOnSave(d, ui.original) });
+  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId(), journal: journalOnSave(d, ui.original, todayIso()) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
   if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   go(ui.backHref);
-}
-
-/**
- * Diário ao salvar o formulário. Livro novo não ganha entrada: a página informada
- * no cadastro é o ponto de partida, não leitura feita hoje.
- */
-function journalOnSave(d, original) {
-  const journal = d.journal || [];
-  if (!original) return journal;
-  const today = todayIso();
-  if (d.status === STATUS.READ) {
-    if (original.status === STATUS.READ) return journal;
-    // Conclusão: registra no dia do término informado, se não for no futuro nem antes do diário.
-    const last = journal[journal.length - 1]?.date || '';
-    const day = isIsoDate(d.endDate) && d.endDate <= today && d.endDate >= last ? d.endDate : today;
-    return closeOnFinish({ ...d, currentPage: original.currentPage, currentPercent: original.currentPercent }, day);
-  }
-  if (d.status !== STATUS.READING && d.status !== STATUS.DROPPED) return journal;
-  const unit = unitOf(d);
-  const field = unit === UNITS.PERCENT ? 'currentPercent' : 'currentPage';
-  const value = d[field];
-  if (value === null || value === undefined || value === '' || Number(value) === original[field]) return journal;
-  return recordProgress({ ...d, [field]: original[field] }, Number(value), unit, today);
 }
 
 function changeGoal(el, isDefault) {
@@ -710,7 +698,7 @@ const actions = {
   },
   'undo-delete'() {
     if (!lastDeleted) return;
-    persist(restoreBook(state, lastDeleted.book, lastDeleted.index), 'Livro restaurado.');
+    persist(restoreBook(state, lastDeleted.book, lastDeleted.index, lastDeleted.upNextIndex), 'Livro restaurado.');
     lastDeleted = null;
     render();
   },
@@ -746,7 +734,7 @@ const actions = {
     if (!ui.draft?.id) return;
     const index = state.books.findIndex((b) => b.id === ui.draft.id);
     if (index < 0) return;
-    lastDeleted = { book: state.books[index], index };
+    lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
     go(ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
@@ -933,7 +921,16 @@ document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || !actions[el.dataset.action]) return;
   e.preventDefault();
+  const hadFocus = document.activeElement === el;
   actions[el.dataset.action](el);
+  // Redesenhar a tela troca os botões e o foco cairia no começo da página:
+  // quem usa teclado volta para o mesmo botão (ex.: a meia estrela que escolheu).
+  if (hadFocus && !el.isConnected && (!document.activeElement || document.activeElement === document.body)) {
+    const { action, value, id } = el.dataset;
+    [...document.querySelectorAll('[data-action]')]
+      .find((x) => x.dataset.action === action && x.dataset.value === value && x.dataset.id === id)
+      ?.focus({ preventScroll: true });
+  }
 });
 
 document.addEventListener('input', (e) => {

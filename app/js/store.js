@@ -338,12 +338,17 @@ export function removeBook(state, id) {
   return { ...state, books, upNext: cleanUpNext(books, state.upNext) };
 }
 
-/** Recoloca um livro excluído (botão Desfazer), na mesma posição de antes. */
-export function restoreBook(state, book, index) {
+/**
+ * Recoloca um livro excluído (botão Desfazer), na mesma posição de antes.
+ * upNextIndex: onde ele estava em "Próximos" (-1 se não estava).
+ */
+export function restoreBook(state, book, index, upNextIndex = -1) {
   if (state.books.some((b) => b.id === book.id)) return state;
   const books = [...state.books];
   books.splice(Math.min(Math.max(index, 0), books.length), 0, book);
-  return { ...state, books };
+  const upNext = [...(state.upNext || [])];
+  if (upNextIndex >= 0) upNext.splice(Math.min(upNextIndex, upNext.length), 0, book.id);
+  return { ...state, books, upNext: cleanUpNext(books, upNext) };
 }
 
 /** Nova leitura de um livro já lido: um novo registro, começando hoje. */
@@ -449,7 +454,7 @@ function readLegacy(legacy) {
 /**
  * Abre os dados salvos. Na primeira abertura da versão 1.3, migra do localStorage.
  *
- * kv: armazenamento assíncrono do db.js ({ storageMode, getItem, setItem, removeItem }).
+ * kv: armazenamento assíncrono do db.js ({ storageMode, getItem, setItem, removeItem, markStored }).
  * legacy: o localStorage (chave 'leituras:v1' das versões até 1.2).
  *
  * Migração: copia o JSON do localStorage para o kv, lê de volta e compara.
@@ -492,6 +497,9 @@ export async function openStoredState(kv, legacy) {
       const back = await kv.getItem(DB_STATE_KEY);
       if (!jsonEqual(back, parsed)) throw new Error('Cópia diferente do original.');
       legacy.removeItem(STORAGE_KEY);
+      // A marca "dados no IndexedDB" vai para o localStorage; se ele estava cheio
+      // (capas por foto na 1.2), só agora, sem a chave antiga, ela cabe.
+      kv.markStored?.();
       return result(normalizeState(parsed), 'kv', { migrated: true });
     } catch {
       try {
