@@ -10,11 +10,11 @@ function segmented(options, current, action, label) {
 
 export function lookupResults(lookup) {
   if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
-  if (lookup.failed) {
-    return '<p class="muted small lookup-status">Não foi possível buscar agora (sem internet ou serviço fora do ar). Preencha os dados abaixo manualmente.</p>';
-  }
-  if (lookup.query.trim().length >= 2 && lookup.searched && !lookup.results.length) {
-    return '<p class="muted small lookup-status">Nenhum livro encontrado. Tente outro termo ou preencha abaixo.</p>';
+  // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
+  // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
+  if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
+    const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
+    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>`;
   }
   return lookup.results.map((r, i) => `
     <button type="button" class="result" data-action="pick-result" data-index="${i}">

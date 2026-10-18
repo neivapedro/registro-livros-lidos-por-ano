@@ -54,7 +54,7 @@ let lookupAbort = null;
 let toastTimer = null;
 
 function emptyLookup() {
-  return { query: '', results: [], loading: false, failed: false, searched: false };
+  return { query: '', results: [], loading: false, failed: false, searched: false, isbn: '' };
 }
 
 // ---------- Navegação ----------
@@ -352,10 +352,22 @@ async function runLookup() {
   const query = ui.lookup.query;
   ui.lookup.loading = true;
   renderLookup();
-  const { results, failed } = await searchBooks(query, { signal: lookupAbort.signal });
+  const { results, failed, isbn } = await searchBooks(query, { signal: lookupAbort.signal, googleKey: googleBooksKey() });
   if (query !== ui.lookup.query) return;
-  Object.assign(ui.lookup, { results, failed, loading: false, searched: true });
+  Object.assign(ui.lookup, { results, failed, isbn, loading: false, searched: true });
+  // ISBN sem resultado: os outros campos ficam para a pessoa, mas o ISBN já vai junto ao salvar.
+  if (isbn && !results.length && ui.draft) ui.draft.isbn = isbn;
   renderLookup();
+}
+
+// Chave opcional da API do Google Books (sem tela para isso ainda). Fica fora do
+// estado de propósito, para não ir parar no arquivo de backup.
+function googleBooksKey() {
+  try {
+    return localStorage.getItem('leituras:googleBooksKey') || '';
+  } catch {
+    return '';
+  }
 }
 
 function onLookupInput(value) {

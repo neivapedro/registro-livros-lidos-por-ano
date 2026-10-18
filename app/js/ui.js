@@ -85,14 +85,15 @@ export function cover(book, { size = 'md', showText = true } = {}) {
 
 /**
  * Endereço da capa em tamanho grande, para ver ampliada.
- * Google Books: pede largura de 800px; Open Library: versão L. Foto do celular: a própria.
+ * Google Books: pede largura de 800px; Open Library: versão L (mantendo ?default=false
+ * da capa pelo ISBN). Foto do celular: a própria.
  */
 export function largeCoverUrl(url) {
   if (typeof url !== 'string' || !url) return null;
   if (url.startsWith('data:')) return url;
   try {
     const u = new URL(url);
-    if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg$/, '-L.jpg');
+    if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg(?=$|\?)/, '-L.jpg');
     if (u.hostname.endsWith('books.google.com') || u.hostname.endsWith('googleusercontent.com')) {
       u.searchParams.delete('zoom');
       u.searchParams.set('fife', 'w800');
