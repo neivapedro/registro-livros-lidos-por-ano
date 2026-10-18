@@ -15,9 +15,13 @@ export function lookupResults(lookup) {
   if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
   // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
   // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
+  // Busca por texto: lembra que o ISBN acha quase todo livro brasileiro (cadastro nacional).
+  const isbnTip = lookup.searched && !lookup.isbn
+    ? '<p class="muted small lookup-tip">Não achou? Digite o ISBN: os 13 números perto do código de barras, no verso do livro.</p>'
+    : '';
   if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
     const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
-    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>`;
+    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>${isbnTip}`;
   }
   return lookup.results.map((r, i) => `
     <button type="button" class="result" data-action="pick-result" data-index="${i}">
@@ -26,7 +30,7 @@ export function lookupResults(lookup) {
         <span class="result-title">${esc(r.title)}</span>
         <span class="muted small">${esc([r.authors, r.pages ? `${r.pages} págs.` : '', r.year].filter(Boolean).join(' · '))}</span>
       </span>
-    </button>`).join('');
+    </button>`).join('') + isbnTip;
 }
 
 function lookupBlock(ui) {

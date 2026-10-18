@@ -409,6 +409,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .result-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .result-title { font-family: var(--serif); font-size: 18px; line-height: 1.1; }
 .lookup-status { padding: 4px 2px; }
+.lookup-tip { padding: 6px 2px 0; }
 .picked {
   display: flex; align-items: center; gap: 14px; padding: 12px;
   border-radius: 18px; background: #221D19; border: 1px solid var(--accent);
