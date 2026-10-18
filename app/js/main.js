@@ -16,9 +16,10 @@ import { yearsWithData } from './stats.js';
 import { milestoneMessage, newMilestones } from './milestones.js';
 import { renderRetroImage } from './share-image.js';
 import {
-  STATUS, FORMATS, createEmptyState, getGoal, newId, openStoredState, parseBackup,
+  STATUS, FORMATS, createEmptyState, getGoal, jsonEqual, newId, openStoredState, parseBackup, readStoredState,
   removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
+import { applyRescue, buildRescue, clearRescue, readRescue, writeRescue } from './rescue.js';
 import { setPageGoal } from './store.js';
 import { esc, icon, largeCoverUrl } from './ui.js';
 import { allQuotesResults, allQuotesView } from './views/all-quotes.js';
@@ -30,7 +31,7 @@ import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
-import { settingsView } from './views/settings.js';
+import { settingsView, storageLine } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
 import { summaryView } from './views/summary.js';
 import { addMinutes } from './journal.js';
@@ -229,6 +230,11 @@ let queued = null;
 let writing = null;
 // Conta as alterações feitas nesta aba (para não trocá-las por dados lidos antes delas).
 let localChanges = 0;
+// Último estado confirmado no aparelho (base da cópia de resgate) e se há cópia guardada.
+let lastSaved = null;
+let hasRescue = false;
+// Outra aba salvou enquanto esta gravava: relê quando terminar.
+let reloadPending = false;
 // Avisa as outras abas (ou o app instalado aberto ao lado) que os dados mudaram.
 const channel = 'BroadcastChannel' in window ? new BroadcastChannel('leituras') : null;
 
@@ -238,12 +244,43 @@ async function flushSaves() {
     const snapshot = queued;
     queued = null;
     if (await writeStoredState(backend, db, localStorage, snapshot)) {
+      lastSaved = snapshot;
       channel?.postMessage({ type: 'saved' });
+      // Tudo gravado: a cópia de resgate não é mais necessária.
+      if (hasRescue && !queued) {
+        clearRescue(localStorage);
+        hasRescue = false;
+      }
     } else {
+      // Não gravou: a alteração fica também na cópia de resgate, aplicada na próxima abertura.
+      saveRescue();
       toast(backend ? SAVE_FAILED : LOAD_FAILED, { sticky: !backend });
     }
   }
   writing = null;
+  if (reloadPending) reloadFromStorage();
+}
+
+/** O app vai sair da tela com gravação em andamento: guarda o que mudou no localStorage. */
+function saveRescue() {
+  if (!writing || backend !== 'kv') return;
+  if (writeRescue(localStorage, buildRescue(lastSaved, state))) hasRescue = true;
+}
+
+/** Na abertura: aplica a cópia de uma gravação que não terminou (app fechado no meio). */
+function applyPendingRescue() {
+  if (backend !== 'kv') return;
+  const rescue = readRescue(localStorage);
+  if (!rescue) return;
+  hasRescue = true;
+  const next = applyRescue(state, rescue);
+  if (jsonEqual(next, state)) {
+    clearRescue(localStorage);
+    hasRescue = false;
+    return;
+  }
+  // Grava pelo caminho normal; a cópia só sai do localStorage depois de confirmada.
+  persist(next);
 }
 
 /** Troca o estado na hora (a tela já pode redesenhar) e grava no aparelho em seguida. */
@@ -261,6 +298,7 @@ function persist(next, message) {
 
 function applyOpened(opened) {
   state = opened.state;
+  lastSaved = state;
   backend = opened.backend;
   if (opened.error) toast(LOAD_FAILED, { sticky: true });
 }
@@ -269,21 +307,43 @@ async function loadFromStorage() {
   applyOpened(await openStoredState(db, localStorage));
 }
 
-channel?.addEventListener('message', async (e) => {
-  if (e.data?.type !== 'saved' || writing) return;
+/**
+ * Relê os dados que outra aba gravou (ou ao voltar do segundo plano, quando o aviso pode
+ * ter se perdido). Só lê do armazenamento em uso: a migração é só na abertura, e uma falha
+ * de leitura aqui mantém o que está na tela em vez de mostrar tudo vazio.
+ */
+async function reloadFromStorage() {
+  if (!ready) return;
+  if (writing) {
+    reloadPending = true;
+    return;
+  }
+  reloadPending = false;
   const before = localChanges;
-  const opened = await openStoredState(db, localStorage);
+  const stored = await readStoredState(backend, db, localStorage);
   // Alterado aqui enquanto lia: fica o desta aba (já indo para o aparelho, e a outra aba
   // recebe o aviso). Trocar pelo lido apagaria da tela o que acabou de ser salvo.
-  if (localChanges !== before) return;
-  applyOpened(opened);
+  if (!stored || localChanges !== before || writing) return;
+  lastSaved = stored;
+  if (jsonEqual(stored, state)) return;
+  state = stored;
   render();
+}
+
+channel?.addEventListener('message', (e) => {
+  if (e.data?.type === 'saved') reloadFromStorage();
 });
 
 /** Espaço usado e proteção contra limpeza, para a tela de Ajustes. */
 async function refreshStorageInfo() {
   ui.storageInfo = await db.storageInfo();
-  if (parseRoute().name === 'ajustes') render();
+  if (parseRoute().name !== 'ajustes') return;
+  // Troca só a linha: redesenhar a tela inteira apagaria o que está sendo digitado
+  // e trocaria o campo "Importar backup" no meio da escolha do arquivo.
+  const html = storageLine(ui.storageInfo);
+  const line = root.querySelector('.storage-info');
+  if (line) line.outerHTML = html;
+  else if (html) root.querySelector('[data-action="export-backup"]')?.insertAdjacentHTML('beforebegin', html);
 }
 
 // ---------- Avisos ----------
@@ -629,8 +689,11 @@ function saveBook() {
     return;
   }
   const isNew = !d.id;
+  // O id fica no rascunho: um segundo toque rápido em Salvar (antes de a tela mudar)
+  // grava o mesmo livro de novo em vez de criar outro igual.
+  d.id ||= newId();
   const booksBefore = state.books;
-  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId(), journal: journalOnSave(d, ui.original, todayIso()) });
+  const { state: next, book } = upsertBook(state, { ...d, journal: journalOnSave(d, ui.original, todayIso()) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
@@ -681,6 +744,8 @@ const actions = {
   reread() {
     if (!ui.original) return;
     const { state: next } = startReread(state, ui.original.id, todayIso());
+    // Segundo toque antes de a tela mudar não cria outra releitura.
+    ui.original = null;
     persist(next, 'Releitura iniciada. Boa leitura!');
     ui.year = yearOf(todayIso());
     go('#/inicio');
@@ -771,7 +836,11 @@ const actions = {
     setSession(null);
     go('#/inicio');
   },
-  reload() { window.location.reload(); },
+  async reload() {
+    // Atualizar no meio de uma gravação a cancelaria: espera ela terminar.
+    while (writing) await writing;
+    window.location.reload();
+  },
 
   // ---------- Diário e trechos (abas do livro) ----------
   'book-tab'(el) {
@@ -1346,6 +1415,14 @@ document.addEventListener('visibilitychange', () => {
   tickTimer();
   syncWakeLock();
 });
+
+// Saindo da tela com gravação em andamento: cópia de resgate. Voltando: relê os dados
+// (outra aba pode ter salvo enquanto esta estava parada, sem receber o aviso).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveRescue();
+  else reloadFromStorage();
+});
+window.addEventListener('pagehide', saveRescue);
 syncTicker();
 
 // ---------- Offline e atualizações ----------
@@ -1374,6 +1451,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 async function boot() {
   try {
     await loadFromStorage();
+    applyPendingRescue();
   } catch {
     backend = null;
     toast(LOAD_FAILED, { sticky: true });

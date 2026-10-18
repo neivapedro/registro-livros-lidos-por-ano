@@ -534,6 +534,24 @@ export async function openStoredState(kv, legacy) {
   }
 }
 
+/**
+ * Relê o estado gravado no backend em uso (outra aba salvou, ou o app voltou do segundo plano).
+ * Não migra nada: isso é só na abertura. Devolve null se não houver dados ou não der para ler.
+ */
+export async function readStoredState(backend, kv, legacy) {
+  try {
+    if (backend === 'legacy') {
+      const raw = legacy.getItem(STORAGE_KEY);
+      return raw ? normalizeState(JSON.parse(raw)) : null;
+    }
+    if (backend !== 'kv') return null;
+    const stored = await kv.getItem(DB_STATE_KEY);
+    return stored ? normalizeState(stored) : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Grava o estado no backend escolhido por openStoredState. Devolve false se não conseguir. */
 export async function writeStoredState(backend, kv, legacy, state) {
   if (backend === 'legacy') return saveState(legacy, state);
@@ -562,12 +580,14 @@ export function parseBackup(textContent) {
   } catch {
     throw new Error('O arquivo não é um backup válido do Leituras.');
   }
-  if (!parsed || parsed.app !== BACKUP_APP_ID || typeof parsed.data !== 'object') {
+  if (!parsed || parsed.app !== BACKUP_APP_ID || !parsed.data || typeof parsed.data !== 'object') {
     throw new Error('O arquivo não é um backup válido do Leituras.');
   }
   // Aceita backups da versão 1 (sem os campos novos) e da 2.
   if (Number(parsed.schemaVersion) > SCHEMA_VERSION) {
     throw new Error('Este backup foi feito por uma versão mais nova do app. Atualize o app e tente de novo.');
   }
+  // Sem a lista de livros, importar apagaria tudo: recusa o arquivo.
+  if (!Array.isArray(parsed.data.books)) throw new Error('O arquivo não é um backup válido do Leituras.');
   return normalizeState(parsed.data);
 }
