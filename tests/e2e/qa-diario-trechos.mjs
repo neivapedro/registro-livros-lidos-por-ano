@@ -341,6 +341,42 @@ try {
   const restored = bookIn(await waitState((s) => bookIn(s, 'long').quotes.length === before.length), 'long');
   assert.deepEqual(restored.quotes.map((q) => q.id), before);
 
+  step('sem mudança em Dados, salvar no diário/trechos não faz aparecer o Salvar');
+  await openBook('read', 'diario');
+  await page.click('[data-action="diary-edit"][data-date="2026-09-20"]');
+  await page.fill('#d-note', 'Terminei no parque.');
+  await page.click('[data-diary-form] button[type="submit"]');
+  await waitState((s) => bookIn(s, 'read').journal[1].note === 'Terminei no parque.');
+  assert.equal(await page.locator('[data-action="book-save"]').count(), 0);
+  await page.click('[data-tab="trechos"]');
+  await page.click('[data-action="quote-delete"][data-id="rq"]');
+  await waitState((s) => bookIn(s, 'read').quotes.length === 0);
+  assert.equal(await page.locator('[data-action="book-save"]').count(), 0);
+
+  step('Desfazer depois de abrir outro livro devolve o trecho ao livro certo');
+  await openBook('want', 'trechos');
+  await page.click('.toast button:has-text("Desfazer")');
+  const undone = await waitState((s) => bookIn(s, 'read').quotes.length === 1);
+  assert.equal(bookIn(undone, 'want').quotes.length, 0);
+  assert.equal(await page.locator('.quote-card').count(), 0, 'a tela do outro livro não ganha o trecho');
+
+  step('Concluir leitura passando pelas abas');
+  await page.goto(`${BASE}#/inicio`);
+  await onPage('inicio');
+  await page.goto(`${BASE}#/livro/reread?concluir=1`);
+  await onPage('livro');
+  await page.click('[data-tab="diario"]');
+  await page.waitForSelector('[data-action="book-save"]');
+  await page.click('[data-action="diary-edit"][data-date="2026-10-12"]');
+  await page.fill('#d-to', '45');
+  await page.click('[data-diary-form] button[type="submit"]');
+  await waitState((s) => bookIn(s, 'reread').journal[0].to === 45);
+  await page.click('[data-action="book-save"]');
+  await onPage('inicio');
+  const done = bookIn(await waitState((s) => bookIn(s, 'reread').status === 'lido'), 'reread');
+  assert.deepEqual(done.journal.map((x) => [x.date, x.from, x.to]), [['2026-10-12', 0, 45], ['2026-10-16', 45, 300]]);
+  assert.equal(done.quotes.length, 1);
+
   step('diário: corrigir com Enter e com data de outro ano');
   await openBook('drop', 'diario');
   await page.click('[data-action="diary-edit"][data-date="2026-05-10"]');
