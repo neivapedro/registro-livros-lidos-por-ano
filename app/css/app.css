@@ -972,3 +972,15 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   .retro-actions .btn-ghost, .retro-actions .btn-primary { padding: 0 10px; }
   .retro-actions .btn-ghost .icon, .retro-actions .btn-primary .icon { display: none; }
 }
+/* Livro do ano com título longo: até 3 linhas, para o slide não passar da tela (375×667). */
+.retro-book-name {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: clamp(30px, 10vw, 44px);
+}
+.retro-book-name.is-long { font-size: clamp(28px, 8.5vw, 36px); }
+@media (max-height: 740px) {
+  .retro .slide.center .cover-xl { width: 128px; height: 192px; padding: 12px; }
+  .retro .slide.center .cover-xl .cover-title { font-size: 26px; }
+  .retro .slide.center { gap: 10px; }
+  .retro .retro-stage { padding: 12px 0; }
+}

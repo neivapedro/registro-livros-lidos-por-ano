@@ -2,7 +2,7 @@
 // Funções puras. As páginas seguem a mesma regra de pagesReadInYear (journal.js).
 
 import { daysElapsedInYear, isLeapYear, monthName, monthOf, yearOf } from './dates.js';
-import { entryPages, pagesReadInYear } from './journal.js';
+import { countedEntries, pagesReadInYear } from './journal.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 
 /** Notas possíveis, de meia em meia estrela. */
@@ -53,11 +53,9 @@ export function pagesByMonth(books, year) {
   const months = Array(12).fill(0);
   for (const book of books) {
     if (book.status === STATUS.WANT) continue;
-    const journal = book.journal || [];
     const finishedInYear = book.status === STATUS.READ && book.endDate && yearOf(book.endDate) === year;
     let all = 0;
-    for (const entry of journal) {
-      const pages = entryPages(book, entry);
+    for (const { entry, pages } of countedEntries(book)) {
       all += pages;
       if (yearOf(entry.date) === year) months[monthOf(entry.date)] += pages;
     }

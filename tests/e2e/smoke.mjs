@@ -328,6 +328,8 @@ try {
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /0\s*de 12/);
   await page.goto(`${BASE}#/ajustes`);
+  // A tela redesenha quando chega o espaço usado: o campo de arquivo antigo some (e o change vai junto).
+  await page.waitForSelector('.storage-info');
   await page.setInputFiles('[data-import]', backupPath);
   await waitState((s) => s.books.length === 14);
   await page.goto(`${BASE}#/inicio`);

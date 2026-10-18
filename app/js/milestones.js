@@ -102,7 +102,9 @@ export function upcomingMilestones(books) {
     const left = nextPages - pages;
     out.push({
       id: `pages-${nextPages}`, kind: 'pages', title: `${nf.format(nextPages)} páginas`,
-      detail: `${left === 1 ? 'Falta 1 página' : `Faltam ${nf.format(left)} páginas`} para ${nf.format(nextPages)}`,
+      // O marco soma o total dos livros concluídos; o tile "páginas" também conta o que foi
+      // lido em livros em andamento e abandonados. O texto diz a regra para os números não parecerem errados.
+      detail: `${left === 1 ? 'Falta 1 página' : `Faltam ${nf.format(left)} páginas`} para ${nf.format(nextPages)}, contando os livros concluídos`,
     });
   }
   if (!done.has('big-book')) {

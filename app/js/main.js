@@ -874,7 +874,8 @@ Object.assign(actions, {
     go('#/buscar');
   },
   'clear-chart-filter'() {
-    ui.filters = { ...BLANK_FILTERS };
+    // Como o "Limpar": o texto digitado na busca fica.
+    ui.filters = { ...BLANK_FILTERS, q: ui.filters.q };
     render();
   },
   'page-goal-remove'(el) {

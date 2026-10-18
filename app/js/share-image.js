@@ -66,15 +66,52 @@ function brand(ctx, year, x, y, size) {
   ctx.fillText(String(year), x + w, y);
 }
 
-function bookCard(ctx, title, x, y, w, h, { label = 64, titleSize = 76 } = {}) {
+/**
+ * Título longo em duas linhas: a primeira leva as palavras que couberem,
+ * a segunda o resto (cortado com reticências se ainda passar).
+ */
+export function splitTitle(measure, title, maxWidth) {
+  const words = title.split(/\s+/).filter(Boolean);
+  let first = words[0] || '';
+  let i = 1;
+  while (i < words.length && measure(`${first} ${words[i]}`) <= maxWidth) {
+    first = `${first} ${words[i]}`;
+    i += 1;
+  }
+  return [first, words.slice(i).join(' ')];
+}
+
+function bookCard(ctx, title, x, y, w, h, { label = 64, titleSize = 76, twoLineSize = 48 } = {}) {
   ctx.fillStyle = C.card;
   ctx.beginPath();
   ctx.roundRect(x, y, w, h, 36);
   ctx.fill();
-  eyebrow(ctx, 'Livro do ano', x + 48, y + label);
-  const text = fitText(ctx, title, w - 96, titleSize, serif);
+  const maxW = w - 96;
   ctx.fillStyle = C.accent;
-  ctx.fillText(text, x + 48, y + h - 56);
+  // Cabe numa linha sem encolher demais: uma linha. Senão, duas linhas num tamanho legível
+  // (antes o título encolhia até 28px e ficava ilegível no story).
+  const single = fitText(ctx, title, maxW, titleSize, serif, Math.round(titleSize * 0.75));
+  if (single === title) {
+    const font = ctx.font; // o tamanho em que coube
+    eyebrow(ctx, 'Livro do ano', x + 48, y + label);
+    ctx.font = font;
+    ctx.fillStyle = C.accent;
+    ctx.fillText(single, x + 48, y + h - 56);
+    return;
+  }
+  const lineH = Math.round(twoLineSize * 1.12);
+  const base2 = y + h - Math.round(twoLineSize * 0.8);
+  eyebrow(ctx, 'Livro do ano', x + 48, base2 - lineH - Math.round(twoLineSize * 1.3));
+  ctx.font = serif(twoLineSize);
+  const [line1, rest] = splitTitle((t) => ctx.measureText(t).width, title, maxW);
+  const l1 = fitText(ctx, line1, maxW, twoLineSize, serif, twoLineSize);
+  ctx.fillStyle = C.accent;
+  ctx.fillText(l1, x + 48, base2 - lineH);
+  if (rest) {
+    const l2 = fitText(ctx, rest, maxW, twoLineSize, serif, twoLineSize);
+    ctx.fillStyle = C.accent;
+    ctx.fillText(l2, x + 48, base2);
+  }
 }
 
 /** Números da imagem: os mesmos da tela (retroData). */
@@ -182,7 +219,7 @@ function drawSquare(ctx, d, year, W) {
     ctx.fillText(text, cx2, y + 112);
   });
 
-  if (d.book) bookCard(ctx, d.book.title, m, 812, W - m * 2, 188, { label: 62, titleSize: 64 });
+  if (d.book) bookCard(ctx, d.book.title, m, 812, W - m * 2, 188, { label: 62, titleSize: 64, twoLineSize: 40 });
 }
 
 /** format: 'story' (padrão) ou 'square'. */

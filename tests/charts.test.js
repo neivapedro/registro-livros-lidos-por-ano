@@ -100,3 +100,11 @@ test('pageGoalProgress: projeção no ritmo atual, só no ano corrente', () => {
   // 50 págs. em 2 dias → 9.125 → ~9.100.
   assert.equal(pageGoalProgress(50, 6000, 2026, '2026-01-02').projection, 9100);
 });
+
+test('pagesByMonth bate com pagesReadInYear depois de uma correção para trás', () => {
+  const books = [book({ id: 'c', status: 'lido', pages: 300, endDate: '2026-04-10', journal: [entry('2026-02-01', 0, 100), entry('2026-02-02', 100, 60), entry('2026-03-01', 60, 150)] })];
+  const months = pagesByMonth(books, 2026);
+  assert.deepEqual(months.slice(1, 4), [100, 50, 150]);
+  assert.equal(months.reduce((a, b) => a + b, 0), pagesReadInYear(books, 2026));
+  assert.equal(pagesReadInYear(books, 2026), 300);
+});

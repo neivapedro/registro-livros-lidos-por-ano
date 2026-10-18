@@ -184,7 +184,7 @@ function bookSlide(d) {
     <div class="slide center">
       <span class="eyebrow">Livro do ano</span>
       ${cover(d.book, { size: 'xl' })}
-      <span class="retro-name">${esc(d.book.title)}</span>
+      <span class="retro-name retro-book-name${d.book.title.length > 40 ? ' is-long' : ''}">${esc(d.book.title)}</span>
       ${stars(d.book.rating, { size: 20 })}
       ${quote ? `<span class="retro-quote">“${esc(quote)}”</span>` : ''}
     </div>`;
