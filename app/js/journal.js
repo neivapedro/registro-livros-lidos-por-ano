@@ -126,14 +126,44 @@ export function journalOnSave(d, original, today) {
   return recordProgress({ ...d, [field]: original[field] }, Number(value), unit, today);
 }
 
-/** Páginas avançadas numa entrada. Kindle: % convertido em páginas quando o total é conhecido. */
+/**
+ * Páginas avançadas numa entrada. Kindle: % convertido em páginas quando o total é conhecido.
+ * A conversão arredonda as posições (não a diferença): entradas encadeadas de 0% a 100%
+ * somam exatamente o total do livro (20 dias de 5% num livro de 416 págs. = 416, não 420).
+ */
 export function entryPages(book, entry) {
   const delta = Math.max(0, entry.to - entry.from);
   if (entry.unit === UNITS.PERCENT) {
     const pages = Number(book.pages) || 0;
-    return pages ? Math.round((delta * pages) / 100) : 0;
+    if (!pages || !delta) return 0;
+    const at = (pct) => Math.round((pct * pages) / 100);
+    return Math.max(0, at(entry.to) - at(entry.from));
   }
   return delta;
+}
+
+/**
+ * Páginas que cada entrada do diário soma nos totais (ano, mês, dia), na ordem das datas.
+ * Só conta o avanço além da maior posição já alcançada no livro: depois de uma correção
+ * para trás (100 → 60), voltar a avançar até 100 não conta de novo (0→100, 100→60, 60→150 = 150).
+ * O total nunca passa do nº de páginas do livro, quando conhecido.
+ * Devolve [{ entry, pages }].
+ */
+export function countedEntries(book) {
+  const total = Number(book.pages) || 0;
+  const high = {};
+  let sum = 0;
+  return [...(book.journal || [])]
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((entry) => {
+      const reached = high[entry.unit];
+      const from = reached === undefined ? entry.from : Math.max(entry.from, reached);
+      high[entry.unit] = reached === undefined ? entry.to : Math.max(reached, entry.to);
+      let pages = entry.to > from ? entryPages(book, { ...entry, from }) : 0;
+      if (total) pages = Math.max(0, Math.min(pages, total - sum));
+      sum += pages;
+      return { entry, pages };
+    });
 }
 
 /** Só conta como dia de leitura a entrada que avançou (correções para trás não contam). */
@@ -149,9 +179,8 @@ function advanced(entry) {
 export function pagesReadPerDay(books) {
   const days = new Map();
   for (const book of books) {
-    for (const entry of book.journal || []) {
+    for (const { entry, pages } of countedEntries(book)) {
       if (!advanced(entry)) continue;
-      const pages = entryPages(book, entry);
       const day = days.get(entry.date) || { pages: 0, byBook: [] };
       day.pages += pages;
       const item = day.byBook.find((x) => x.id === book.id);
@@ -211,8 +240,7 @@ export function pagesReadInYear(books, year) {
       continue;
     }
     let all = 0;
-    for (const entry of journal) {
-      const pages = entryPages(book, entry);
+    for (const { entry, pages } of countedEntries(book)) {
       all += pages;
       if (yearOf(entry.date) === year) total += pages;
     }

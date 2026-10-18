@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  closeOnFinish, entryPages, journalOnSave, longestDayStreak, pagesReadInYear, pagesReadPerDay, readingDays, recordProgress, unitOf,
+  closeOnFinish, countedEntries, entryPages, journalOnSave, longestDayStreak, pagesReadInYear, pagesReadPerDay, readingDays, recordProgress, unitOf,
 } from '../app/js/journal.js';
 
 const physical = (extra = {}) => ({ id: 'p', title: 'Físico', format: 'fisico', status: 'lendo', pages: 300, currentPage: null, journal: [], ...extra });
@@ -170,4 +170,29 @@ test('journalOnSave: página nova, conclusão no dia do término e abandono', ()
     { date: '2026-10-16', from: 50, to: 60, unit: 'page', note: '' });
   const read = physical({ status: 'lido', journal: original.journal });
   assert.deepEqual(journalOnSave({ ...read, notes: 'x' }, read, '2026-10-16'), original.journal, 'editar livro lido não mexe no diário');
+});
+
+test('páginas: correção para trás e novo avanço não contam duas vezes', () => {
+  const e = (date, from, to, unit = 'page') => ({ date, from, to, unit, note: '' });
+  // 0→100, corrigiu para 60, depois 60→150: leu até a 150, não 190.
+  const book = physical({ pages: 300, journal: [e('2026-03-01', 0, 100), e('2026-03-02', 100, 60), e('2026-03-03', 60, 150)] });
+  assert.equal(pagesReadInYear([book], 2026), 150);
+  assert.deepEqual(countedEntries(book).map((x) => x.pages), [100, 0, 50]);
+  assert.equal(pagesReadPerDay([book]).get('2026-03-03').pages, 50);
+  // Diário fora de ordem: conta pela data.
+  assert.equal(pagesReadInYear([physical({ journal: [e('2026-03-03', 60, 150), e('2026-03-01', 0, 100)] })], 2026), 150);
+  // Nunca passa do total do livro.
+  const capped = physical({ pages: 120, journal: [e('2026-03-01', 0, 100), e('2026-03-02', 100, 200)] });
+  assert.equal(pagesReadInYear([capped], 2026), 120);
+  // Lido com diário repetido (0→100 duas vezes): o que falta entra no término, sem passar de 120.
+  const repeated = physical({ pages: 120, status: 'lido', endDate: '2026-03-05', journal: [e('2026-03-01', 0, 100), e('2026-03-02', 0, 100)] });
+  assert.equal(pagesReadInYear([repeated], 2026), 120);
+});
+
+test('páginas: Kindle concluído de 0% a 100% soma exatamente o total do livro', () => {
+  const journal = Array.from({ length: 20 }, (_, i) => ({ date: `2026-04-${String(i + 1).padStart(2, '0')}`, from: i * 5, to: i * 5 + 5, unit: 'percent', note: '' }));
+  const k = kindle({ pages: 416, status: 'lido', endDate: '2026-04-20', journal });
+  assert.equal(pagesReadInYear([k], 2026), 416, 'antes: 20 × round(20,8) = 420');
+  assert.equal(entryPages(k, { from: 0, to: 5, unit: 'percent' }), 21);
+  assert.equal(entryPages(k, { from: 10, to: 15, unit: 'percent' }), 20);
 });
