@@ -21,6 +21,12 @@ test('o service worker guarda todos os arquivos do app para uso offline', () => 
   assert.deepEqual(missing, [], `Adicione ao SHELL do sw.js: ${missing.join(', ')}`);
 });
 
+test('versão do service worker igual à mostrada no app (senão o app recarregaria à toa)', () => {
+  const swVersion = sw.match(/const VERSION = '([^']+)'/)[1];
+  const appVersion = readFileSync(join(APP, 'js/views/settings.js'), 'utf8').match(/APP_VERSION = '([^']+)'/)[1];
+  assert.equal(swVersion, `v${appVersion}`);
+});
+
 test('todo arquivo listado no service worker existe', () => {
   const absent = shell.filter((f) => !existsSync(join(APP, f)));
   assert.deepEqual(absent, []);

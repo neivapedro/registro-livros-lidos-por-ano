@@ -4,7 +4,7 @@ import { monthlyTarget } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 
-export const APP_VERSION = '1.3.0';
+export const APP_VERSION = '1.3.1';
 
 function stepper(label, value, action, hint) {
   return `

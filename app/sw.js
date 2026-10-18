@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.3.0';
+const VERSION = 'v1.3.1';
 const CACHE = `leituras-${VERSION}`;
 
 const SHELL = [
@@ -69,6 +69,11 @@ self.addEventListener('activate', (event) => {
       .then((keys) => Promise.all(keys.filter((k) => k.startsWith('leituras-') && k !== CACHE).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
   );
+});
+
+// O app pergunta a versão para saber se a tela aberta ficou para trás (main.js).
+self.addEventListener('message', (event) => {
+  if (event.data?.type === 'versao') event.source?.postMessage({ type: 'versao', version: VERSION });
 });
 
 // Arquivos do app: responde do cache e atualiza em segundo plano.
