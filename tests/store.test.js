@@ -178,6 +178,18 @@ test('restoreBook desfaz a exclusão na mesma posição', () => {
   assert.equal(restoreBook(back, book, 1), back);
 });
 
+test('restoreBook devolve o livro ao mesmo lugar em "Próximos"', () => {
+  let state = createEmptyState();
+  for (const id of ['a', 'b', 'c']) ({ state } = upsertBook(state, { id, title: id, status: 'quero' }));
+  state = setUpNext(state, ['c', 'b', 'a']);
+  const book = state.books[1];
+  const removed = removeBook(state, 'b');
+  assert.deepEqual(removed.upNext, ['c', 'a']);
+  assert.deepEqual(restoreBook(removed, book, 1, state.upNext.indexOf('b')).upNext, ['c', 'b', 'a']);
+  // Fora da lista antes de excluir: continua fora.
+  assert.deepEqual(restoreBook(removeBook(state, 'b'), book, 1, -1).upNext, ['c', 'a']);
+});
+
 test('startReread cria nova leitura do mesmo livro', () => {
   let state = createEmptyState();
   ({ state } = upsertBook(state, {
@@ -457,6 +469,21 @@ test('migração: copia do localStorage, confere e só então apaga', async () =
   assert.equal(again.migrated, false);
   assert.equal(again.backend, 'kv');
   assert.deepEqual(again.state, opened.state);
+});
+
+test('migração: marca "dados no IndexedDB" de novo depois de liberar o localStorage', async () => {
+  // Com o localStorage cheio (muitas capas por foto na 1.2), a marca gravada junto
+  // com a cópia pode ser recusada; apagada a chave antiga, já cabe.
+  const kv = memoryKv();
+  const legacy = legacyWith(v1State);
+  const marks = [];
+  kv.markStored = () => marks.push(legacy.getItem(STORAGE_KEY));
+  await openStoredState(kv, legacy);
+  assert.deepEqual(marks, [null], 'marca pedida depois de apagar a chave antiga');
+  // Cópia que falhou não marca.
+  const bad = memoryKv({ corrupt: true });
+  bad.markStored = () => assert.fail('não devia marcar');
+  await openStoredState(bad, legacyWith(v1State));
 });
 
 test('migração: cópia diferente mantém o localStorage e continua usando ele', async () => {

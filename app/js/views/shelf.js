@@ -13,7 +13,7 @@ function wantList(books) {
       '<a class="btn-outline" href="#/novo?status=quero">Adicionar à fila</a>');
   }
   return want.map((b) => bookRow(b, {
-    action: `<button type="button" class="btn-outline sm" data-action="start-reading" data-id="${b.id}">Começar</button>`,
+    action: `<button type="button" class="btn-outline sm" data-action="start-reading" data-id="${esc(b.id)}">Começar</button>`,
   })).join('') + '<a class="btn-ghost" href="#/novo?status=quero">+ Adicionar à fila</a>';
 }
 

@@ -316,6 +316,23 @@ test('falha não fica guardada: a próxima tentativa consulta de novo', async ()
   assert.equal(calls.length, 2);
 });
 
+test('resultado parcial (uma fonte falhou) não fica guardado: a próxima tentativa consulta de novo', async () => {
+  let brasilUp = false;
+  const { impl, calls } = fakeFetch([
+    [BRASIL, () => {
+      if (!brasilUp) throw new Error('fora do ar');
+      return ok(brasilApiBook);
+    }],
+    [OL, () => ok({ docs: [olDoc] })],
+  ]);
+  const first = await searchBooks('9788521315315', { fetchImpl: impl });
+  assert.deepEqual(first.results.map((r) => r.source), ['Open Library']);
+  brasilUp = true;
+  const again = await searchBooks('9788521315315', { fetchImpl: impl });
+  assert.equal(calls.length, 4, 'consulta as fontes de novo');
+  assert.ok(again.results.some((r) => r.source.startsWith('BrasilAPI')));
+});
+
 test('fonte lenta é abandonada no tempo máximo', async () => {
   const signals = [];
   const { impl } = fakeFetch([

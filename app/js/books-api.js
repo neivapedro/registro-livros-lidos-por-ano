@@ -297,6 +297,6 @@ export async function searchBooks(query, { fetchImpl = fetch, signal, googleKey 
     : await searchText(fetchImpl, q, googleKey, opts);
   if (signal?.aborted) return { results: [], failed: false, isbn };
   // Só guarda resposta completa: se alguma fonte falhou, a próxima tentativa consulta de novo.
-  if (outcome.results.length || !outcome.partial) remember(key, outcome);
+  if (!outcome.partial) remember(key, outcome);
   return { results: outcome.results, failed: outcome.failed, isbn };
 }

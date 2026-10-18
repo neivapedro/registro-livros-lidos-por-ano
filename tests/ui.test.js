@@ -49,3 +49,12 @@ test('meia estrela na exibição e nota com vírgula', async () => {
   assert.equal((stars(5).match(/star-on/g) || []).length, 5);
   assert.equal(stars(null), '');
 });
+
+test('estante escapa o id do livro (backup importado pode trazer qualquer texto)', async () => {
+  const { shelfView } = await import('../app/js/views/shelf.js');
+  const { normalizeState } = await import('../app/js/store.js');
+  const state = normalizeState({ books: [{ id: '"><img src=x onerror=alert(1)>', title: 'T', status: 'quero', createdAt: '2026-01-01' }] });
+  const html = shelfView({ state, tab: 'quero' });
+  assert.doesNotMatch(html, /<img src=x/);
+  assert.match(html, /data-id="&quot;&gt;&lt;img src=x onerror=alert\(1\)&gt;"/);
+});
