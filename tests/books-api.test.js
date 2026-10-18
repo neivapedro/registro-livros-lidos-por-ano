@@ -1,7 +1,7 @@
 import { beforeEach, test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  clearSearchCache, isbn10To13, mergeResults, normalizeBrasilApiBook, normalizeGoogleVolume, normalizeOpenLibraryDoc,
+  clearSearchCache, isbn10To13, joinAuthors, mergeResults, rankResults, normalizeBrasilApiBook, normalizeGoogleVolume, normalizeOpenLibraryDoc,
   openLibraryCoverByIsbn, parseIsbn, searchBooks,
 } from '../app/js/books-api.js';
 
@@ -195,7 +195,7 @@ test('busca por título inclui o Google Books quando há chave', async () => {
     [OL, () => ok({ docs: [olDoc] })],
   ]);
   const { results } = await searchBooks('a meta goldratt', { fetchImpl: impl, googleKey: 'minha chave' });
-  assert.deepEqual(results.map((r) => r.source), ['Open Library', 'Google Books']);
+  assert.deepEqual(results.map((r) => r.source).sort(), ['Google Books', 'Open Library']);
   assert.equal(calls.length, 2);
   const google = calls.find((u) => u.startsWith(GOOGLE));
   assert.match(google, /q=a%20meta%20goldratt&/);
@@ -373,4 +373,47 @@ test('searchBooks ignora termos muito curtos', async () => {
   const { impl, calls } = fakeFetch([]);
   assert.deepEqual(await searchBooks(' a ', { fetchImpl: impl }), { results: [], failed: false, isbn: '' });
   assert.equal(calls.length, 0);
+});
+
+test('rankResults: livros do autor buscado vêm primeiro e o que não combina sai', () => {
+  const r = (title, authors, source = 'Google Books') => ({ title, authors, source });
+  const list = [r('IA para Empreendedores', 'Alexandre Rodrigues'), r('Coletânea', 'Vários, Joel Silva'),
+    r('Influência', 'Joel Jota'), r('Outro', 'Fulano'), r('Ultracorajoso', 'Joel Jota')];
+  assert.deepEqual(rankResults(list, 'joel jota').map((x) => x.title),
+    ['Influência', 'Ultracorajoso', 'Coletânea']);
+  // Open Library sem palavra em comum fica (edição em português com outro título), no fim.
+  assert.deepEqual(rankResults([r('A Meta', 'Goldratt', 'Open Library'), r('The Goal', 'Goldratt')], 'the goal')
+    .map((x) => x.title), ['The Goal', 'A Meta']);
+  // Se nada combina, a lista fica como veio.
+  assert.deepEqual(rankResults(list, 'xyz').map((x) => x.title), list.map((x) => x.title));
+  // Título vence palavra solta; acentos e maiúsculas não importam.
+  assert.deepEqual(rankResults([r('Bom dia', 'X'), r('A Revolução dos Bichos', 'George Orwell')], 'revolucao bichos')
+    .map((x) => x.title), ['A Revolução dos Bichos']);
+});
+
+test('Google com erro 503 passageiro: tenta de novo e traz o livro', async () => {
+  let n = 0;
+  const unavailable = () => ({ ok: false, status: 503, json: async () => ({}) });
+  const { impl } = fakeFetch([
+    [GOOGLE, () => { n += 1; return n === 1 ? unavailable() : ok({ items: [googleItem] }); }],
+    [OL, () => ok({ docs: [] })],
+  ]);
+  const { results, failed } = await searchBooks('a meta goldratt', { fetchImpl: impl, googleKey: 'k' });
+  assert.equal(failed, false);
+  assert.equal(n, 2);
+  assert.ok(results.some((x) => x.source === 'Google Books'));
+});
+
+test('busca mostra até 15 resultados', async () => {
+  const items = Array.from({ length: 30 }, (_, i) => ({ id: `g${i}`, volumeInfo: { title: `Livro ${i}`, authors: ['A'] } }));
+  const { impl } = fakeFetch([[GOOGLE, () => ok({ items })], [OL, () => ok({ docs: [] })]]);
+  const { results } = await searchBooks('livro', { fetchImpl: impl, googleKey: 'k' });
+  assert.equal(results.length, 15);
+});
+
+test('joinAuthors: até 3 nomes; coletânea vira "e outros"', () => {
+  assert.equal(joinAuthors(['Joel Jota']), 'Joel Jota');
+  assert.equal(joinAuthors(['A', ' B ', '', 'C']), 'A, B, C');
+  assert.equal(joinAuthors(['Joel Jota', 'Ana', 'Bia', 'Caio', 'Duda']), 'Joel Jota, Ana, Bia e outros');
+  assert.equal(joinAuthors(undefined), '');
 });

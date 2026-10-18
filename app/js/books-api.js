@@ -21,6 +21,10 @@ const OPEN_LIBRARY_FIELDS = [
 
 /** Tempo máximo de cada fonte (ms). Passado isso, ela conta como falha. */
 export const SOURCE_TIMEOUT_MS = 8000;
+const RETRIES_ON_5XX = 2;
+const RETRY_DELAY_MS = 300;
+/** Quantos resultados a busca mostra. */
+export const RESULT_LIMIT = 15;
 
 // Nomes que a BrasilAPI usa para dizer de onde veio o livro.
 const BRASIL_API_PROVIDERS = {
@@ -86,6 +90,12 @@ function joinTitle(title, subtitle) {
   return subtitle ? `${title}: ${subtitle}` : title;
 }
 
+/** Coletâneas trazem dezenas de autores: mostra os 3 primeiros e "e outros". */
+export function joinAuthors(list) {
+  const names = (Array.isArray(list) ? list : []).filter((a) => typeof a === 'string' && a.trim()).map((a) => a.trim());
+  return names.length > 3 ? `${names.slice(0, 3).join(', ')} e outros` : names.join(', ');
+}
+
 export function normalizeGoogleVolume(item) {
   const info = item?.volumeInfo;
   if (!info?.title) return null;
@@ -95,7 +105,7 @@ export function normalizeGoogleVolume(item) {
     source: 'Google Books',
     sourceId: `google:${item.id}`,
     title: joinTitle(info.title, info.subtitle),
-    authors: (info.authors || []).join(', '),
+    authors: joinAuthors(info.authors),
     pages: info.pageCount > 0 ? info.pageCount : null,
     cover: toHttps(links.thumbnail || links.smallThumbnail),
     isbn: pickIsbn(ids),
@@ -119,7 +129,7 @@ export function normalizeOpenLibraryDoc(doc) {
     source: 'Open Library',
     sourceId: `openlibrary:${useEdition && edition.key ? edition.key : doc.key}`,
     title: joinTitle(src.title, src.subtitle),
-    authors: (doc.author_name || []).join(', '),
+    authors: joinAuthors(doc.author_name),
     pages: pages > 0 ? pages : null,
     cover: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null,
     isbn: pickIsbn(src.isbn) || (useEdition ? '' : pickIsbn(doc.isbn)),
@@ -142,7 +152,7 @@ export function normalizeBrasilApiBook(data, fallbackIsbn = '') {
     source: provider ? `BrasilAPI (${provider})` : 'BrasilAPI',
     sourceId: `brasilapi:${isbn || data.title}`,
     title: joinTitle(data.title, data.subtitle),
-    authors: authors.filter((a) => typeof a === 'string' && a.trim()).map((a) => a.trim()).join(', '),
+    authors: joinAuthors(authors),
     pages: data.page_count > 0 ? data.page_count : null,
     cover: toHttps(data.cover_url) || (isbn ? openLibraryCoverByIsbn(isbn) : null),
     isbn,
@@ -157,8 +167,39 @@ function dedupeKey(r) {
   return r.isbn || `${norm(r.title)}|${norm(r.authors.split(',')[0] || '')}`;
 }
 
+const foldText = (s) => String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+const words = (s) => foldText(s).split(/[^a-z0-9]+/).filter((w) => w.length >= 2);
+
+/**
+ * Põe primeiro o que combina com o que foi digitado. O Google devolve muito livro
+ * sem relação (para "Joel Jota", o livro dele vinha em 7º, atrás de coletâneas).
+ * Pontos: todas as palavras no autor (busca por autor) > todas no título ou no
+ * título + autor > alguma palavra. Empate mantém a ordem das fontes.
+ */
+export function rankResults(results, query) {
+  const q = words(query);
+  if (!q.length) return results;
+  const has = (text, w) => text.split(/[^a-z0-9]+/).some((t) => t.startsWith(w));
+  const score = (r) => {
+    const author = foldText(r.authors);
+    const title = foldText(r.title);
+    const both = `${title} ${author}`;
+    if (q.every((w) => has(author, w))) return 4;
+    if (q.every((w) => has(title, w))) return 3;
+    if (q.every((w) => has(both, w))) return 2;
+    return q.some((w) => has(both, w)) ? 1 : 0;
+  };
+  const scored = results.map((r, i) => ({ r, i, s: score(r) }));
+  // Do Google, livro sem nenhuma palavra digitada no título nem no autor é ruído (ele casa
+  // pela descrição): sai da lista, a não ser que nada combine. Da Open Library fica, porque
+  // ela pode mostrar a edição em português com outro título ("The Goal" → "A Meta").
+  const noise = (x) => x.s === 0 && x.r.source === 'Google Books';
+  const relevant = scored.some((x) => x.s > 0) ? scored.filter((x) => !noise(x)) : scored;
+  return relevant.sort((a, b) => b.s - a.s || a.i - b.i).map((x) => x.r);
+}
+
 /** Junta as listas intercalando as fontes (na ordem dada) e removendo repetidos. */
-export function mergeResults(lists, limit = 12) {
+export function mergeResults(lists, limit = RESULT_LIMIT) {
   const out = [];
   const seen = new Set();
   const max = Math.max(0, ...lists.map((l) => l.length));
@@ -195,7 +236,13 @@ async function getJson(fetchImpl, url, { signal, timeoutMs }) {
   });
   aborted.catch(() => {});
   try {
-    const res = await Promise.race([fetchImpl(url, { signal: ctrl.signal }), aborted]);
+    let res = await Promise.race([fetchImpl(url, { signal: ctrl.signal }), aborted]);
+    // Erro passageiro do servidor (o Google responde 503 com frequência): tenta de novo,
+    // dentro do mesmo prazo da fonte.
+    for (let retry = 0; res.status >= 500 && retry < RETRIES_ON_5XX; retry += 1) {
+      await Promise.race([new Promise((r) => { setTimeout(r, RETRY_DELAY_MS); }), aborted]);
+      res = await Promise.race([fetchImpl(url, { signal: ctrl.signal }), aborted]);
+    }
     // 404 da BrasilAPI quer dizer "ISBN não encontrado": resposta válida, sem livro.
     if (res.status === 404) return null;
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -212,7 +259,7 @@ function openLibraryUrl(param) {
 
 function googleUrl(query, { portuguese, key }) {
   const lang = portuguese ? '&langRestrict=pt' : '';
-  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=10&printType=books${lang}&key=${encodeURIComponent(key)}`;
+  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=40&printType=books${lang}&key=${encodeURIComponent(key)}`;
 }
 
 /**
@@ -226,7 +273,7 @@ async function runSources(fetchImpl, sources, opts) {
   const lists = settled.map((s) => (s.status === 'fulfilled' ? s.value : []));
   const rejected = settled.filter((s) => s.status === 'rejected').length;
   return {
-    results: mergeResults(lists),
+    results: mergeResults(lists, Infinity),
     failed: rejected === sources.length,
     partial: rejected > 0,
   };
@@ -246,7 +293,7 @@ function searchIsbn(fetchImpl, isbn, googleKey, opts) {
     { url: openLibraryUrl(`isbn=${isbn}`), parse: parseOl },
   ];
   if (googleKey) sources.push({ url: googleUrl(`isbn:${isbn}`, { portuguese: false, key: googleKey }), parse: parseGoogle });
-  return runSources(fetchImpl, sources, opts);
+  return runSources(fetchImpl, sources, opts).then((o) => ({ ...o, results: o.results.slice(0, RESULT_LIMIT) }));
 }
 
 async function searchText(fetchImpl, q, googleKey, opts) {
@@ -256,9 +303,10 @@ async function searchText(fetchImpl, q, googleKey, opts) {
     if (googleKey) sources.push({ url: googleUrl(q, { portuguese, key: googleKey }), parse: parseGoogle });
     return sources;
   };
+  const ranked = (outcome) => ({ ...outcome, results: rankResults(outcome.results, q).slice(0, RESULT_LIMIT) });
   const outcome = await runSources(fetchImpl, build(true), opts);
-  if (outcome.failed || outcome.results.length || opts.signal?.aborted) return outcome;
-  return runSources(fetchImpl, build(false), opts);
+  if (outcome.failed || outcome.results.length || opts.signal?.aborted) return ranked(outcome);
+  return ranked(await runSources(fetchImpl, build(false), opts));
 }
 
 // ---------- Memória da sessão ----------
