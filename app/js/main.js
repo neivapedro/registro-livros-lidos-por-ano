@@ -1,15 +1,20 @@
 import { searchBooks } from './books-api.js';
+import { chartFilters } from './charts.js';
 import { isIsoDate, todayIso, yearOf } from './dates.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { closeOnFinish, recordProgress, unitOf, UNITS } from './journal.js';
+import { yearsWithData } from './stats.js';
 import { renderRetroImage } from './share-image.js';
 import {
   STATUS, FORMATS, createEmptyState, getGoal, newId, openStoredState, parseBackup,
   removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
+import { setPageGoal } from './store.js';
 import { esc, icon, largeCoverUrl } from './ui.js';
 import { allTimeView } from './views/alltime.js';
+import { calendarUi, heatmapDayAt } from './views/calendar.js';
+import { compareYearsOf } from './views/charts.js';
 import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
@@ -638,6 +643,74 @@ const actions = {
   },
   reload() { window.location.reload(); },
 };
+
+// ---------- Estatísticas: calendário, gráficos e meta de páginas ----------
+// Estado só da tela (não vai para os dados): modo do calendário, gráfico mensal e anos comparados.
+Object.assign(ui, { calendar: null, monthChart: 'livros', compare: null });
+
+const BLANK_FILTERS = { q: '', status: '', year: '', genre: '', format: '', minRating: '' };
+
+function setCalendar(year, changes) {
+  ui.calendar = { ...calendarUi(ui, year, todayIso()), ...changes };
+  render();
+}
+
+Object.assign(actions, {
+  'cal-mode'(el) { setCalendar(Number(el.dataset.year), { mode: el.dataset.mode }); },
+  'cal-month'(el) {
+    const year = Number(el.dataset.year);
+    const month = calendarUi(ui, year, todayIso()).month + Number(el.dataset.delta);
+    if (month >= 0 && month <= 11) setCalendar(year, { month });
+  },
+  'cal-day'(el) { setCalendar(Number(el.dataset.year), { day: el.dataset.date }); },
+  'month-chart-mode'(el) {
+    ui.monthChart = el.dataset.mode;
+    render();
+  },
+  // Toque numa barra ou faixa: abre a Buscar com os livros daquele recorte.
+  'chart-filter'(el) {
+    ui.filters = chartFilters(el.dataset.year, el.dataset.kind, el.dataset.value);
+    go('#/buscar');
+  },
+  'clear-chart-filter'() {
+    ui.filters = { ...BLANK_FILTERS };
+    render();
+  },
+  'page-goal-remove'(el) {
+    persist(setPageGoal(state, Number(el.dataset.year), null), 'Meta de páginas removida.');
+    render();
+  },
+});
+
+// Mapa do ano: o toque vale para o quadradinho mais próximo (são pequenos no celular).
+document.addEventListener('click', (e) => {
+  const svg = e.target.closest?.('[data-heatmap]');
+  if (!svg) return;
+  const day = heatmapDayAt(svg, e.clientX, e.clientY);
+  if (day) setCalendar(Number(svg.dataset.year), { day });
+});
+
+document.addEventListener('change', (e) => {
+  const which = { 'compare-a': 'a', 'compare-b': 'b' }[e.target.dataset?.change];
+  if (!which) return;
+  const years = yearsWithData(state.books, yearOf(todayIso()));
+  ui.compare = { ...compareYearsOf(ui, years), [which]: Number(e.target.value) };
+  render();
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest('[data-page-goal-form]');
+  if (!form) return;
+  e.preventDefault();
+  const raw = form.querySelector('input')?.value.trim() || '';
+  const goal = Number(raw.replace(/\./g, ''));
+  if (!Number.isInteger(goal) || goal < 1 || goal > 1000000) {
+    toast('Informe um número de páginas entre 1 e 1.000.000.');
+    return;
+  }
+  persist(setPageGoal(state, Number(form.dataset.year), goal), 'Meta de páginas salva.');
+  render();
+});
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');

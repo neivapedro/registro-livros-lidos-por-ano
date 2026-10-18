@@ -1,6 +1,7 @@
 // Cálculos dos indicadores. Funções puras: recebem os livros e devolvem números.
 
 import { daysElapsedInYear, daysInclusive, monthOf, yearOf } from './dates.js';
+import { pagesReadInYear } from './journal.js';
 import { STATUS, FORMATS } from './store.js';
 
 export function readBooks(books) {
@@ -36,7 +37,9 @@ function average(values) {
 
 export function yearStats(books, year, goal, today) {
   const read = booksReadInYear(books, year);
-  const pages = read.reduce((s, b) => s + (b.pages || 0), 0);
+  // Páginas lidas no ano pelo diário (regra em journal.js): conta também o que foi lido
+  // em livros ainda em andamento ou abandonados. Retrospectiva e imagem usam este número.
+  const pages = pagesReadInYear(books, year);
   const ratings = read.map((b) => b.rating).filter((r) => r);
   const durations = read
     .filter((b) => b.startDate && b.startDate <= b.endDate)
@@ -62,6 +65,7 @@ export function yearStats(books, year, goal, today) {
     progress: goal > 0 ? Math.min(1, read.length / goal) : 0,
     remaining: Math.max(0, goal - read.length),
     pages,
+    // Livros concluídos no ano com nº de páginas (os sem nº não somam páginas).
     pagesKnown: read.filter((b) => b.pages).length,
     pagesPerDay: daysElapsed > 0 ? pages / daysElapsed : 0,
     avgRating: average(ratings),
@@ -164,6 +168,18 @@ export function droppedInYear(books, year) {
     .sort((a, b) => b.endDate.localeCompare(a.endDate));
 }
 
+/** Páginas de todos os anos: a soma de pagesReadInYear em cada ano com término ou diário. */
+export function pagesAllTime(books) {
+  const years = new Set();
+  for (const b of books) {
+    if (b.endDate) years.add(yearOf(b.endDate));
+    for (const e of b.journal || []) years.add(yearOf(e.date));
+  }
+  let total = 0;
+  for (const y of years) total += pagesReadInYear(books, y);
+  return total;
+}
+
 /** Indicadores de todos os anos somados. */
 export function allTimeStats(books, today) {
   const read = readBooks(books);
@@ -185,7 +201,7 @@ export function allTimeStats(books, today) {
   const best = years.reduce((top, y) => (y.count > (top?.count || 0) ? y : top), null);
   return {
     count: read.length,
-    pages: read.reduce((s, b) => s + (b.pages || 0), 0),
+    pages: pagesAllTime(books),
     avgRating: average(read.map((b) => b.rating).filter((r) => r)),
     // Média dos anos já encerrados; no primeiro ano, o próprio ano em andamento.
     avgPerYear: years.length > 1
