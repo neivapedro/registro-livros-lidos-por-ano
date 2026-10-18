@@ -242,7 +242,7 @@ export function retroView({ state, year, today, ui }) {
       </div>
       <div class="retro-actions">
         ${formatToggle(ui.retroFormat === 'square' ? 'square' : 'story')}
-        <button type="button" class="btn-ghost" data-action="retro-save">${icon('download', { size: 18, stroke: 2 })}Salvar imagem</button>
+        <button type="button" class="btn-ghost" data-action="retro-save">${icon('download', { size: 18, stroke: 2 })}Salvar</button>
         <button type="button" class="btn-primary sm" data-action="retro-share">${icon('upload', { size: 18, stroke: 2.2 })}Compartilhar</button>
       </div>
     </div>`;
