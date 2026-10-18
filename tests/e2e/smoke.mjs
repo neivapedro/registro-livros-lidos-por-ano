@@ -191,13 +191,12 @@ try {
   await page.locator('#f-title').dispatchEvent('input');
   await page.click('.btn-primary');
   await page.waitForSelector('.hero');
-  const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('leituras:v1')).books.find((b) => b.title === 'Livro sem cadastro'));
+  await waitState((st) => st?.books.some((b) => b.title === 'Livro sem cadastro'));
+  const saved = (await readState()).books.find((b) => b.title === 'Livro sem cadastro');
   assert.equal(saved.isbn, '9788521315315');
-  await page.evaluate(() => {
-    const data = JSON.parse(localStorage.getItem('leituras:v1'));
-    data.books = data.books.filter((b) => b.title !== 'Livro sem cadastro');
-    localStorage.setItem('leituras:v1', JSON.stringify(data));
-  });
+  const cleaned = await readState();
+  cleaned.books = cleaned.books.filter((b) => b.title !== 'Livro sem cadastro');
+  await writeState(cleaned);
   await page.reload();
   await page.waitForSelector('.hero');
 
