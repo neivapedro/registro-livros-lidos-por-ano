@@ -31,7 +31,7 @@ import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
-import { settingsView, storageLine } from './views/settings.js';
+import { APP_VERSION, settingsView, storageLine } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
 import { summaryView } from './views/summary.js';
 import { addMinutes } from './journal.js';
@@ -1429,20 +1429,41 @@ syncTicker();
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   let hadController = Boolean(navigator.serviceWorker.controller);
+  // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
+  const applyUpdate = () => {
+    const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
+    if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
+    else window.location.reload();
+  };
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!hadController) {
       hadController = true;
       return;
     }
-    // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
-    const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
-    if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
-    else window.location.reload();
+    applyUpdate();
   });
+  // A troca de versão pode terminar antes de o app começar a ouvir o aviso acima: a tela
+  // fica na versão antiga até a próxima abertura. Por isso pergunta ao service worker
+  // qual versão ele tem; se for outra, recarrega (uma vez só por versão, para nunca entrar em ciclo).
+  navigator.serviceWorker.addEventListener('message', (event) => {
+    const version = event.data?.type === 'versao' ? event.data.version : null;
+    if (!version || version === `v${APP_VERSION}`) return;
+    try {
+      if (sessionStorage.getItem('leituras:recarregou') === version) return;
+      sessionStorage.setItem('leituras:recarregou', version);
+    } catch {
+      return;
+    }
+    applyUpdate();
+  });
+  navigator.serviceWorker.startMessages?.();
+  navigator.serviceWorker.controller?.postMessage({ type: 'versao' });
   navigator.serviceWorker.register('./sw.js').then((registration) => {
     // O app instalado no iPhone volta do segundo plano sem recarregar: procura versão nova nessa hora.
     document.addEventListener('visibilitychange', () => {
-      if (document.visibilityState === 'visible') registration.update().catch(() => {});
+      if (document.visibilityState !== 'visible') return;
+      registration.update().catch(() => {});
+      navigator.serviceWorker.controller?.postMessage({ type: 'versao' });
     });
   }).catch(() => {});
 }
