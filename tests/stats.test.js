@@ -164,6 +164,26 @@ test('allTimeStats soma todos os anos', () => {
   assert.equal(s.dropped, 1);
 });
 
+test('yearStats e allTimeStats: páginas pela regra do diário (pagesReadInYear)', () => {
+  const books = build([
+    // Lido sem diário: total no ano do término.
+    read('Sem diário', '2026-03-01', { pages: 200 }),
+    // Lido com diário atravessando o ano: 60 em 2025, 40 em 2026.
+    read('Virada', '2026-01-03', { pages: 100, journal: [
+      { date: '2025-12-30', from: 0, to: 60, unit: 'page' },
+      { date: '2026-01-03', from: 60, to: 100, unit: 'page' },
+    ] }),
+    // Em andamento: as páginas do diário contam no ano, o livro não conta na meta.
+    { title: 'Lendo', status: 'lendo', startDate: '2026-10-01', pages: 300, currentPage: 50, journal: [{ date: '2026-10-02', from: 0, to: 50, unit: 'page' }] },
+  ]);
+  const s = yearStats(books, 2026, 12, TODAY);
+  assert.equal(s.count, 2);
+  assert.equal(s.pages, 200 + 40 + 50);
+  assert.equal(s.pagesKnown, 2);
+  assert.equal(yearStats(books, 2025, 12, TODAY).pages, 60);
+  assert.equal(allTimeStats(books, TODAY).pages, 350);
+});
+
 test('allTimeStats no primeiro ano e sem livros', () => {
   const first = allTimeStats(build([read('a', '2026-01-01'), read('b', '2026-02-01')]), TODAY);
   assert.equal(first.avgPerYear, 2);

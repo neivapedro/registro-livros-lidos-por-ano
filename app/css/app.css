@@ -223,7 +223,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
 }
 .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.cover-title { font-family: var(--serif); font-size: 13px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; }
+.cover-title { font-family: var(--serif); font-size: 13px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; -webkit-hyphens: auto; hyphens: auto; }
 .cover-author { font-size: 8px; font-weight: 700; letter-spacing: 0.6px; text-transform: uppercase; opacity: 0.8; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .cover-xs { width: 34px; height: 50px; padding: 0; border-radius: 4px; }
 .cover-sm { width: 48px; height: 72px; padding: 6px; border-radius: 5px; }
@@ -242,6 +242,8 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .stars { display: inline-flex; gap: 2px; }
 .star-on { color: var(--accent); }
 .star-off { color: #3A3633; }
+.star-half { color: var(--accent); }
+.star-half-bg { fill: #3A3633; }
 
 /* ---------- Início ---------- */
 
@@ -330,6 +332,10 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   display: inline-flex; align-items: center; justify-content: center; gap: 6px;
 }
 .seg-btn.is-on { background: var(--accent); color: var(--on-accent); }
+/* 320px: "Abandonei" não cabia no botão marcado do Status (4 opções). */
+@media (max-width: 359px) {
+  .segmented .seg-btn { padding-inline: 2px; font-size: 12px; }
+}
 .seg-count { font-size: 12px; opacity: 0.75; }
 .tabs-4 .seg-btn { flex-direction: column; gap: 0; font-size: 13px; min-height: 52px; line-height: 1.2; padding: 4px 2px; }
 .drop-reason { margin: -6px 0 4px; padding: 10px 14px; border-radius: 0 0 16px 16px; background: var(--surface-2); font-size: 14px; color: var(--text-soft); display: flex; flex-direction: column; gap: 4px; }
@@ -347,13 +353,18 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .filter { position: relative; display: flex; align-items: center; min-width: 0; }
 .filter select {
   appearance: none; -webkit-appearance: none;
-  width: 100%; height: 44px; padding: 0 28px 0 14px; border-radius: 999px;
+  width: 100%; height: 44px; padding: 0 26px 0 12px; border-radius: 999px;
   background: var(--surface); border: 1px solid var(--line-strong);
   font-size: 16px; font-weight: 600; color: var(--text-soft);
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }
 .filters .btn-text { justify-content: center; }
-.filter .icon { position: absolute; right: 11px; pointer-events: none; color: var(--muted); }
+.filter .icon { position: absolute; right: 10px; pointer-events: none; color: var(--muted); }
+/* 320–360px: em três colunas os nomes dos filtros ("Gênero", "Formato") ficavam cortados.
+   A fonte fica em 16px (menor que isso o iPhone dá zoom ao tocar). */
+@media (max-width: 374px) {
+  .filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ---------- Formulário ---------- */
 
@@ -448,8 +459,15 @@ body.viewer-open { overflow: hidden; }
   border: 1px solid var(--accent); background: var(--surface); outline: none; font-size: 16px;
 }
 
-.star-row { display: flex; gap: 6px; }
-.star-btn { width: 48px; height: 48px; border: 0; border-radius: 14px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+.star-row { display: flex; align-items: center; gap: 6px; }
+/* Cada estrela tem duas metades tocáveis: a esquerda vale meia estrela a menos. */
+.star-slot { position: relative; flex: 0 1 48px; min-width: 0; height: 48px; border-radius: 14px; background: var(--surface); display: flex; align-items: center; justify-content: center; }
+.star-slot .icon { pointer-events: none; }
+.star-hit { position: absolute; top: 0; bottom: 0; width: 50%; padding: 0; border: 0; background: transparent; }
+.star-hit.left { left: 0; border-radius: 14px 0 0 14px; }
+.star-hit.right { right: 0; border-radius: 0 14px 14px 0; }
+.star-hit:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.star-value { margin-left: 4px; font-weight: 700; color: var(--accent); }
 
 .toggle-row { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; text-align: left; border-radius: 18px; }
 .toggle-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
@@ -581,4 +599,426 @@ textarea::placeholder { color: var(--faint); }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
+}
+
+/* ---------- Diário e trechos ---------- */
+
+/* Abas do livro: sublinhado caramelo, diferente do seletor de status (segmented). */
+.book-tabs { display: flex; gap: 4px; margin-top: -8px; border-bottom: 1px solid var(--line); }
+.book-tab {
+  flex: 1; min-width: 0; min-height: 48px; position: relative;
+  border: 0; background: transparent; color: var(--muted);
+  font-size: 14px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+}
+.book-tab.is-on { color: var(--text); }
+.book-tab.is-on::after { content: ''; position: absolute; left: 14%; right: 14%; bottom: -1px; height: 2px; border-radius: 2px; background: var(--accent); }
+.book-tab-count { min-width: 20px; padding: 2px 6px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); font-size: 11px; font-weight: 800; line-height: 1.3; }
+.book-tab.is-on .book-tab-count { background: var(--surface-warm); color: var(--accent); }
+.book-tabs-title {
+  flex: 1; min-width: 0; padding: 0 6px; text-align: center;
+  font-family: var(--serif); font-weight: 400; font-size: 20px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.book-tabs-spacer { width: 66px; flex-shrink: 0; }
+.book-tab-panel { display: flex; flex-direction: column; gap: 14px; }
+
+.diary-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.diary-row {
+  width: 100%; min-height: 64px; display: flex; align-items: flex-start; gap: 14px; text-align: left;
+  padding: 12px 14px; border-radius: 18px; border: 1px solid var(--line); background: var(--surface); color: var(--text);
+}
+.diary-row:active { border-color: var(--accent); }
+.diary-date { width: 40px; flex-shrink: 0; display: flex; flex-direction: column; align-items: center; line-height: 1; }
+.diary-day { font-family: var(--serif); font-size: 28px; }
+.diary-month { margin-top: 3px; font-size: 10px; font-weight: 800; letter-spacing: 1.2px; line-height: 1.3; text-transform: uppercase; text-align: center; color: var(--muted); }
+.diary-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; padding-top: 5px; }
+.diary-line { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 2px 10px; }
+.diary-range { font-weight: 700; font-variant-numeric: tabular-nums; }
+.diary-delta { font-size: 14px; font-weight: 800; color: var(--accent); white-space: nowrap; }
+.diary-delta.is-back { color: var(--muted); font-weight: 600; }
+.diary-sub { font-size: 12px; font-weight: 600; color: var(--muted); }
+.diary-note { font-size: 13px; color: var(--text-soft); white-space: pre-line; overflow-wrap: anywhere; }
+.diary-edit-icon { flex-shrink: 0; padding-top: 8px; color: var(--faint); }
+
+.notes-form { display: flex; flex-direction: column; gap: 10px; }
+.diary-entry.is-editing .notes-form { padding: 14px; border-radius: 18px; border: 1px solid var(--accent); background: var(--surface); }
+.notes-form .field { background: var(--surface-2); border-color: var(--line-strong); }
+.notes-form .field:focus-within { border-color: var(--accent); }
+.notes-form textarea { min-height: 140px; background: var(--surface-2); border-color: var(--line-strong); font-family: var(--serif); font-size: 19px; line-height: 1.35; }
+.notes-form textarea:focus { border-color: var(--accent); }
+.notes-form-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+.notes-form-gap { flex: 1; }
+.notes-form .btn-primary.sm { width: auto; min-height: 44px; padding: 0 20px; border-radius: 14px; }
+.btn-text.danger { color: var(--danger); padding-left: 0; }
+
+.quotes-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.book-tab-panel .btn-outline.sm { min-height: 44px; padding: 0 16px; }
+.quote-list { display: flex; flex-direction: column; gap: 12px; }
+.quote-card {
+  position: relative; display: flex; flex-direction: column; gap: 10px;
+  padding: 20px 18px 14px 22px; border-radius: var(--radius);
+  background: var(--surface); border: 1px solid var(--line); color: var(--text);
+}
+/* Filete caramelo à esquerda, como numa citação impressa. */
+.quote-card::before { content: ''; position: absolute; left: -1px; top: 22px; bottom: 22px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
+.quote-text { margin: 0; font-family: var(--serif); font-style: italic; font-size: 21px; line-height: 1.3; white-space: pre-line; overflow-wrap: anywhere; }
+.quote-meta { font-size: 12px; font-weight: 600; letter-spacing: 0.3px; color: var(--muted); }
+.quote-meta .accent { font-weight: 800; }
+.quote-note { font-size: 14px; color: var(--text-soft); white-space: pre-line; overflow-wrap: anywhere; }
+.quote-actions { display: flex; flex-wrap: wrap; align-items: center; margin: 0 -8px -8px; padding-top: 4px; border-top: 1px solid var(--line); }
+.quote-actions .btn-text { min-height: 44px; padding: 0 8px; gap: 6px; }
+.quote-form { gap: 12px; border-color: var(--accent); }
+.quote-form.card { padding: 16px; }
+.quote-hint { font-size: 12px; line-height: 1.45; color: var(--muted); }
+.quote-link .quote-text { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
+.quote-link:active { border-color: var(--accent); }
+.quote-source { display: flex; flex-direction: column; gap: 2px; }
+.quote-book { font-size: 14px; font-weight: 700; color: var(--text-soft); overflow-wrap: anywhere; }
+.quotes-link { flex-direction: row; justify-content: space-between; align-items: center; min-height: 56px; padding: 14px 18px; }
+
+/* ---------- Cronômetro de leitura ---------- */
+
+/* Cartão "Lendo agora": Concluir e Ler agora empilhados ao lado da capa. */
+.reading-main { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 12px; row-gap: 6px; }
+.reading-main .reading-link { grid-row: span 2; }
+.reading-main > .btn-outline { width: 100%; }
+/* iPhone SE (320px): com os botões ao lado, o título ficava com uma palavra por linha. */
+@media (max-width: 359px) {
+  .reading-main { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .reading-main .reading-link { grid-column: 1 / -1; grid-row: auto; }
+}
+.btn-timer {
+  min-height: 44px; padding: 0 12px; width: 100%;
+  border: 0; border-radius: 14px; background: var(--surface-warm); color: var(--accent);
+  font-size: 13px; font-weight: 700;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex-shrink: 0;
+}
+.btn-timer.is-running { background: var(--accent); color: var(--on-accent); }
+
+.timer-banner {
+  display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px;
+  border-radius: 18px; background: var(--surface-warm); border: 1px solid rgba(208, 140, 79, 0.35); color: var(--text);
+}
+.timer-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--accent); flex-shrink: 0; animation: timer-pulse 1.6s ease-in-out infinite; }
+.timer-dot.is-paused { background: var(--muted); animation: none; }
+@keyframes timer-pulse { 50% { opacity: 0.3; } }
+.timer-banner-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 14px; }
+.timer-banner-text strong { white-space: nowrap; }
+.timer-banner-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.timer-banner-go { font-size: 13px; font-weight: 800; color: var(--accent); flex-shrink: 0; }
+
+.app[data-page="ler"] { gap: 22px; }
+.timer { display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.timer-book { display: flex; flex-direction: column; gap: 6px; max-width: 100%; }
+.timer-book .serif-title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.timer-clock {
+  margin: 6px 0 0; font-family: var(--serif); font-size: clamp(64px, 22vw, 96px); line-height: 0.9;
+  letter-spacing: -1px; font-variant-numeric: tabular-nums; white-space: nowrap;
+}
+.timer.is-paused .timer-clock { color: var(--muted); }
+.timer-state { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--accent); }
+.timer.is-paused .timer-state { color: var(--muted); }
+.timer-controls { display: flex; flex-direction: column; gap: 8px; margin-top: auto; }
+.timer-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.timer-actions .btn-ghost { min-height: 56px; font-size: 16px; }
+.timer-text-btn { align-self: center; justify-content: center; }
+.timer-stop { display: flex; flex-direction: column; gap: 10px; }
+.timer-stop-label { font-size: 15px; font-weight: 700; text-align: center; }
+.timer-stop .progress-edit-field { height: 56px; }
+.timer-stop .progress-edit-field input { font-size: 22px; }
+/* Telas baixas (iPhone SE): capa menor para os botões caberem sem rolar. */
+@media (max-height: 700px) {
+  .timer .cover-xl { width: 120px; height: 180px; padding: 12px; }
+  .timer .cover-xl .cover-title { font-size: 24px; }
+}
+/* ---------- v1.3: ritmo, próximas, sorteio, etiquetas, série, planilha e chave do Google ---------- */
+
+/* Ritmo no cartão "Lendo agora": discreto, só informa. */
+.pace-line { display: flex; flex-direction: column; gap: 2px; margin-top: -4px; font-size: 12px; font-weight: 600; color: var(--muted); }
+.pace-line span { overflow-wrap: anywhere; text-wrap: pretty; } /* sem "3" numa linha e "nov" na outra */
+.next-up .btn-primary.sm { min-height: 48px; }
+
+/* Fila "Quero ler": ferramentas numa segunda linha do cartão, para o título não espremer. */
+.book-row:has(> .row-tools) { flex-wrap: wrap; }
+.row-tools { flex-basis: 100%; display: flex; align-items: center; gap: 8px; padding-top: 8px; border-top: 1px solid var(--line); }
+.row-tools .chip-btn:last-child { margin-left: auto; }
+.next-pos { font-family: var(--serif); font-size: 22px; color: var(--accent); min-width: 28px; }
+.icon-btn.sm { background: var(--surface-2); border-color: transparent; }
+.icon-btn:disabled, .chip-btn:disabled, .btn-ghost:disabled { opacity: 0.35; cursor: default; }
+.icon.flip { transform: rotate(180deg); }
+.chip-btn.sm { min-height: 44px; padding: 0 14px; display: inline-flex; align-items: center; gap: 6px; }
+.list-head { font-size: 13px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-top: 6px; display: flex; align-items: baseline; gap: 8px; }
+.list-head .small { text-transform: none; letter-spacing: 0; font-weight: 600; }
+.list-tools { display: flex; justify-content: flex-end; }
+
+/* Sorteio */
+.draw-open { gap: 10px; }
+.draw-panel { gap: 12px; }
+.filters.filters-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.draw-result { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 18px; background: #221D19; border: 1px solid var(--accent); }
+.draw-result .reading-text { flex: 1; }
+.draw-panel .two-cols .btn-ghost, .draw-panel .two-cols .btn-primary { min-height: 52px; padding: 0 10px; }
+
+/* Etiquetas e série nas listas */
+.chip.chip-tag { background: transparent; border: 1px solid var(--line-strong); color: var(--text-soft); }
+.chip.chip-series { background: var(--surface-warm); color: var(--accent); }
+
+/* Formulário: data alvo, série e etiquetas */
+.target-row { display: flex; align-items: center; gap: 8px; }
+.target-row input { flex: 1; min-width: 0; }
+.target-row .btn-text { padding: 0 4px; flex-shrink: 0; }
+.series-cols { display: grid; grid-template-columns: minmax(0, 1fr) 84px; gap: 10px; }
+.series-info { display: flex; flex-direction: column; gap: 4px; padding: 0 2px; }
+.series-info a { font-weight: 700; }
+.tag-chip {
+  display: inline-flex; align-items: center; max-width: 100%; min-height: 44px; padding-left: 14px; border-radius: 999px;
+  background: var(--surface-warm); border: 1px solid var(--accent); color: var(--accent); font-size: 13px; font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.tag-x { width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; border-radius: 999px; }
+.tag-input { display: flex; gap: 8px; align-items: center; }
+.tag-input input {
+  flex: 1; min-width: 0; height: 48px; padding: 0 14px; border-radius: 16px;
+  background: var(--surface); border: 1px solid var(--line); outline: none; font-weight: 600;
+}
+.tag-input input:focus { border-color: var(--accent); }
+.tag-input input::placeholder { color: var(--faint); font-weight: 500; }
+.tag-input .chip-btn { min-height: 48px; flex-shrink: 0; }
+
+/* Resumo: etiquetas mais usadas */
+.tag-count { display: inline-flex; align-items: center; gap: 8px; max-width: 100%; padding: 6px 6px 6px 12px; border-radius: 999px; background: var(--surface-2); font-size: 13px; font-weight: 600; }
+.tag-count-name { min-width: 0; overflow-wrap: anywhere; }
+.tag-count-n { min-width: 24px; height: 24px; padding: 0 6px; border-radius: 999px; background: var(--surface-warm); color: var(--accent); font-weight: 800; display: inline-flex; align-items: center; justify-content: center; }
+
+/* Ajustes: chave do Google Books */
+.gkey-status { display: inline-flex; align-items: center; gap: 6px; color: var(--muted); font-weight: 600; }
+.gkey-status.is-on { color: var(--accent); }
+.gkey .two-cols .btn-ghost { min-height: 52px; }
+/* ---------- Estatísticas: calendário, gráficos tocáveis e meta de páginas (1.3) ---------- */
+
+:root {
+  /* Tons do mapa de leitura: do cinza do cartão ao caramelo. */
+  --heat-0: var(--surface-2);
+  --heat-1: #4A3526;
+  --heat-2: #74512F;
+  --heat-3: #A36D40;
+  --heat-4: var(--accent);
+}
+
+/* Alternador compacto (Ano | Mês, Livros | Páginas). */
+.seg-mini { padding: 3px; border-radius: 14px; flex-shrink: 0; }
+.seg-mini .seg-btn { min-height: 44px; padding: 0 14px; font-size: 13px; border-radius: 11px; }
+.card > .seg-mini { align-self: flex-start; }
+.cal-head { align-items: center; }
+
+/* Mapa do ano: duas metades (jan–jun, jul–dez), o SVG estica até a largura do cartão. */
+.heatmap { display: flex; flex-direction: column; gap: 10px; }
+.hm-half { display: flex; flex-direction: column; gap: 4px; }
+.hm-months { position: relative; height: 14px; font-size: 11px; font-weight: 600; color: var(--muted); }
+.hm-month { position: absolute; top: 0; }
+.hm-svg { display: block; width: 100%; height: auto; touch-action: manipulation; cursor: pointer; }
+.hm-l0 { fill: var(--heat-0); background: var(--heat-0); }
+.hm-l1 { fill: var(--heat-1); background: var(--heat-1); }
+.hm-l2 { fill: var(--heat-2); background: var(--heat-2); }
+.hm-l3 { fill: var(--heat-3); background: var(--heat-3); }
+.hm-l4 { fill: var(--heat-4); background: var(--heat-4); }
+.hm-future { opacity: 0.4; }
+.hm-dot { fill: var(--text); pointer-events: none; }
+.hm-sel { fill: none; stroke: var(--text); stroke-width: 1.6; pointer-events: none; }
+.hm-legend { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; }
+.hm-scale { display: inline-flex; align-items: center; gap: 3px; }
+.hm-key { width: 10px; height: 10px; border-radius: 2px; display: inline-block; position: relative; }
+.hm-key-dot::after { content: ''; position: absolute; inset: 3px; border-radius: 999px; background: var(--text); }
+.hm-scale .hm-key-dot { margin-right: 3px; }
+
+/* Grade do mês, com a capa no dia em que o livro foi concluído. */
+.cal-month { display: flex; flex-direction: column; gap: 10px; }
+.cal-month-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cal-month-name { font-family: var(--serif); font-size: 24px; }
+.cal-nav:disabled { opacity: 0.35; }
+.cal-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; }
+.cal-wd { text-align: center; font-size: 11px; font-weight: 700; color: var(--faint); padding-bottom: 2px; }
+.cal-cell {
+  position: relative; min-width: 0; aspect-ratio: 5 / 7; padding: 0; border: 1px solid transparent;
+  border-radius: 8px; background: transparent; color: var(--text-soft);
+  display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow: hidden;
+}
+.cal-cell.is-out { visibility: hidden; }
+.cal-cell.has-read { background: rgba(208, 140, 79, 0.16); }
+.cal-cell.is-today .cal-num { color: var(--accent); font-weight: 800; }
+.cal-cell.is-sel { border-color: var(--text); }
+.cal-num { font-size: 11px; font-weight: 600; line-height: 1; padding-top: 4px; }
+.cal-cell.has-book .cal-num { position: absolute; top: 2px; left: 3px; z-index: 1; padding: 1px 3px; border-radius: 4px; background: rgba(14, 12, 11, 0.7); color: var(--text); font-size: 10px; }
+.cal-cover { position: absolute; inset: 2px; display: block; }
+.cal-cover .cover { width: 100%; height: 100%; border-radius: 5px; box-shadow: none; padding: 14px 3px 3px; }
+/* Capa desenhada (sem imagem): título bem pequeno, para não virar um bloco liso. */
+.cal-cover .cover-title { font-size: 8px; line-height: 1.05; -webkit-line-clamp: 4; }
+.cal-cover .cover-author { display: none; }
+.cal-more { position: absolute; right: 1px; bottom: 1px; padding: 0 3px; border-radius: 4px; background: var(--accent); color: var(--on-accent); font-size: 10px; font-weight: 800; }
+.cal-drop { position: absolute; right: 3px; bottom: 3px; color: var(--danger); }
+.cal-detail .cal-drop { position: static; flex-shrink: 0; }
+
+.cal-detail { display: flex; flex-direction: column; gap: 4px; padding: 12px 14px; border-radius: 14px; background: var(--surface-2); font-size: 14px; }
+.cal-detail.muted { background: transparent; padding: 0 2px; }
+.cal-detail-line { display: inline-flex; align-items: center; gap: 6px; color: var(--text-soft); font-size: 13px; }
+.cal-foot { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px 14px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 14px; }
+.cal-note { padding-top: 12px; border-top: 1px solid var(--line); }
+
+/* Barras tocáveis: cada coluna ocupa a mesma largura e abre a Buscar filtrada. */
+.bar-col { flex: 1 1 0; min-width: 0; }
+button.bar-col { padding: 0; border: 0; background: transparent; color: inherit; border-radius: 8px; }
+button.bar-col:active { background: var(--surface-2); }
+/* "bar empty" herdava o estilo do estado vazio (.empty): borda tracejada e preenchimento. */
+.bar.empty { display: block; padding: 0; border: 0; border-radius: 6px 6px 3px 3px; }
+.bars-rating .bar-label { font-size: 10px; }
+.hbar-list { display: flex; flex-direction: column; gap: 4px; }
+.hbar-btn { width: 100%; min-height: 44px; padding: 6px 0; border: 0; background: transparent; color: inherit; text-align: left; justify-content: center; }
+.hbar-btn > span { display: flex; }
+.hbar-btn .hbar-track { display: block; }
+.hbar-btn .hbar-fill { display: block; }
+.hbar-btn.is-empty { opacity: 0.55; }
+.hbar-btn:active .hbar-track { background: var(--line-strong); }
+
+.split-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; }
+.split-legend-tap { gap: 4px 10px; }
+.split-tap {
+  min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: inherit;
+  display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; text-align: left;
+}
+
+/* Buscar: chip do filtro que veio de um gráfico. */
+.filter-chip {
+  display: flex; align-items: center; gap: 6px; align-self: flex-start; max-width: 100%;
+  padding-left: 14px; border-radius: 999px; background: var(--surface-warm); border: 1px solid var(--accent); color: var(--accent);
+  font-size: 13px; font-weight: 700;
+}
+.filter-chip-text { min-width: 0; overflow-wrap: anywhere; padding: 6px 0; }
+.filter-chip-x { width: 44px; height: 44px; flex-shrink: 0; border: 0; background: transparent; color: var(--accent); display: inline-flex; align-items: center; justify-content: center; }
+
+/* Todos os anos: dois anos lado a lado. */
+.cmp2-row { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1fr) minmax(0, 1fr); gap: 10px; align-items: center; }
+.cmp2-head { padding-bottom: 4px; }
+.cmp2-pick { min-width: 0; }
+.cmp2-pick select { width: 100%; }
+/* 320–360px: o ano escolhido ("2026") virava "20…". Coluna dos rótulos mais estreita e menos folga no seletor. */
+@media (max-width: 374px) {
+  .cmp2-row { grid-template-columns: minmax(0, 0.7fr) minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
+  .cmp2-pick select { padding: 0 28px 0 12px; }
+  .cmp2-pick .icon { right: 10px; }
+  /* Diário: "págs. registradas" quebrava no meio da palavra. */
+  .diary-summary { gap: 8px; }
+  .diary-summary .tile { padding: 12px 10px; }
+}
+.cmp2-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.cmp2-value { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
+.cmp2-track { height: 4px; border-radius: 999px; background: var(--surface-2); }
+.cmp2-fill { display: block; height: 4px; border-radius: 999px; background: #8C7F75; }
+.cmp2-row .cmp2-cell:nth-child(2) .cmp2-fill { background: var(--accent); }
+.cmp2-label { overflow-wrap: anywhere; }
+
+/* Início: linha fina da meta de páginas no cartão da meta. */
+.hero:has(.hero-pages) { flex-wrap: wrap; row-gap: 16px; }
+/* O texto da meta continua ao lado do anel; só a linha de páginas desce. */
+.hero:has(.hero-pages) .hero-text { flex: 1 1 0; }
+.hero-pages { flex-basis: 100%; display: flex; flex-direction: column; gap: 8px; padding-top: 14px; border-top: 1px solid var(--line); }
+.hero-pages-track { display: block; height: 4px; border-radius: 999px; background: var(--line-strong); overflow: hidden; }
+.hero-pages-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent-hover); }
+.hero-pages-text { font-size: 13px; color: var(--text-soft); font-weight: 600; }
+
+/* Ajustes: meta de páginas opcional. */
+.page-goal { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.page-goal-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.page-goal-field {
+  flex: 1 1 140px; min-width: 0; height: 48px; display: flex; align-items: center; gap: 6px; padding: 0 14px;
+  border-radius: 14px; background: var(--surface-2); border: 1px solid var(--line-strong);
+}
+.page-goal-field:focus-within { border-color: var(--accent); }
+.page-goal-field input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; font-size: 18px; font-weight: 800; }
+.page-goal .btn-outline { min-height: 48px; }
+/* ---------- Marcos e Retrospectiva 2.0 (v1.3) ---------- */
+
+.mile-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.mile { display: flex; align-items: center; gap: 12px; padding: 10px 0; min-height: 44px; border-top: 1px solid var(--line); }
+.mile:first-child { border-top: 0; padding-top: 0; }
+.mile-icon {
+  width: 36px; height: 36px; flex-shrink: 0; border-radius: 12px;
+  background: var(--surface-warm); color: var(--accent);
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.mile-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mile-title { font-size: 15px; font-weight: 700; overflow-wrap: anywhere; }
+.mile-detail { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+/* Próximos marcos: discretos, sem cor de destaque. */
+.mile.is-next .mile-icon { background: transparent; border: 1px dashed var(--line-strong); color: var(--faint); }
+.mile.is-next .mile-title { color: var(--text-soft); font-weight: 600; }
+.mile.is-next .mile-detail { color: var(--faint); }
+.milestones > .eyebrow { margin-top: 2px; }
+
+/* Nomes longos (gênero, perfil) não podem passar da tela de 320px. */
+.retro-mid { font-size: clamp(44px, 15vw, 64px); overflow-wrap: anywhere; }
+.retro-name { overflow-wrap: anywhere; }
+.retro-mosaic {
+  display: flex; flex-wrap: wrap; justify-content: center; gap: 8px;
+  width: 100%; max-width: 340px; margin-bottom: 14px;
+  /* Capas 2:3 em --rows linhas: a altura do mosaico cabe na tela junto do título e dos botões
+     (iPhone SE, 375×667). A última linha incompleta fica centralizada. */
+  max-width: min(340px, calc((100dvh - 360px - var(--safe-t) - var(--safe-b) - (var(--rows) - 1) * 8px) / var(--rows) * 2 / 3 * var(--cols) + (var(--cols) - 1) * 8px));
+}
+.retro-mosaic > .cover { width: calc((100% - (var(--cols) - 1) * 8px) / var(--cols)); container-type: inline-size; }
+/* Capa desenhada pequena demais para o título (telas baixas): fica só a cor. */
+@container (max-width: 44px) { .retro-mosaic .cover-title { display: none; } }
+.retro-mosaic .cover { padding: 6px; border-radius: 6px; }
+.retro-mosaic .cover-title { font-size: 11px; }
+.retro-mosaic .cover-author { display: none; }
+.retro-note { font-size: 15px; line-height: 1.5; color: var(--text-soft); margin-top: 14px; max-width: 320px; }
+.retro-note strong { color: var(--accent); }
+.retro-note.faint { font-size: 13px; color: var(--faint); }
+.retro-pair { display: flex; align-items: center; gap: 18px; }
+.retro-pair .retro-block { min-width: 0; }
+.retro-title {
+  font-family: var(--serif); font-size: 30px; line-height: 1.05; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+.retro-months { display: flex; align-items: flex-end; gap: 6px; height: 64px; margin-top: 22px; }
+.retro-mbar { flex: 1; border-radius: 4px; background: #3A2E26; }
+.retro-mbar.on { background: var(--accent); }
+.retro-miles { gap: 14px; }
+.retro-miles .mile { border-top-color: #2A211A; padding: 12px 0; }
+.retro-miles .mile:first-child { padding-top: 0; }
+.retro-miles .mile-icon { background: #241B16; }
+.retro-miles .mile-title { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.1; }
+.retro-gate { gap: 14px; }
+.retro-gate .retro-line { max-width: 340px; }
+.retro-format-toggle { grid-column: 1 / -1; background: #241B16; border-color: transparent; }
+/* A retrospectiva ocupa a largura toda: com margin auto num flex em coluna ela encolhia
+   até o conteúdo e cada slide ficava de uma largura. Sem a folga da tela sem menu, nada rola. */
+.app[data-page="retro"] > .retro { width: 100%; }
+body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
+/* Telas de 320px: sem ícone nos botões da retrospectiva, para o texto caber numa linha. */
+.retro-actions .icon { flex-shrink: 0; }
+@media (max-width: 359px) {
+  .retro-actions .btn-ghost, .retro-actions .btn-primary { padding: 0 10px; }
+  .retro-actions .btn-ghost .icon, .retro-actions .btn-primary .icon { display: none; }
+}
+/* Livro do ano com título longo: até 3 linhas, para o slide não passar da tela (375×667). */
+.retro-book-name {
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  font-size: clamp(30px, 10vw, 44px);
+}
+.retro-book-name.is-long { font-size: clamp(28px, 8.5vw, 36px); }
+@media (max-height: 740px) {
+  .retro .slide.center .cover-xl { width: 128px; height: 192px; padding: 12px; }
+  .retro .slide.center .cover-xl .cover-title { font-size: 26px; }
+  .retro .slide.center { gap: 10px; }
+  .retro .retro-stage { padding: 12px 0; }
+  .retro .slide.gap-lg { gap: 18px; }
+  /* Livro do ano com título longo e anotação: o trecho fica em 2 linhas para caber (375×667). */
+  .retro .retro-quote { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+}
+/* iPhone SE de 1ª geração (320×568): capa menor e sem o trecho no Livro do ano. */
+@media (max-height: 600px) {
+  .retro .slide.center .cover-xl { width: 96px; height: 144px; padding: 10px; }
+  .retro .slide.center .cover-xl .cover-title { font-size: 20px; }
+  .retro .retro-quote { display: none; }
 }

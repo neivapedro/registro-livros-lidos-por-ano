@@ -1,9 +1,10 @@
 import { daysSince, formatBR, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
 import { monthlyTarget } from '../stats.js';
-import { esc, icon, plural } from '../ui.js';
+import { decimal, esc, icon, plural } from '../ui.js';
+import { pageGoalSettings } from './charts.js';
 
-export const APP_VERSION = '1.2.4';
+export const APP_VERSION = '1.3.0';
 
 function stepper(label, value, action, hint) {
   return `
@@ -17,7 +18,38 @@ function stepper(label, value, action, hint) {
     </div>`;
 }
 
-export function settingsView({ state, today }) {
+/** "Espaço usado: 1,2 MB · Proteção contra limpeza automática: ativa". Some o que o navegador não informa. */
+export function storageLine(info) {
+  if (!info) return '';
+  const parts = [];
+  if (typeof info.usage === 'number') {
+    const mb = info.usage / (1024 * 1024);
+    parts.push(`Espaço usado: ${mb < 0.1 ? 'menos de 0,1' : decimal(mb)} MB`);
+  }
+  if (typeof info.persisted === 'boolean') parts.push(`Proteção contra limpeza automática: ${info.persisted ? 'ativa' : 'não ativa'}`);
+  return parts.length ? `<p class="muted small storage-info">${parts.join(' · ')}</p>` : '';
+}
+
+/** Chave opcional do Google Books (guardada fora do backup; veja prefs.js). */
+function googleKeyCard(hasKey) {
+  return `
+    <section class="card gkey">
+      <h2>Busca de livros</h2>
+      <p class="muted small">Opcional: com uma chave gratuita do Google Books a busca por título encontra mais livros brasileiros.</p>
+      <div class="field">
+        <label for="gb-key">Chave do Google Books</label>
+        <input id="gb-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AIza…)" data-gkey>
+      </div>
+      <p class="small gkey-status${hasKey ? ' is-on' : ''}" role="status">${hasKey ? `${icon('check', { size: 14, stroke: 2.4 })}Chave configurada` : 'Sem chave — usando BrasilAPI e Open Library'}</p>
+      <div class="two-cols">
+        <button type="button" class="btn-primary sm" data-action="save-gkey">Salvar</button>
+        <button type="button" class="btn-ghost" data-action="remove-gkey"${hasKey ? '' : ' disabled'}>Remover</button>
+      </div>
+      <p class="muted small">A chave fica só neste aparelho e não vai para o backup.</p>
+    </section>`;
+}
+
+export function settingsView({ state, ui, today }) {
   const year = yearOf(today);
   const goal = getGoal(state, year);
   const last = state.lastBackupAt
@@ -33,16 +65,21 @@ export function settingsView({ state, today }) {
     <section class="card">
       <h2>Meta de leitura</h2>
       ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
-      ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Usada automaticamente em cada ano novo')}
+      ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
+      ${pageGoalSettings(state, year)}
     </section>
 
     <section class="card">
       <h2>Backup dos dados</h2>
       <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
       <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>
+      ${storageLine(ui?.storageInfo)}
       <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
       <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
+      <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
+      <p class="muted small">A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.</p>
     </section>
+${googleKeyCard(Boolean(ui?.googleKey))}
 
     <section class="card">
       <h2>Instalar no celular</h2>
@@ -55,7 +92,7 @@ export function settingsView({ state, today }) {
 
     <section class="card">
       <h2>Sobre</h2>
-      <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via Google Books e Open Library.</p>
+      <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books, com a chave).</p>
       <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>
     </section>`;
 }

@@ -1,6 +1,7 @@
 // Peças de interface reutilizadas pelas telas. Todo texto vindo de dados passa por esc().
 
 import { formatShort } from './dates.js';
+import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
@@ -85,14 +86,15 @@ export function cover(book, { size = 'md', showText = true } = {}) {
 
 /**
  * Endereço da capa em tamanho grande, para ver ampliada.
- * Google Books: pede largura de 800px; Open Library: versão L. Foto do celular: a própria.
+ * Google Books: pede largura de 800px; Open Library: versão L (mantendo ?default=false
+ * da capa pelo ISBN). Foto do celular: a própria.
  */
 export function largeCoverUrl(url) {
   if (typeof url !== 'string' || !url) return null;
   if (url.startsWith('data:')) return url;
   try {
     const u = new URL(url);
-    if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg$/, '-L.jpg');
+    if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg(?=$|\?)/, '-L.jpg');
     if (u.hostname.endsWith('books.google.com') || u.hostname.endsWith('googleusercontent.com')) {
       u.searchParams.delete('zoom');
       u.searchParams.set('fife', 'w800');
@@ -104,13 +106,34 @@ export function largeCoverUrl(url) {
   return url;
 }
 
+/** Nota no formato brasileiro: 4 → "4", 4.5 → "4,5". */
+export function formatRating(rating) {
+  return decimal(Number(rating), Number(rating) % 1 ? 1 : 0);
+}
+
+/** "0,5 estrela", "1,5 estrela", "4 estrelas" (abaixo de 2 fica no singular). */
+export function ratingLabel(rating) {
+  return `${formatRating(rating)} ${Number(rating) < 2 ? 'estrela' : 'estrelas'}`;
+}
+
+// Metade esquerda da estrela (o eixo de simetria é x = 12).
+const STAR_LEFT = '<path d="M12 3L9.3 8.6l-6.1.9 4.4 4.3-1 6.1L12 17z"/>';
+
+/** Estrela n de uma nota: cheia, meia (metade esquerda) ou vazia. */
+export function starIcon(n, rating, { size = 14 } = {}) {
+  const r = Number(rating) || 0;
+  if (r >= n) return icon('star', { size, cls: 'star-on' });
+  if (r >= n - 0.5) {
+    return `<svg class="icon star-half" width="${size}" height="${size}" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><g class="star-half-bg">${FILLED.star}</g>${STAR_LEFT}</svg>`;
+  }
+  return icon('star', { size, cls: 'star-off' });
+}
+
 export function stars(rating, { size = 14 } = {}) {
   if (!rating) return '';
   let out = '';
-  for (let i = 1; i <= 5; i += 1) {
-    out += icon('star', { size, cls: i <= rating ? 'star-on' : 'star-off' });
-  }
-  return `<span class="stars" role="img" aria-label="Nota ${rating} de 5">${out}</span>`;
+  for (let i = 1; i <= 5; i += 1) out += starIcon(i, rating, { size });
+  return `<span class="stars" role="img" aria-label="Nota ${formatRating(rating)} de 5">${out}</span>`;
 }
 
 export function chip(text, cls = '') {
@@ -155,6 +178,8 @@ export function bookRow(book, { action = '' } = {}) {
   if (book.reread) meta.push(chip('Releitura'));
   meta.push(chip(FORMAT_LABELS[book.format]));
   if (book.genre) meta.push(chip(book.genre));
+  if (book.series) meta.push(chip(seriesLabel(book), 'chip-series'));
+  for (const tag of book.tags || []) meta.push(chip(tag, 'chip-tag'));
   return `
     <div class="book-row">
       <a class="book-row-link" href="#/livro/${encodeURIComponent(book.id)}">

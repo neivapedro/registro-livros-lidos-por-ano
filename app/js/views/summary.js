@@ -1,7 +1,10 @@
 import { daysInclusive, monthInitial, monthName, monthOf, yearOf } from '../dates.js';
-import { FORMATS, getGoal } from '../store.js';
+import { getGoal } from '../store.js';
 import { droppedInYear, goalStreak, monthsMetInYear, yearStats, yearsWithData } from '../stats.js';
+import { topTagsInYear } from '../tags.js';
 import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
+import { calendarSection } from './calendar.js';
+import { formatCard, lengthChart, monthChartToggle, pagesMonthChart, pagesMonthLegend, ratingChart } from './charts.js';
 import { yearSelect } from './home.js';
 
 function kpis(s) {
@@ -44,7 +47,11 @@ function monthChart(s, today) {
     const future = i > lastMonth;
     const barH = n ? Math.max(6, Math.round((n / max) * h)) : 4;
     const cls = future ? 'bar future' : n >= s.monthlyTarget ? 'bar met' : n ? 'bar partial' : 'bar empty';
-    return `<div class="bar-col"><span class="bar-value">${n || ''}</span><span class="${cls}" style="height:${barH}px"></span><span class="bar-label${i === monthOf(today) && isCurrent ? ' now' : ''}">${monthInitial(i)}</span><span class="sr-only">${monthName(i)}: ${plural(n, 'livro', 'livros')}</span></div>`;
+    const inner = `<span class="bar-value">${n || ''}</span><span class="${cls}" style="height:${barH}px"></span><span class="bar-label${i === monthOf(today) && isCurrent ? ' now' : ''}">${monthInitial(i)}</span><span class="sr-only">${monthName(i)}: ${plural(n, 'livro', 'livros')}</span>`;
+    // Mês com livro: o toque abre a busca com os livros concluídos no mês.
+    return n
+      ? `<button type="button" class="bar-col" data-action="chart-filter" data-year="${s.year}" data-kind="month" data-value="${i}">${inner}</button>`
+      : `<div class="bar-col">${inner}</div>`;
   }).join('');
   return `
     <div class="bars" style="--chart-h:${h}px">
@@ -70,32 +77,15 @@ function streakLine(s, streak, today) {
     </div>`;
 }
 
-function formatSplit(s) {
-  const phys = s.formats[FORMATS.PHYSICAL];
-  const kin = s.formats[FORMATS.KINDLE];
-  if (!s.count) return '';
-  return `
-    <section class="card">
-      <h2>Formato</h2>
-      <div class="split" role="img" aria-label="${phys} físicos e ${kin} no Kindle">
-        ${phys ? `<span class="split-a" style="flex:${phys}"></span>` : ''}${kin ? `<span class="split-b" style="flex:${kin}"></span>` : ''}
-      </div>
-      <div class="split-legend">
-        <span><span class="dot dot-a"></span><strong>Físico</strong><span class="muted">${plural(phys, 'livro', 'livros')}</span></span>
-        <span><span class="dot dot-b"></span><strong>Kindle</strong><span class="muted">${plural(kin, 'livro', 'livros')}</span></span>
-      </div>
-    </section>`;
-}
-
 function genreBars(s) {
   if (!s.genres.length) return '';
   const max = s.genres[0].count;
   const rows = s.genres.slice(0, 6).map((g, i) => `
-    <div class="hbar">
-      <div class="hbar-head"><span class="strong-ish">${esc(g.label)}</span><span class="muted">${plural(g.count, 'livro', 'livros')}</span></div>
-      <div class="hbar-track"><div class="hbar-fill${i === 0 ? ' is-top' : ''}" style="width:${(g.count / max) * 100}%"></div></div>
-    </div>`).join('');
-  return `<section class="card"><h2>Gêneros mais lidos</h2>${rows}</section>`;
+    <button type="button" class="hbar hbar-btn" data-action="chart-filter" data-year="${s.year}" data-kind="genre" data-value="${esc(g.label)}">
+      <span class="hbar-head"><span class="strong-ish">${esc(g.label)}</span><span class="muted">${plural(g.count, 'livro', 'livros')}</span></span>
+      <span class="hbar-track"><span class="hbar-fill${i === 0 ? ' is-top' : ''}" style="width:${(g.count / max) * 100}%"></span></span>
+    </button>`).join('');
+  return `<section class="card"><h2>Gêneros mais lidos</h2><div class="hbar-list">${rows}</div></section>`;
 }
 
 function authorRank(s) {
@@ -133,7 +123,15 @@ function droppedCard(state, year) {
   return `<section class="card"><div class="section-head"><h2>Abandonados</h2><span class="muted small">${plural(list.length, 'livro', 'livros')} · não contam na meta</span></div>${rows}</section>`;
 }
 
-export function summaryView({ state, year, today }) {
+// Etiquetas dos livros lidos no ano (as criadas pela própria pessoa).
+function tagsCard(state, year) {
+  const list = topTagsInYear(state.books, year);
+  if (!list.length) return '';
+  const chips = list.map((t) => `<span class="tag-count"><span class="tag-count-name">${esc(t.label)}</span><span class="tag-count-n">${t.count}</span></span>`).join('');
+  return `<section class="card"><h2>Etiquetas mais usadas</h2><div class="chips-wrap" aria-label="Etiquetas e quantidade de livros">${chips}</div></section>`;
+}
+
+export function summaryView({ state, ui, year, today }) {
   const currentYear = yearOf(today);
   const s = yearStats(state.books, year, getGoal(state, year), today);
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
@@ -149,14 +147,21 @@ export function summaryView({ state, year, today }) {
     ${kpis(s)}
     ${favoriteCard(s)}
     <section class="card">
-      <div class="section-head"><h2>Livros por mês</h2><span class="legend-target muted small"><span class="dash"></span>meta</span></div>
-      ${monthChart(s, today)}
+      ${ui?.monthChart === 'paginas'
+    ? `<div class="section-head"><h2>Páginas por mês</h2>${pagesMonthLegend(state, year)}</div>`
+    : '<div class="section-head"><h2>Livros por mês</h2><span class="legend-target muted small"><span class="dash"></span>meta</span></div>'}
+      ${monthChartToggle(ui || {}, year)}
+      ${ui?.monthChart === 'paginas' ? pagesMonthChart(state, s, today) : monthChart(s, today)}
       ${streakLine(s, streak, today)}
     </section>
-    ${formatSplit(s)}
+    ${calendarSection({ state, ui: ui || {}, year, today })}
+    ${formatCard(state, s)}
+    ${ratingChart(s)}
+    ${lengthChart(s)}
     ${genreBars(s)}
     ${authorRank(s)}
     ${droppedCard(state, year)}
+    ${tagsCard(state, year)}
     ${yearCompare(state, today, year)}
     ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
 }

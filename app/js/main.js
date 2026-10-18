@@ -1,26 +1,55 @@
 import { searchBooks } from './books-api.js';
-import { todayIso, yearOf } from './dates.js';
+import { booksToCsv, csvFileName } from './csv.js';
+import { readGoogleKey, removeGoogleKey, saveGoogleKey } from './prefs.js';
+import { addTags, removeTag } from './tags.js';
+import { MAX_UP_NEXT } from './store.js';
+import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
+import { formatShort, todayIso, yearOf } from './dates.js';
+import { chartFilters } from './charts.js';
 import { photoToCover } from './cover-photo.js';
+import * as db from './db.js';
+import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
+import { journalOnSave, recordProgress, unitOf, UNITS } from './journal.js';
+import { renderQuoteImage } from './quote-image.js';
+import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
+import { yearsWithData } from './stats.js';
+import { milestoneMessage, newMilestones } from './milestones.js';
 import { renderRetroImage } from './share-image.js';
 import {
-  STATUS, FORMATS, STORAGE_KEY, createEmptyState, getGoal, loadState, newId, parseBackup,
-  removeBook, restoreBook, saveState, serializeBackup, setGoal, startReread, upsertBook, validateBook,
+  STATUS, FORMATS, createEmptyState, getGoal, jsonEqual, newId, openStoredState, parseBackup, readStoredState,
+  removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
+import { applyRescue, buildRescue, clearRescue, readRescue, writeRescue } from './rescue.js';
+import { setPageGoal } from './store.js';
 import { esc, icon, largeCoverUrl } from './ui.js';
+import { allQuotesResults, allQuotesView } from './views/all-quotes.js';
 import { allTimeView } from './views/alltime.js';
+import { BOOK_TABS } from './views/book-tabs.js';
+import { calendarUi, heatmapDayAt } from './views/calendar.js';
+import { compareYearsOf } from './views/charts.js';
 import { formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
-import { settingsView } from './views/settings.js';
+import { settingsView, storageLine } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
 import { summaryView } from './views/summary.js';
+import { addMinutes } from './journal.js';
+import {
+  elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
+  sessionMinutes, sessionSummary, startSession, wholeMinutes,
+} from './timer.js';
+import { timerView } from './views/timer.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
 const toastEl = document.getElementById('toast');
 
-let state = loadState(localStorage);
+// Preenchido em boot(), antes da primeira tela.
+let state = createEmptyState();
+// Onde gravar: 'kv' (IndexedDB), 'legacy' (localStorage antigo) ou null (não gravar). Veja openStoredState.
+let backend = null;
+let ready = false;
 
 const ui = {
   year: yearOf(todayIso()),
@@ -36,6 +65,7 @@ const ui = {
   finishing: false,
   original: null,
   editingProgress: null,
+  storageInfo: null,
 };
 
 let lastDeleted = null;
@@ -47,7 +77,7 @@ let lookupAbort = null;
 let toastTimer = null;
 
 function emptyLookup() {
-  return { query: '', results: [], loading: false, failed: false, searched: false };
+  return { query: '', results: [], loading: false, failed: false, searched: false, isbn: '' };
 }
 
 // ---------- Navegação ----------
@@ -73,6 +103,7 @@ function blankDraft(status) {
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
     currentPage: null, currentPercent: null, dropReason: '', reread: false,
+    series: '', seriesNumber: null, tags: [], targetDate: null, quotes: [], journal: [],
   };
 }
 
@@ -105,11 +136,14 @@ function enterRoute(route) {
       }
     }
   }
+  if (route.name === 'novo' || route.name === 'livro') enterBookNotes(route);
   if (route.name === 'retro') ui.retroSlide = 0;
+  if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
 }
 
 function render() {
+  if (!ready) return;
   const route = parseRoute();
   if (route.key !== currentKey) {
     ui.editingProgress = null;
@@ -161,14 +195,24 @@ function render() {
     case 'ajustes':
       html = settingsView(ctx);
       break;
+    case 'trechos':
+      html = allQuotesView(ctx);
+      break;
+    case 'ler':
+      html = timerScreen(route.params[0]);
+      if (html === null) return;
+      showNav = false;
+      break;
     default:
       html = homeView(ctx);
   }
   root.innerHTML = html;
   root.dataset.page = route.name;
   document.body.classList.toggle('no-nav', !showNav);
+  // Trechos salvos se abre a partir do Resumo (Todos os anos).
+  const navName = route.name === 'trechos' ? 'resumo' : route.name;
   for (const link of nav.querySelectorAll('[data-nav]')) {
-    const on = link.dataset.nav === route.name || (link.dataset.nav === 'inicio' && !['estante', 'resumo', 'buscar'].includes(route.name));
+    const on = link.dataset.nav === navName || (link.dataset.nav === 'inicio' && !['estante', 'resumo', 'buscar'].includes(navName));
     link.classList.toggle('is-on', on);
     if (on) link.setAttribute('aria-current', 'page'); else link.removeAttribute('aria-current');
   }
@@ -178,14 +222,73 @@ function render() {
 
 // ---------- Persistência ----------
 
-let persistRequested = false;
+const SAVE_FAILED = 'Não foi possível salvar neste aparelho. Exporte um backup agora.';
+const LOAD_FAILED = 'Não foi possível abrir seus dados agora. Feche o app e abra de novo.';
 
-function persist(next, message) {
-  state = next;
-  if (!saveState(localStorage, state)) {
-    toast('Não foi possível salvar neste aparelho. Exporte um backup agora.');
+let persistRequested = false;
+let queued = null;
+let writing = null;
+// Conta as alterações feitas nesta aba (para não trocá-las por dados lidos antes delas).
+let localChanges = 0;
+// Último estado confirmado no aparelho (base da cópia de resgate) e se há cópia guardada.
+let lastSaved = null;
+let hasRescue = false;
+// Outra aba salvou enquanto esta gravava: relê quando terminar.
+let reloadPending = false;
+// Avisa as outras abas (ou o app instalado aberto ao lado) que os dados mudaram.
+const channel = 'BroadcastChannel' in window ? new BroadcastChannel('leituras') : null;
+
+/** Grava em segundo plano, um estado por vez; se vários se acumulam, grava só o último. */
+async function flushSaves() {
+  while (queued) {
+    const snapshot = queued;
+    queued = null;
+    if (await writeStoredState(backend, db, localStorage, snapshot)) {
+      lastSaved = snapshot;
+      channel?.postMessage({ type: 'saved' });
+      // Tudo gravado: a cópia de resgate não é mais necessária.
+      if (hasRescue && !queued) {
+        clearRescue(localStorage);
+        hasRescue = false;
+      }
+    } else {
+      // Não gravou: a alteração fica também na cópia de resgate, aplicada na próxima abertura.
+      saveRescue();
+      toast(backend ? SAVE_FAILED : LOAD_FAILED, { sticky: !backend });
+    }
+  }
+  writing = null;
+  if (reloadPending) reloadFromStorage();
+}
+
+/** O app vai sair da tela com gravação em andamento: guarda o que mudou no localStorage. */
+function saveRescue() {
+  if (!writing || backend !== 'kv') return;
+  if (writeRescue(localStorage, buildRescue(lastSaved, state))) hasRescue = true;
+}
+
+/** Na abertura: aplica a cópia de uma gravação que não terminou (app fechado no meio). */
+function applyPendingRescue() {
+  if (backend !== 'kv') return;
+  const rescue = readRescue(localStorage);
+  if (!rescue) return;
+  hasRescue = true;
+  const next = applyRescue(state, rescue);
+  if (jsonEqual(next, state)) {
+    clearRescue(localStorage);
+    hasRescue = false;
     return;
   }
+  // Grava pelo caminho normal; a cópia só sai do localStorage depois de confirmada.
+  persist(next);
+}
+
+/** Troca o estado na hora (a tela já pode redesenhar) e grava no aparelho em seguida. */
+function persist(next, message) {
+  state = next;
+  localChanges += 1;
+  queued = state;
+  writing ||= flushSaves();
   if (message) toast(message);
   if (!persistRequested && navigator.storage?.persist) {
     persistRequested = true;
@@ -193,13 +296,55 @@ function persist(next, message) {
   }
 }
 
-// Outra aba (ou o app instalado) alterou os dados: recarrega.
-window.addEventListener('storage', (e) => {
-  if (e.key === STORAGE_KEY) {
-    state = loadState(localStorage);
-    render();
+function applyOpened(opened) {
+  state = opened.state;
+  lastSaved = state;
+  backend = opened.backend;
+  if (opened.error) toast(LOAD_FAILED, { sticky: true });
+}
+
+async function loadFromStorage() {
+  applyOpened(await openStoredState(db, localStorage));
+}
+
+/**
+ * Relê os dados que outra aba gravou (ou ao voltar do segundo plano, quando o aviso pode
+ * ter se perdido). Só lê do armazenamento em uso: a migração é só na abertura, e uma falha
+ * de leitura aqui mantém o que está na tela em vez de mostrar tudo vazio.
+ */
+async function reloadFromStorage() {
+  if (!ready) return;
+  if (writing) {
+    reloadPending = true;
+    return;
   }
+  reloadPending = false;
+  const before = localChanges;
+  const stored = await readStoredState(backend, db, localStorage);
+  // Alterado aqui enquanto lia: fica o desta aba (já indo para o aparelho, e a outra aba
+  // recebe o aviso). Trocar pelo lido apagaria da tela o que acabou de ser salvo.
+  if (!stored || localChanges !== before || writing) return;
+  lastSaved = stored;
+  if (jsonEqual(stored, state)) return;
+  state = stored;
+  render();
+}
+
+channel?.addEventListener('message', (e) => {
+  if (e.data?.type === 'saved') reloadFromStorage();
 });
+
+/** Espaço usado e proteção contra limpeza, para a tela de Ajustes. */
+async function refreshStorageInfo() {
+  ui.storageInfo = await db.storageInfo();
+  if (parseRoute().name !== 'ajustes') return;
+  // Troca só a linha: redesenhar a tela inteira apagaria o que está sendo digitado
+  // e trocaria o campo "Importar backup" no meio da escolha do arquivo.
+  const html = storageLine(ui.storageInfo);
+  const line = root.querySelector('.storage-info');
+  if (line) line.outerHTML = html;
+  else if (html) root.querySelector('[data-action="export-backup"]')?.insertAdjacentHTML('beforebegin', html);
+}
 
 // ---------- Avisos ----------
 
@@ -274,8 +419,9 @@ async function retroImage(share) {
   const data = retroData(state, year, todayIso());
   toast('Gerando imagem…', { sticky: true });
   try {
-    const blob = await renderRetroImage(data, year);
-    const name = `leituras-${year}.png`;
+    const format = ui.retroFormat === 'square' ? 'square' : 'story';
+    const blob = await renderRetroImage(data, year, format);
+    const name = format === 'square' ? `leituras-${year}-quadrado.png` : `leituras-${year}.png`;
     const file = new File([blob], name, { type: 'image/png' });
     hideToast();
     if ((share || isIOS()) && await shareFile(file, `Minhas leituras de ${year}`)) return;
@@ -311,10 +457,22 @@ async function runLookup() {
   const query = ui.lookup.query;
   ui.lookup.loading = true;
   renderLookup();
-  const { results, failed } = await searchBooks(query, { signal: lookupAbort.signal });
+  const { results, failed, isbn } = await searchBooks(query, { signal: lookupAbort.signal, googleKey: googleBooksKey() });
   if (query !== ui.lookup.query) return;
-  Object.assign(ui.lookup, { results, failed, loading: false, searched: true });
+  Object.assign(ui.lookup, { results, failed, isbn, loading: false, searched: true });
+  // ISBN sem resultado: os outros campos ficam para a pessoa, mas o ISBN já vai junto ao salvar.
+  if (isbn && !results.length && ui.draft) ui.draft.isbn = isbn;
   renderLookup();
+}
+
+// Chave opcional da API do Google Books (sem tela para isso ainda). Fica fora do
+// estado de propósito, para não ir parar no arquivo de backup.
+function googleBooksKey() {
+  try {
+    return localStorage.getItem('leituras:googleBooksKey') || '';
+  } catch {
+    return '';
+  }
 }
 
 function onLookupInput(value) {
@@ -366,7 +524,14 @@ function openCoverViewer(src, title) {
 
 // ---------- Progresso da leitura (cartão do Início) ----------
 
-/** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. */
+/** Livro com a nova posição e o diário atualizado (registro automático e silencioso). */
+function withProgress(book, value) {
+  const unit = unitOf(book);
+  const journal = recordProgress(book, value, unit, todayIso());
+  return unit === UNITS.PERCENT ? { ...book, currentPercent: value, journal } : { ...book, currentPage: value, journal };
+}
+
+/** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. Devolve o valor aceito (nada se inválido). */
 function saveProgress(bookId, raw) {
   const book = state.books.find((b) => b.id === bookId);
   if (!book) return;
@@ -384,11 +549,11 @@ function saveProgress(bookId, raw) {
     ui.editingProgress = null;
     if (Math.round(value) === 100) {
       go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
-      return;
+      return 100;
     }
-    persist(upsertBook(state, { ...book, currentPercent: Math.round(value) }).state, 'Progresso atualizado.');
+    persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
     render();
-    return;
+    return Math.round(value);
   }
   if (!Number.isInteger(value) || value < 0 || (book.pages && value > book.pages)) {
     toast(book.pages ? `Informe uma página entre 0 e ${book.pages}.` : 'Informe um número de página válido.');
@@ -397,11 +562,119 @@ function saveProgress(bookId, raw) {
   ui.editingProgress = null;
   if (book.pages && value === book.pages) {
     go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+    return value;
+  }
+  persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
+  render();
+  return value;
+}
+
+// ---------- Diário e trechos (abas do livro) ----------
+
+// Último registro do diário ou trecho excluído, para o Desfazer.
+let lastNoteDeleted = null;
+
+/** Ao abrir um livro: aba Dados, ou a pedida no endereço (#/livro/id?aba=trechos). */
+function enterBookNotes(route) {
+  const tab = route.query.get('aba');
+  ui.bookTab = route.name === 'livro' && BOOK_TABS.includes(tab) ? tab : 'dados';
+  ui.diaryEdit = null;
+  ui.quoteForm = null;
+}
+
+function currentBook() {
+  return state.books.find((b) => b.id === ui.draft?.id) || null;
+}
+
+/**
+ * Grava diário/trechos direto no livro salvo: mudanças ainda não salvas em Dados
+ * ficam só no rascunho. O rascunho recebe as mesmas listas, para que o Salvar
+ * de Dados depois não desfaça o que foi feito aqui.
+ */
+function saveBookNotes(bookId, patch, message) {
+  const book = state.books.find((b) => b.id === bookId);
+  if (!book) return;
+  const { state: next, book: saved } = upsertBook(state, { ...book, ...patch });
+  persist(next, message);
+  if (ui.draft?.id !== bookId) return;
+  for (const key of Object.keys(patch)) {
+    if (key === 'journal' || key === 'quotes' || ui.draft[key] === ui.original?.[key]) ui.draft[key] = saved[key];
+  }
+  ui.original = saved;
+}
+
+function saveDiaryEntry(form) {
+  const book = currentBook();
+  if (!book) return;
+  const before = (book.journal || []).find((e) => e.date === form.dataset.date);
+  const result = editEntry(book, form.dataset.date, Object.fromEntries(new FormData(form)), todayIso());
+  if (result.error) {
+    toast(result.error);
     return;
   }
-  persist(upsertBook(state, { ...book, currentPage: value }).state, 'Página atualizada.');
+  ui.diaryEdit = null;
+  // Corrigiu o último dia: a página (ou %) atual do livro acompanha.
+  saveBookNotes(book.id, { journal: result.journal, ...syncPosition(book, before, result.entry, result.journal) }, 'Registro corrigido.');
   render();
 }
+
+function saveQuote(form) {
+  const book = currentBook();
+  if (!book) return;
+  const existing = (book.quotes || []).find((q) => q.id === form.dataset.id) || null;
+  const result = buildQuote(book, Object.fromEntries(new FormData(form)), { existing, id: newId(), nowTs: new Date().toISOString() });
+  if (result.error) {
+    toast(result.error);
+    return;
+  }
+  ui.quoteForm = null;
+  saveBookNotes(book.id, { quotes: upsertQuote(book.quotes, result.quote) }, existing ? 'Trecho atualizado.' : 'Trecho salvo.');
+  render();
+}
+
+/** Imagem 1080×1080 do trecho: menu de compartilhar do celular; sem ele, baixa o arquivo. */
+async function shareQuoteImage(quoteId) {
+  const book = currentBook();
+  const quote = book?.quotes?.find((q) => q.id === quoteId);
+  if (!quote) return;
+  toast('Gerando imagem…', { sticky: true });
+  try {
+    const blob = await renderQuoteImage(quote, book);
+    const name = quoteFileName(book);
+    const file = new File([blob], name, { type: 'image/png' });
+    hideToast();
+    if (await shareFile(file, `Trecho de ${book.title}`)) return;
+    downloadBlob(file, name);
+    toast('Imagem salva.');
+  } catch {
+    toast('Não foi possível gerar a imagem.');
+  }
+}
+
+/** Abre um formulário inline e põe o cursor no campo indicado. */
+function openNotesForm(fieldId) {
+  render();
+  const field = document.getElementById(fieldId);
+  field?.focus();
+  field?.closest('form')?.scrollIntoView({ block: 'nearest' });
+}
+
+document.addEventListener('submit', (e) => {
+  const diary = e.target.closest('[data-diary-form]');
+  const quote = e.target.closest('[data-quote-form]');
+  if (!diary && !quote) return;
+  e.preventDefault();
+  if (diary) saveDiaryEntry(diary);
+  else saveQuote(quote);
+});
+
+// Busca dos trechos: redesenha só a lista, para não tirar o foco do campo.
+document.addEventListener('input', (e) => {
+  if (!('quotesQ' in e.target.dataset)) return;
+  ui.quotesQuery = e.target.value;
+  const el = document.getElementById('quotes-results');
+  if (el) el.innerHTML = allQuotesResults(state, ui.quotesQuery);
+});
 
 // ---------- Ações ----------
 
@@ -416,10 +689,15 @@ function saveBook() {
     return;
   }
   const isNew = !d.id;
-  const { state: next, book } = upsertBook(state, { ...d, id: d.id || newId() });
+  // O id fica no rascunho: um segundo toque rápido em Salvar (antes de a tela mudar)
+  // grava o mesmo livro de novo em vez de criar outro igual.
+  d.id ||= newId();
+  const booksBefore = state.books;
+  const { state: next, book } = upsertBook(state, { ...d, journal: journalOnSave(d, ui.original, todayIso()) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
+  if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   go(ui.backHref);
 }
@@ -466,6 +744,8 @@ const actions = {
   reread() {
     if (!ui.original) return;
     const { state: next } = startReread(state, ui.original.id, todayIso());
+    // Segundo toque antes de a tela mudar não cria outra releitura.
+    ui.original = null;
     persist(next, 'Releitura iniciada. Boa leitura!');
     ui.year = yearOf(todayIso());
     go('#/inicio');
@@ -483,7 +763,7 @@ const actions = {
   },
   'undo-delete'() {
     if (!lastDeleted) return;
-    persist(restoreBook(state, lastDeleted.book, lastDeleted.index), 'Livro restaurado.');
+    persist(restoreBook(state, lastDeleted.book, lastDeleted.index, lastDeleted.upNextIndex), 'Livro restaurado.');
     lastDeleted = null;
     render();
   },
@@ -519,7 +799,7 @@ const actions = {
     if (!ui.draft?.id) return;
     const index = state.books.findIndex((b) => b.id === ui.draft.id);
     if (index < 0) return;
-    lastDeleted = { book: state.books[index], index };
+    lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
     go(ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
@@ -551,16 +831,179 @@ const actions = {
     if (!window.confirm('Apagar TODOS os livros e ajustes deste celular?')) return;
     if (!window.confirm('Tem certeza? Sem um backup, não será possível recuperar.')) return;
     persist(createEmptyState(), 'Dados apagados.');
+    // Sessão do cronômetro aberta não sobrevive: voltaria do nada se um backup fosse importado depois.
+    ui.timerStop = null;
+    setSession(null);
     go('#/inicio');
   },
-  reload() { window.location.reload(); },
+  async reload() {
+    // Atualizar no meio de uma gravação a cancelaria: espera ela terminar.
+    while (writing) await writing;
+    window.location.reload();
+  },
+
+  // ---------- Diário e trechos (abas do livro) ----------
+  'book-tab'(el) {
+    ui.bookTab = el.dataset.tab;
+    ui.diaryEdit = null;
+    ui.quoteForm = null;
+    render();
+  },
+  'book-save'() {
+    // Volta para Dados: se houver erro no formulário, ele aparece lá.
+    ui.bookTab = 'dados';
+    saveBook();
+  },
+  'diary-edit'(el) {
+    ui.diaryEdit = el.dataset.date;
+    openNotesForm('d-to');
+  },
+  'diary-cancel'() {
+    ui.diaryEdit = null;
+    render();
+  },
+  'diary-delete'(el) {
+    const book = currentBook();
+    const entry = book?.journal?.find((e) => e.date === el.dataset.date);
+    if (!entry) return;
+    lastNoteDeleted = { bookId: book.id, entry };
+    ui.diaryEdit = null;
+    saveBookNotes(book.id, { journal: removeEntry(book, entry.date) });
+    render();
+    toast(`Registro de ${formatShort(entry.date)} excluído.`, { actionLabel: 'Desfazer', action: 'notes-undo', duration: 7000 });
+  },
+  'quote-new'() {
+    ui.quoteForm = { id: null };
+    openNotesForm('q-text');
+  },
+  'quote-edit'(el) {
+    ui.quoteForm = { id: el.dataset.id };
+    openNotesForm('q-text');
+  },
+  'quote-cancel'() {
+    ui.quoteForm = null;
+    render();
+  },
+  'quote-delete'(el) {
+    const book = currentBook();
+    const index = (book?.quotes || []).findIndex((q) => q.id === el.dataset.id);
+    if (index < 0) return;
+    lastNoteDeleted = { bookId: book.id, quote: book.quotes[index], index };
+    saveBookNotes(book.id, { quotes: removeQuote(book.quotes, el.dataset.id) });
+    render();
+    toast('Trecho excluído.', { actionLabel: 'Desfazer', action: 'notes-undo', duration: 7000 });
+  },
+  'quote-share'(el) { shareQuoteImage(el.dataset.id); },
+  'notes-undo'() {
+    const d = lastNoteDeleted;
+    const book = d && state.books.find((b) => b.id === d.bookId);
+    if (!book) return;
+    lastNoteDeleted = null;
+    const patch = d.entry ? { journal: restoreEntry(book, d.entry) } : { quotes: restoreQuote(book.quotes, d.quote, d.index) };
+    saveBookNotes(book.id, patch, d.entry ? 'Registro restaurado.' : 'Trecho restaurado.');
+    render();
+  },
 };
+
+// ---------- Estatísticas: calendário, gráficos e meta de páginas ----------
+// Estado só da tela (não vai para os dados): modo do calendário, gráfico mensal e anos comparados.
+Object.assign(ui, { calendar: null, monthChart: 'livros', compare: null });
+
+const BLANK_FILTERS = { q: '', status: '', year: '', genre: '', format: '', minRating: '' };
+
+function setCalendar(year, changes) {
+  ui.calendar = { ...calendarUi(ui, year, todayIso()), ...changes };
+  render();
+}
+
+Object.assign(actions, {
+  'cal-mode'(el) { setCalendar(Number(el.dataset.year), { mode: el.dataset.mode }); },
+  'cal-month'(el) {
+    const year = Number(el.dataset.year);
+    const month = calendarUi(ui, year, todayIso()).month + Number(el.dataset.delta);
+    if (month >= 0 && month <= 11) setCalendar(year, { month });
+  },
+  'cal-day'(el) { setCalendar(Number(el.dataset.year), { day: el.dataset.date }); },
+  'month-chart-mode'(el) {
+    ui.monthChart = el.dataset.mode;
+    render();
+  },
+  // Toque numa barra ou faixa: abre a Buscar com os livros daquele recorte.
+  'chart-filter'(el) {
+    ui.filters = chartFilters(el.dataset.year, el.dataset.kind, el.dataset.value);
+    go('#/buscar');
+  },
+  'clear-chart-filter'() {
+    // Como o "Limpar": o texto digitado na busca fica.
+    ui.filters = { ...BLANK_FILTERS, q: ui.filters.q };
+    render();
+  },
+  'page-goal-remove'(el) {
+    persist(setPageGoal(state, Number(el.dataset.year), null), 'Meta de páginas removida.');
+    render();
+  },
+});
+
+// Mapa do ano: o toque vale para o quadradinho mais próximo (são pequenos no celular).
+document.addEventListener('click', (e) => {
+  const svg = e.target.closest?.('[data-heatmap]');
+  if (!svg) return;
+  const day = heatmapDayAt(svg, e.clientX, e.clientY);
+  if (day) setCalendar(Number(svg.dataset.year), { day });
+});
+
+document.addEventListener('change', (e) => {
+  const which = { 'compare-a': 'a', 'compare-b': 'b' }[e.target.dataset?.change];
+  if (!which) return;
+  const years = yearsWithData(state.books, yearOf(todayIso()));
+  ui.compare = { ...compareYearsOf(ui, years), [which]: Number(e.target.value) };
+  render();
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest('[data-page-goal-form]');
+  if (!form) return;
+  e.preventDefault();
+  const raw = form.querySelector('input')?.value.trim() || '';
+  const goal = Number(raw.replace(/\./g, ''));
+  if (!Number.isInteger(goal) || goal < 1 || goal > 1000000) {
+    toast('Informe um número de páginas entre 1 e 1.000.000.');
+    return;
+  }
+  persist(setPageGoal(state, Number(form.dataset.year), goal), 'Meta de páginas salva.');
+  render();
+});
+
+// ---------- Marcos e retrospectiva (v1.3) ----------
+
+// Formato da imagem da retrospectiva: 'story' (1080×1920) ou 'square' (1080×1080).
+ui.retroFormat = 'story';
+
+actions['retro-format'] = (el) => {
+  ui.retroFormat = el.dataset.value === 'square' ? 'square' : 'story';
+  render();
+};
+
+/** Livro concluído: se um marco novo apareceu, avisa com o toast (sem pop-up, sem pontos). */
+function celebrateMilestones(booksBefore, booksAfter) {
+  const message = milestoneMessage(newMilestones(booksBefore, booksAfter));
+  if (message) toast(message, { duration: 5000 });
+}
 
 document.addEventListener('click', (e) => {
   const el = e.target.closest('[data-action]');
   if (!el || !actions[el.dataset.action]) return;
   e.preventDefault();
+  const hadFocus = document.activeElement === el;
   actions[el.dataset.action](el);
+  // Redesenhar a tela troca os botões e o foco cairia no começo da página:
+  // quem usa teclado volta para o mesmo botão (ex.: a meia estrela que escolheu).
+  if (hadFocus && !el.isConnected && (!document.activeElement || document.activeElement === document.body)) {
+    const { action, value, id } = el.dataset;
+    [...document.querySelectorAll('[data-action]')]
+      .find((x) => x.dataset.action === action && x.dataset.value === value && x.dataset.id === id)
+      ?.focus({ preventScroll: true });
+  }
 });
 
 document.addEventListener('input', (e) => {
@@ -625,12 +1068,362 @@ document.addEventListener('submit', (e) => {
   }
 });
 
+// ---------- Fila, etiquetas, série, planilha e chave do Google (v1.3) ----------
+// Bloco próprio: ações novas entram no mesmo objeto `actions` usado pelos cliques.
+
+Object.assign(ui, { draw: null, groupSeries: false, tagInput: '', googleKey: readGoogleKey(localStorage) });
+
+/** Sorteia (de novo) com os filtros do painel, evitando repetir o último. */
+function drawNext() {
+  const picked = drawBook(state.books, ui.draw, Math.random, ui.draw.id);
+  ui.draw.id = picked?.id || null;
+}
+
+/** Leva o texto digitado no campo de etiqueta para o livro. Devolve true se acrescentou algo. */
+function commitTagInput() {
+  const value = document.querySelector('[data-tag-input]')?.value ?? ui.tagInput;
+  ui.tagInput = '';
+  if (!ui.draft || !String(value).trim()) return false;
+  ui.draft.tags = addTags(ui.draft.tags, value);
+  return true;
+}
+
+function focusTagInput() {
+  const input = document.getElementById('f-tag');
+  if (!input) return;
+  input.focus();
+  input.setSelectionRange(input.value.length, input.value.length);
+}
+
+async function exportCsv() {
+  const name = csvFileName(todayIso());
+  const file = new File([booksToCsv(state.books)], name, { type: 'text/csv;charset=utf-8' });
+  const shared = isIOS() && await shareFile(file, 'Planilha do Leituras');
+  if (!shared) downloadBlob(file, name);
+  toast('Planilha exportada.');
+}
+
+function saveGoogleKeyFromInput() {
+  const result = saveGoogleKey(localStorage, document.querySelector('[data-gkey]')?.value);
+  if (!result.key) {
+    toast('Cole a chave antes de salvar.');
+    return;
+  }
+  if (!result.ok) {
+    toast('Não foi possível salvar a chave neste aparelho.');
+    return;
+  }
+  ui.googleKey = result.key;
+  render();
+  if (result.warning) {
+    toast('Chave salva, mas ela não parece uma chave do Google (começa com AIza e tem 39 caracteres). Confira se colou inteira.', { duration: 7000 });
+  } else {
+    toast('Chave salva. A busca vai consultar também o Google Books.');
+  }
+}
+
+Object.assign(actions, {
+  'toggle-next'(el) {
+    const { state: next, full } = toggleUpNext(state, el.dataset.id);
+    if (full) {
+      toast(`Limite de ${MAX_UP_NEXT} próximas. Tire uma da lista para marcar outra.`);
+      return;
+    }
+    persist(next);
+    render();
+  },
+  'move-next'(el) {
+    const { id, delta } = el.dataset;
+    persist(moveUpNext(state, id, Number(delta)));
+    render();
+    // Mantém o foco no mesmo botão (quem usa leitor de tela continua de onde estava).
+    const again = document.querySelector(`[data-action="move-next"][data-delta="${delta}"][data-id="${CSS.escape(id)}"]`);
+    (again && !again.disabled ? again : document.querySelector(`[data-action="move-next"][data-id="${CSS.escape(id)}"]:not([disabled])`))?.focus();
+  },
+  'draw-open'() {
+    ui.draw = { genre: '', format: '', id: null };
+    drawNext();
+    render();
+  },
+  'draw-again'() {
+    if (!ui.draw) return;
+    drawNext();
+    render();
+  },
+  'draw-close'() {
+    ui.draw = null;
+    render();
+  },
+  'draw-start'(el) {
+    ui.draw = null;
+    actions['start-reading'](el);
+  },
+  'toggle-group-series'() {
+    ui.groupSeries = !ui.groupSeries;
+    render();
+  },
+  'add-tag'(el) {
+    if (!ui.draft) return;
+    ui.draft.tags = addTags(ui.draft.tags, el.dataset.value);
+    render();
+  },
+  'remove-tag'(el) {
+    if (!ui.draft) return;
+    ui.draft.tags = removeTag(ui.draft.tags, el.dataset.value);
+    render();
+    focusTagInput();
+  },
+  'add-tag-input'() {
+    commitTagInput();
+    render();
+    focusTagInput();
+  },
+  'clear-target-date'() {
+    if (!ui.draft) return;
+    ui.draft.targetDate = null;
+    render();
+  },
+  'export-csv'() { exportCsv(); },
+  'save-gkey'() { saveGoogleKeyFromInput(); },
+  'remove-gkey'() {
+    removeGoogleKey(localStorage);
+    ui.googleKey = '';
+    render();
+    toast('Chave removida. A busca volta a usar BrasilAPI e Open Library.');
+  },
+});
+
+document.addEventListener('input', (e) => {
+  const t = e.target;
+  if (!('tagInput' in t.dataset) || !ui.draft) return;
+  // Vírgula fecha a etiqueta: o que vem antes entra no livro, o resto continua no campo.
+  if (t.value.includes(',')) {
+    const cut = t.value.lastIndexOf(',');
+    ui.draft.tags = addTags(ui.draft.tags, t.value.slice(0, cut));
+    ui.tagInput = t.value.slice(cut + 1).trimStart();
+    render();
+    focusTagInput();
+  } else {
+    ui.tagInput = t.value;
+  }
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if ('tagInput' in e.target.dataset) {
+    // Enter num campo de texto enviaria o formulário: aqui ele só acrescenta a etiqueta.
+    e.preventDefault();
+    commitTagInput();
+    render();
+    focusTagInput();
+  } else if ('gkey' in e.target.dataset) {
+    e.preventDefault();
+    saveGoogleKeyFromInput();
+  }
+});
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (!t.dataset.draw || !ui.draw) return;
+  ui.draw[t.dataset.draw] = t.value;
+  ui.draw.id = null;
+  drawNext();
+  render();
+});
+
+// Antes do salvar (fase de captura): etiqueta digitada e não confirmada também vale.
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('[data-submit="save-book"]')) commitTagInput();
+}, true);
+
+// Mudou de tela: o texto de etiqueta pela metade e o painel de sorteio não acompanham.
+window.addEventListener('hashchange', () => {
+  ui.tagInput = '';
+  ui.draw = null;
+});
+
 // Capa que não carrega (offline, link quebrado): fica a capa desenhada.
 document.addEventListener('error', (e) => {
   if (e.target.classList?.contains('cover-img')) e.target.remove();
 }, true);
 
 window.addEventListener('hashchange', render);
+
+// ---------- Cronômetro de leitura ----------
+// A sessão fica no localStorage (fora do estado e do backup: é passageira) e o tempo
+// sai sempre dos horários gravados; o intervalo de 1 s só redesenha o número na tela.
+
+ui.session = loadSession(localStorage);
+// Formulário do "Parar" aberto: { resume } diz se o cronômetro corria antes de parar.
+ui.timerStop = null;
+let timerTicker = null;
+let wakeLock = null;
+let wakeLockPending = false;
+
+function setSession(session) {
+  ui.session = session;
+  saveSession(localStorage, session);
+  syncTicker();
+  syncWakeLock();
+}
+
+/** Livro da sessão aberta, se ainda existe e está em leitura. */
+function sessionBook() {
+  const s = ui.session;
+  return s ? state.books.find((b) => b.id === s.bookId && b.status === STATUS.READING) || null : null;
+}
+
+/** Tela #/ler/:id. Devolve null quando redireciona (sem sessão ou sessão de outro livro). */
+function timerScreen(id) {
+  const book = sessionBook();
+  if (!book) {
+    if (ui.session) setSession(null);
+    go('#/inicio');
+    return null;
+  }
+  if (book.id !== id) {
+    go(`#/ler/${encodeURIComponent(book.id)}`);
+    return null;
+  }
+  syncWakeLock();
+  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop) });
+}
+
+function tickTimer() {
+  if (!ui.session) return;
+  const ms = elapsedMs(ui.session, Date.now());
+  for (const el of document.querySelectorAll('[data-timer-elapsed]')) el.textContent = formatElapsed(ms);
+  for (const el of document.querySelectorAll('[data-timer-minutes]')) el.textContent = `${wholeMinutes(ms)} min`;
+}
+
+// Pausado, o número não muda: o intervalo só existe com o cronômetro correndo.
+function syncTicker() {
+  const running = ui.session && !isPaused(ui.session);
+  if (running && !timerTicker) timerTicker = setInterval(tickTimer, 1000);
+  else if (!running && timerTicker) {
+    clearInterval(timerTicker);
+    timerTicker = null;
+  }
+}
+
+function wantsWakeLock() {
+  return parseRoute().name === 'ler' && Boolean(ui.session) && !isPaused(ui.session) && document.visibilityState === 'visible';
+}
+
+/** Tela acesa só na tela do cronômetro correndo. Sem suporte (iOS antes do 18.4): segue sem. */
+async function syncWakeLock() {
+  if (!wantsWakeLock()) {
+    if (wakeLock) {
+      const lock = wakeLock;
+      wakeLock = null;
+      lock.release().catch(() => {});
+    }
+    return;
+  }
+  if (wakeLock || wakeLockPending || !navigator.wakeLock?.request) return;
+  wakeLockPending = true;
+  try {
+    const lock = await navigator.wakeLock.request('screen');
+    // O sistema solta a trava quando o app vai para o segundo plano.
+    lock.addEventListener('release', () => {
+      if (wakeLock === lock) wakeLock = null;
+    });
+    wakeLock = lock;
+  } catch {
+    // Negado (bateria fraca, sem permissão): o cronômetro funciona igual.
+  }
+  wakeLockPending = false;
+  if (!wantsWakeLock()) syncWakeLock();
+}
+
+/** "Parar" → Salvar: grava a posição pelo mesmo caminho do cartão do Início e soma os minutos ao dia. */
+function saveTimerSession(raw) {
+  const book = sessionBook();
+  if (!book) return;
+  const minutes = sessionMinutes(elapsedMs(ui.session, Date.now()));
+  const unit = unitOf(book);
+  const before = (unit === UNITS.PERCENT ? book.currentPercent : book.currentPage) ?? 0;
+  const value = saveProgress(book.id, raw);
+  if (value === undefined) return;
+  ui.timerStop = null;
+  setSession(null);
+  // Sessão de menos de 1 minuto não soma minutos (a posição já foi salva).
+  if (minutes) {
+    const saved = state.books.find((b) => b.id === book.id);
+    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso()) }).state);
+  }
+  // Fim do livro: saveProgress já abriu o Concluir; senão, volta ao Início.
+  if (parseRoute().name === 'ler') go('#/inicio');
+  toast(sessionSummary({ minutes, unit, delta: value - before }), { duration: 5000 });
+}
+
+Object.assign(actions, {
+  'start-timer'(el) {
+    const id = el.dataset.id;
+    const current = sessionBook();
+    // Uma sessão por vez: com outra aberta, leva até ela.
+    if (current && current.id !== id) {
+      toast(`Já há uma leitura em andamento: ${current.title}.`);
+      go(`#/ler/${encodeURIComponent(current.id)}`);
+      return;
+    }
+    if (!current) {
+      ui.timerStop = null;
+      setSession(startSession(id, Date.now()));
+    }
+    go(`#/ler/${encodeURIComponent(id)}`);
+  },
+  'timer-toggle'() {
+    if (!ui.session) return;
+    const now = Date.now();
+    setSession(isPaused(ui.session) ? resumeSession(ui.session, now) : pauseSession(ui.session, now));
+    render();
+  },
+  'timer-stop'() {
+    if (!ui.session) return;
+    // O tempo congela enquanto a pessoa informa onde parou.
+    ui.timerStop = { resume: !isPaused(ui.session) };
+    setSession(pauseSession(ui.session, Date.now()));
+    render();
+    const input = document.getElementById('timer-input');
+    input?.focus();
+    input?.select();
+  },
+  'timer-back'() {
+    if (ui.session && ui.timerStop?.resume) setSession(resumeSession(ui.session, Date.now()));
+    ui.timerStop = null;
+    render();
+  },
+  'timer-cancel'() {
+    if (!window.confirm('Descartar esta sessão? O tempo lido não será salvo.')) return;
+    ui.timerStop = null;
+    setSession(null);
+    go('#/inicio');
+    toast('Sessão descartada.');
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  if (!e.target.closest('[data-timer-form]')) return;
+  e.preventDefault();
+  saveTimerSession(document.getElementById('timer-input')?.value);
+});
+
+window.addEventListener('hashchange', syncWakeLock);
+// Volta do segundo plano: acerta o número na hora e pede a tela acesa de novo.
+document.addEventListener('visibilitychange', () => {
+  tickTimer();
+  syncWakeLock();
+});
+
+// Saindo da tela com gravação em andamento: cópia de resgate. Voltando: relê os dados
+// (outra aba pode ter salvo enquanto esta estava parada, sem receber o aviso).
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'hidden') saveRescue();
+  else reloadFromStorage();
+});
+window.addEventListener('pagehide', saveRescue);
+syncTicker();
 
 // ---------- Offline e atualizações ----------
 
@@ -643,7 +1436,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     }
     // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
     const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
-    if (busy) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
+    if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
     else window.location.reload();
   });
   navigator.serviceWorker.register('./sw.js').then((registration) => {
@@ -654,4 +1447,17 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   }).catch(() => {});
 }
 
-render();
+// Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
+async function boot() {
+  try {
+    await loadFromStorage();
+    applyPendingRescue();
+  } catch {
+    backend = null;
+    toast(LOAD_FAILED, { sticky: true });
+  }
+  ready = true;
+  render();
+}
+
+boot();

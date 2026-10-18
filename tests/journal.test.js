@@ -1,0 +1,198 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  closeOnFinish, countedEntries, entryPages, journalOnSave, longestDayStreak, pagesReadInYear, pagesReadPerDay, readingDays, recordProgress, unitOf,
+} from '../app/js/journal.js';
+
+const physical = (extra = {}) => ({ id: 'p', title: 'Físico', format: 'fisico', status: 'lendo', pages: 300, currentPage: null, journal: [], ...extra });
+const kindle = (extra = {}) => ({ id: 'k', title: 'Kindle', format: 'kindle', status: 'lendo', pages: 400, currentPercent: null, journal: [], ...extra });
+
+test('unidade: página no físico, % no Kindle', () => {
+  assert.equal(unitOf(physical()), 'page');
+  assert.equal(unitOf(kindle()), 'percent');
+});
+
+test('recordProgress parte da última posição conhecida', () => {
+  // Sem diário nem página: parte do zero.
+  assert.deepEqual(recordProgress(physical(), 40, 'page', '2026-10-01'), [
+    { date: '2026-10-01', from: 0, to: 40, unit: 'page', note: '' },
+  ]);
+  // Sem diário, com página atual (livros da versão 1.2): parte dela.
+  assert.deepEqual(recordProgress(physical({ currentPage: 100 }), 130, 'page', '2026-10-01'), [
+    { date: '2026-10-01', from: 100, to: 130, unit: 'page', note: '' },
+  ]);
+  // Com diário: parte do 'to' da última entrada.
+  const book = physical({ currentPage: 130, journal: [{ date: '2026-10-01', from: 100, to: 130, unit: 'page', note: '' }] });
+  assert.deepEqual(recordProgress(book, 160, 'page', '2026-10-02')[1], { date: '2026-10-02', from: 130, to: 160, unit: 'page', note: '' });
+});
+
+test('recordProgress junta o mesmo dia: mantém o from do dia e atualiza o to', () => {
+  let book = physical({ currentPage: 50 });
+  book = { ...book, journal: recordProgress(book, 60, 'page', '2026-10-01'), currentPage: 60 };
+  book = { ...book, journal: recordProgress(book, 75, 'page', '2026-10-01'), currentPage: 75 };
+  assert.deepEqual(book.journal, [{ date: '2026-10-01', from: 50, to: 75, unit: 'page', note: '' }]);
+  // Voltou para onde começou o dia: a entrada some.
+  assert.deepEqual(recordProgress(book, 50, 'page', '2026-10-01'), []);
+});
+
+test('recordProgress ignora quando nada muda', () => {
+  assert.deepEqual(recordProgress(physical({ currentPage: 80 }), 80, 'page', '2026-10-01'), []);
+  const journal = [{ date: '2026-10-01', from: 50, to: 80, unit: 'page', note: '' }];
+  assert.deepEqual(recordProgress(physical({ journal }), 80, 'page', '2026-10-02'), journal);
+  assert.deepEqual(recordProgress(physical({ journal }), 80, 'page', '2026-10-01'), journal);
+  assert.deepEqual(recordProgress(physical(), 'abc', 'page', '2026-10-01'), []);
+});
+
+test('recordProgress registra correção para trás (conta 0 páginas)', () => {
+  const journal = [{ date: '2026-10-01', from: 0, to: 120, unit: 'page', note: '' }];
+  const next = recordProgress(physical({ journal }), 100, 'page', '2026-10-02');
+  assert.deepEqual(next[1], { date: '2026-10-02', from: 120, to: 100, unit: 'page', note: '' });
+  assert.equal(entryPages(physical(), next[1]), 0);
+});
+
+test('recordProgress não altera o diário original', () => {
+  const journal = [{ date: '2026-10-01', from: 0, to: 10, unit: 'page', note: '' }];
+  const book = physical({ journal });
+  recordProgress(book, 20, 'page', '2026-10-01');
+  recordProgress(book, 30, 'page', '2026-10-02');
+  assert.deepEqual(book.journal, [{ date: '2026-10-01', from: 0, to: 10, unit: 'page', note: '' }]);
+});
+
+test('Kindle registra em %', () => {
+  const next = recordProgress(kindle({ currentPercent: 20 }), 35, 'percent', '2026-10-01');
+  assert.deepEqual(next, [{ date: '2026-10-01', from: 20, to: 35, unit: 'percent', note: '' }]);
+});
+
+test('closeOnFinish termina no total do livro', () => {
+  const journal = [{ date: '2026-10-01', from: 0, to: 120, unit: 'page', note: '' }];
+  assert.deepEqual(closeOnFinish(physical({ currentPage: 120, journal }), '2026-10-05')[1],
+    { date: '2026-10-05', from: 120, to: 300, unit: 'page', note: '' });
+  // Mesmo dia de uma entrada: atualiza o to.
+  assert.deepEqual(closeOnFinish(physical({ journal }), '2026-10-01'), [{ date: '2026-10-01', from: 0, to: 300, unit: 'page', note: '' }]);
+  // Kindle: até 100%.
+  assert.deepEqual(closeOnFinish(kindle({ currentPercent: 80 }), '2026-10-05'), [{ date: '2026-10-05', from: 80, to: 100, unit: 'percent', note: '' }]);
+  // Físico sem total de páginas: não dá para saber onde termina.
+  assert.deepEqual(closeOnFinish(physical({ pages: null, journal }), '2026-10-05'), journal);
+});
+
+test('pagesReadPerDay soma os livros e converte % do Kindle em páginas', () => {
+  const books = [
+    physical({ journal: [
+      { date: '2026-10-01', from: 0, to: 40, unit: 'page', note: '' },
+      { date: '2026-10-02', from: 40, to: 30, unit: 'page', note: '' },
+    ] }),
+    kindle({ journal: [{ date: '2026-10-01', from: 10, to: 15, unit: 'percent', note: '' }] }),
+    kindle({ id: 'k2', title: 'Sem páginas', pages: null, journal: [{ date: '2026-10-03', from: 0, to: 10, unit: 'percent', note: '' }] }),
+  ];
+  const days = pagesReadPerDay(books);
+  assert.deepEqual(days.get('2026-10-01'), {
+    pages: 60,
+    byBook: [{ id: 'p', title: 'Físico', pages: 40 }, { id: 'k', title: 'Kindle', pages: 20 }],
+  });
+  assert.equal(days.has('2026-10-02'), false, 'correção para trás não é dia de leitura');
+  assert.deepEqual(days.get('2026-10-03'), { pages: 0, byBook: [{ id: 'k2', title: 'Sem páginas', pages: 0 }] });
+});
+
+test('readingDays e longestDayStreak', () => {
+  const books = [
+    physical({ journal: [
+      { date: '2025-12-31', from: 0, to: 10, unit: 'page', note: '' },
+      { date: '2026-01-01', from: 10, to: 20, unit: 'page', note: '' },
+      { date: '2026-01-02', from: 20, to: 30, unit: 'page', note: '' },
+      { date: '2026-01-05', from: 30, to: 25, unit: 'page', note: '' },
+    ] }),
+    kindle({ journal: [{ date: '2026-01-02', from: 0, to: 5, unit: 'percent', note: '' }, { date: '2026-01-04', from: 5, to: 9, unit: 'percent', note: '' }] }),
+  ];
+  assert.deepEqual([...readingDays(books, 2026)].sort(), ['2026-01-01', '2026-01-02', '2026-01-04']);
+  assert.equal(readingDays(books).size, 4);
+  assert.equal(longestDayStreak(readingDays(books)), 3);
+  assert.equal(longestDayStreak(['2026-03-01', '2026-02-28', '2026-02-27', '2026-03-03']), 3);
+  assert.equal(longestDayStreak(['2024-02-28', '2024-02-29', '2024-03-01']), 3);
+  assert.equal(longestDayStreak(['2026-03-08', '2026-03-08']), 1);
+  assert.equal(longestDayStreak([]), 0);
+});
+
+test('pagesReadInYear: diário quando existe, total do livro no ano do término quando não', () => {
+  const books = [
+    // Lido sem diário: 200 páginas em 2026.
+    { id: 'a', title: 'A', status: 'lido', format: 'fisico', pages: 200, endDate: '2026-03-01', journal: [] },
+    // Lido sem diário em 2025: não conta.
+    { id: 'b', title: 'B', status: 'lido', format: 'fisico', pages: 500, endDate: '2025-03-01', journal: [] },
+    // Lido com diário atravessando o ano: só as páginas de 2026.
+    { id: 'c', title: 'C', status: 'lido', format: 'fisico', pages: 100, endDate: '2026-01-03', journal: [
+      { date: '2025-12-30', from: 0, to: 60, unit: 'page', note: '' },
+      { date: '2026-01-03', from: 60, to: 100, unit: 'page', note: '' },
+    ] },
+    // Lendo, Kindle: 10% de 300 páginas.
+    { id: 'd', title: 'D', status: 'lendo', format: 'kindle', pages: 300, journal: [{ date: '2026-05-01', from: 20, to: 30, unit: 'percent', note: '' }] },
+    // Abandonado com diário.
+    { id: 'e', title: 'E', status: 'abandonado', format: 'fisico', pages: 400, endDate: '2026-06-01', journal: [{ date: '2026-05-20', from: 0, to: 50, unit: 'page', note: '' }] },
+    // Lido com diário que começou no meio (livro da versão 1.2): o que falta entra no ano do término.
+    { id: 'f', title: 'F', status: 'lido', format: 'fisico', pages: 300, endDate: '2026-10-10', journal: [{ date: '2026-10-10', from: 200, to: 300, unit: 'page', note: '' }] },
+    // Quero ler: nunca conta.
+    { id: 'g', title: 'G', status: 'quero', format: 'fisico', pages: 100, journal: [{ date: '2026-02-01', from: 0, to: 10, unit: 'page', note: '' }] },
+  ];
+  assert.equal(pagesReadInYear(books, 2026), 200 + 40 + 30 + 50 + 300);
+  assert.equal(pagesReadInYear(books, 2025), 500 + 60);
+  assert.equal(pagesReadInYear([], 2026), 0);
+});
+
+// ---------- Diário ao salvar o formulário ----------
+
+test('journalOnSave: livro novo e "Quero ler" não ganham entrada (a página informada é o ponto de partida)', () => {
+  assert.deepEqual(journalOnSave(physical({ status: 'lido', endDate: '2026-09-20' }), null, '2026-10-16'), []);
+  const want = physical({ status: 'quero', currentPage: null });
+  assert.deepEqual(journalOnSave({ ...want, status: 'lido', startDate: '2026-09-01', endDate: '2026-09-20' }, want, '2026-10-16'), []);
+  assert.deepEqual(journalOnSave({ ...want, status: 'lendo', currentPage: 50 }, want, '2026-10-16'), []);
+  assert.deepEqual(journalOnSave({ ...want, status: 'abandonado', currentPage: 80, endDate: '2026-10-16' }, want, '2026-10-16'), []);
+});
+
+test('journalOnSave: trocar o formato não conta como leitura do dia', () => {
+  const original = physical({ currentPage: 100, journal: [{ date: '2026-10-10', from: 0, to: 100, unit: 'page', note: '' }] });
+  const toKindle = { ...original, format: 'kindle', currentPage: null, currentPercent: 33 };
+  assert.deepEqual(journalOnSave(toKindle, original, '2026-10-16'), original.journal);
+  // Concluir já no formato novo também não inventa 0 → 100%.
+  const finished = { ...toKindle, status: 'lido', endDate: '2026-10-16' };
+  assert.deepEqual(journalOnSave(finished, original, '2026-10-16'), original.journal);
+  assert.equal(pagesReadInYear([{ ...finished, journal: original.journal }], 2026), 300, 'o resto do livro entra no ano do término');
+});
+
+test('journalOnSave: página nova, conclusão no dia do término e abandono', () => {
+  const original = physical({ currentPage: 50, journal: [{ date: '2026-10-05', from: 0, to: 50, unit: 'page', note: '' }] });
+  assert.deepEqual(journalOnSave({ ...original, currentPage: 80 }, original, '2026-10-16').at(-1),
+    { date: '2026-10-16', from: 50, to: 80, unit: 'page', note: '' });
+  assert.deepEqual(journalOnSave({ ...original, currentPage: 50 }, original, '2026-10-16'), original.journal, 'mesma página');
+  assert.deepEqual(journalOnSave({ ...original, status: 'lido', endDate: '2026-10-10' }, original, '2026-10-16').at(-1),
+    { date: '2026-10-10', from: 50, to: 300, unit: 'page', note: '' });
+  // Término antes da última entrada (ou no futuro): fica no dia de hoje.
+  assert.equal(journalOnSave({ ...original, status: 'lido', endDate: '2026-10-01' }, original, '2026-10-16').at(-1).date, '2026-10-16');
+  assert.deepEqual(journalOnSave({ ...original, status: 'abandonado', currentPage: 60, endDate: '2026-10-16' }, original, '2026-10-16').at(-1),
+    { date: '2026-10-16', from: 50, to: 60, unit: 'page', note: '' });
+  const read = physical({ status: 'lido', journal: original.journal });
+  assert.deepEqual(journalOnSave({ ...read, notes: 'x' }, read, '2026-10-16'), original.journal, 'editar livro lido não mexe no diário');
+});
+
+test('páginas: correção para trás e novo avanço não contam duas vezes', () => {
+  const e = (date, from, to, unit = 'page') => ({ date, from, to, unit, note: '' });
+  // 0→100, corrigiu para 60, depois 60→150: leu até a 150, não 190.
+  const book = physical({ pages: 300, journal: [e('2026-03-01', 0, 100), e('2026-03-02', 100, 60), e('2026-03-03', 60, 150)] });
+  assert.equal(pagesReadInYear([book], 2026), 150);
+  assert.deepEqual(countedEntries(book).map((x) => x.pages), [100, 0, 50]);
+  assert.equal(pagesReadPerDay([book]).get('2026-03-03').pages, 50);
+  // Diário fora de ordem: conta pela data.
+  assert.equal(pagesReadInYear([physical({ journal: [e('2026-03-03', 60, 150), e('2026-03-01', 0, 100)] })], 2026), 150);
+  // Nunca passa do total do livro.
+  const capped = physical({ pages: 120, journal: [e('2026-03-01', 0, 100), e('2026-03-02', 100, 200)] });
+  assert.equal(pagesReadInYear([capped], 2026), 120);
+  // Lido com diário repetido (0→100 duas vezes): o que falta entra no término, sem passar de 120.
+  const repeated = physical({ pages: 120, status: 'lido', endDate: '2026-03-05', journal: [e('2026-03-01', 0, 100), e('2026-03-02', 0, 100)] });
+  assert.equal(pagesReadInYear([repeated], 2026), 120);
+});
+
+test('páginas: Kindle concluído de 0% a 100% soma exatamente o total do livro', () => {
+  const journal = Array.from({ length: 20 }, (_, i) => ({ date: `2026-04-${String(i + 1).padStart(2, '0')}`, from: i * 5, to: i * 5 + 5, unit: 'percent', note: '' }));
+  const k = kindle({ pages: 416, status: 'lido', endDate: '2026-04-20', journal });
+  assert.equal(pagesReadInYear([k], 2026), 416, 'antes: 20 × round(20,8) = 420');
+  assert.equal(entryPages(k, { from: 0, to: 5, unit: 'percent' }), 21);
+  assert.equal(entryPages(k, { from: 10, to: 15, unit: 'percent' }), 20);
+});

@@ -1,7 +1,11 @@
 import { formatShort, yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
+import { paceLines } from '../pace.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
-import { cover, decimal, esc, icon, num, plural, emptyState, progressBar } from '../ui.js';
+import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
+import { timerBanner, timerButton } from './timer.js';
+import { firstUpNext } from '../upnext.js';
+import { pageGoalHero } from './charts.js';
 
 const RING_C = 2 * Math.PI * 56;
 
@@ -13,7 +17,7 @@ export function yearSelect(years, selected, action, { withAll = false } = {}) {
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
 }
 
-function hero(stats, streak, isCurrentYear) {
+function hero(stats, streak, isCurrentYear, pagesLine = '') {
   const dash = (RING_C * stats.progress).toFixed(1);
   const pct = Math.round(stats.progress * 100);
   let line;
@@ -23,13 +27,14 @@ function hero(stats, streak, isCurrentYear) {
   const streakChip = isCurrentYear && streak.current > 0
     ? `<span class="pill-accent">${icon('flame', { size: 14 })}${streak.current === 1 ? '1 mês na meta' : `${streak.current} meses seguidos`}</span>`
     : `<span class="pill-muted">Meta mensal: ${plural(stats.monthlyTarget, 'livro', 'livros')}</span>`;
+  // Sem livros: sem o arco (com a ponta arredondada, um traço de tamanho zero vira um ponto).
   return `
     <section class="card hero">
       <div class="ring">
         <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="${stats.count} de ${stats.goal} livros da meta">
           <circle cx="66" cy="66" r="56" fill="none" stroke="var(--line-strong)" stroke-width="11"/>
-          <circle cx="66" cy="66" r="56" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
-            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 66 66)" class="ring-progress"/>
+          ${stats.progress > 0 ? `<circle cx="66" cy="66" r="56" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
+            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 66 66)" class="ring-progress"/>` : ''}
         </svg>
         <div class="ring-center"><span class="ring-count">${stats.count}</span><span class="ring-sub">de ${plural(stats.goal, 'livro', 'livros')}</span></div>
       </div>
@@ -39,6 +44,7 @@ function hero(stats, streak, isCurrentYear) {
         <span class="muted small">${line}</span>
         ${streakChip}
       </div>
+      ${pagesLine}
     </section>`;
 }
 
@@ -77,7 +83,7 @@ function progressEditor(b) {
     </form>`;
 }
 
-function readingNow(books, editingId) {
+function readingNow(books, editingId, session, today) {
   if (!books.length) return '';
   const cards = books.map((b) => `
     <div class="card reading">
@@ -91,17 +97,47 @@ function readingNow(books, editingId) {
         </span>
       </a>
       <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
+      ${timerButton(b, session)}
       </div>
       ${editingId === b.id ? progressEditor(b) : `
       <div class="reading-progress">
         ${progressBar(b) || `<span class="muted small">${b.format === 'kindle' ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`}
         <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${updateLabel(b)}</button>
-      </div>`}
+      </div>${paceInfo(b, today)}`}
     </div>`).join('');
   return `
     <section class="section">
       <div class="section-head"><h2>Lendo agora</h2><span class="muted small">${plural(books.length, 'livro', 'livros')}</span></div>
       ${cards}
+    </section>`;
+}
+
+// Ritmo e previsão: só informa, sem cobrar (nunca "atrasado").
+function paceInfo(b, today) {
+  const { pace, target } = paceLines(b, today);
+  if (!pace && !target) return '';
+  return `<p class="pace-line">${[pace, target].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join('')}</p>`;
+}
+
+// Sem leitura em andamento: sugere o primeiro da lista de próximas.
+function nextUpCard(state) {
+  const b = firstUpNext(state);
+  if (!b) return '';
+  return `
+    <section class="section">
+      <div class="section-head"><h2>Próxima leitura</h2><a class="link" href="#/estante?aba=quero">Ver fila</a></div>
+      <div class="card reading next-up">
+        <div class="reading-main">
+          <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}">
+            ${cover(b, { size: 'md' })}
+            <span class="reading-text">
+              <span class="serif-title">${esc(b.title)}</span>
+              <span class="muted small">${esc(b.authors || 'Autor não informado')}</span>
+            </span>
+          </a>
+        </div>
+        <button type="button" class="btn-primary sm" data-action="start-reading" data-id="${esc(b.id)}">Começar a ler</button>
+      </div>
     </section>`;
 }
 
@@ -113,7 +149,7 @@ function readGrid(stats) {
   const items = stats.books.slice(0, 6).map((b) => `
     <a class="grid-book" href="#/livro/${encodeURIComponent(b.id)}">
       <span class="grid-cover">${cover(b, { size: 'fill' })}${b.favorite ? `<span class="fav-badge">${icon('heart', { size: 12, label: 'Favorito do ano' })}</span>` : ''}</span>
-      <span class="grid-meta"><span class="grid-month">${esc(formatShort(b.endDate))}</span>${b.rating ? `<span class="grid-rating">${icon('star', { size: 11 })}${b.rating}</span>` : ''}</span>
+      <span class="grid-meta"><span class="grid-month">${esc(formatShort(b.endDate))}</span>${b.rating ? `<span class="grid-rating" aria-label="Nota ${formatRating(b.rating)}">${icon('star', { size: 11 })}${formatRating(b.rating)}</span>` : ''}</span>
     </a>`).join('');
   return `<section class="section">${head}<div class="book-grid">${items}</div></section>`;
 }
@@ -141,9 +177,11 @@ export function homeView({ state, ui, year, today }) {
         <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>
       </div>
     </header>
-    ${hero(stats, streak, year === currentYear)}
+    ${timerBanner(state.books, ui?.session)}
+    ${hero(stats, streak, year === currentYear, pageGoalHero(state, stats, today))}
     ${statTiles(stats)}
-    ${year === currentYear ? readingNow(reading, ui?.editingProgress) : ''}
+    ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session, today) : ''}
+    ${year === currentYear && !reading.length ? nextUpCard(state) : ''}
     ${readGrid(stats)}
     ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;
 }

@@ -1,6 +1,9 @@
 import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
-import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres } from '../store.js';
-import { cover, esc, icon, plural, progressOf } from '../ui.js';
+import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
+import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags } from '../store.js';
+import { hasTag } from '../tags.js';
+import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
+import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
 
 function segmented(options, current, action, label) {
   const buttons = options.map(([value, text]) => `
@@ -10,11 +13,11 @@ function segmented(options, current, action, label) {
 
 export function lookupResults(lookup) {
   if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
-  if (lookup.failed) {
-    return '<p class="muted small lookup-status">Não foi possível buscar agora (sem internet ou serviço fora do ar). Preencha os dados abaixo manualmente.</p>';
-  }
-  if (lookup.query.trim().length >= 2 && lookup.searched && !lookup.results.length) {
-    return '<p class="muted small lookup-status">Nenhum livro encontrado. Tente outro termo ou preencha abaixo.</p>';
+  // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
+  // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
+  if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
+    const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
+    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>`;
   }
   return lookup.results.map((r, i) => `
     <button type="button" class="result" data-action="pick-result" data-index="${i}">
@@ -55,7 +58,65 @@ export function readingSummary(d) {
   return `<p class="muted small">Entra no registro de ${year}</p>`;
 }
 
-export function formView({ state, ui, isEdit }) {
+// "Quero terminar até": opcional, só enquanto está lendo.
+function targetDateField(d) {
+  return `
+        <div class="field target-field">
+          <label for="f-target">Quero terminar até <span class="faint">(opcional)</span></label>
+          <span class="target-row">
+            <input id="f-target" type="date" value="${esc(d.targetDate || '')}" data-field="targetDate">
+            ${d.targetDate ? '<button type="button" class="btn-text small" data-action="clear-target-date">Limpar</button>' : ''}
+          </span>
+        </div>`;
+}
+
+/** Série e número; no livro já salvo, o próximo volume e quantos foram lidos. */
+function seriesFields(state, d, isEdit) {
+  const names = seriesNames(state.books).map((n) => `<option value="${esc(n)}"></option>`).join('');
+  let info = '';
+  if (isEdit && d.series && String(d.series).trim()) {
+    const s = seriesInfo(state.books, d);
+    const lines = [];
+    if (s.next) {
+      lines.push(`Próximo da série: <a href="#/livro/${encodeURIComponent(s.next.id)}">nº ${esc(formatSeriesNumber(s.next.seriesNumber))} — ${esc(s.next.title)}</a>`);
+    }
+    if (s.total > 1) lines.push(`Você leu ${s.read} de ${s.total} cadastrados nesta série`);
+    info = lines.length ? `<div class="series-info">${lines.map((l) => `<p class="muted small">${l}</p>`).join('')}</div>` : '';
+  }
+  return `
+      <section class="field-group">
+        <span class="label">Série</span>
+        <div class="series-cols">
+          <div class="field"><label for="f-series">Nome da série</label><input id="f-series" type="text" maxlength="120" list="series-names" autocomplete="off" value="${esc(d.series || '')}" data-field="series" placeholder="Ex.: Duna"></div>
+          <div class="field"><label for="f-series-n">Nº</label><input id="f-series-n" type="text" inputmode="decimal" maxlength="8" value="${esc(formatSeriesNumber(d.seriesNumber))}" data-field="seriesNumber" placeholder="1"></div>
+        </div>
+        <datalist id="series-names">${names}</datalist>
+        ${info}
+      </section>`;
+}
+
+/** Etiquetas livres: as do livro (com ×), campo para criar e as já usadas em outros livros. */
+function tagsField(state, ui, d) {
+  const tags = d.tags || [];
+  const current = tags.map((t) => `
+    <span class="tag-chip">${esc(t)}<button type="button" class="tag-x" data-action="remove-tag" data-value="${esc(t)}" aria-label="Remover etiqueta ${esc(t)}">${icon('close', { size: 14, stroke: 2.2 })}</button></span>`).join('');
+  const used = allTags(state).filter((t) => !hasTag(tags, t)).slice(0, 16);
+  const usedChips = used.map((t) => `<button type="button" class="chip-btn sm" data-action="add-tag" data-value="${esc(t)}">+ ${esc(t)}</button>`).join('');
+  return `
+      <section class="field-group">
+        <label class="label" for="f-tag">Etiquetas</label>
+        ${tags.length ? `<div class="chips-wrap">${current}</div>` : ''}
+        <div class="tag-input">
+          <input id="f-tag" type="text" maxlength="40" autocomplete="off" autocapitalize="none" enterkeyhint="done" placeholder="Nova etiqueta" value="${esc(ui.tagInput || '')}" data-tag-input>
+          <button type="button" class="chip-btn" data-action="add-tag-input">Adicionar</button>
+        </div>
+        ${used.length ? `<span class="muted small">Usadas antes</span><div class="chips-wrap">${usedChips}</div>` : '<span class="muted small">Toque em Adicionar, Enter ou vírgula para incluir.</span>'}
+      </section>`;
+}
+
+export function formView({ state, ui, isEdit, today }) {
+  // Livro já salvo tem as abas Diário e Trechos (views/book-tabs.js).
+  if (isEdit && ui.bookTab && ui.bookTab !== 'dados') return bookTabScreen({ state, ui, today });
   const d = ui.draft;
   const genres = allGenres(state);
   if (d.genre && !genres.includes(d.genre)) genres.push(d.genre);
@@ -65,10 +126,10 @@ export function formView({ state, ui, isEdit }) {
     ? `<span class="new-genre"><label class="sr-only" for="new-genre">Novo gênero</label><input id="new-genre" type="text" maxlength="60" placeholder="Novo gênero" data-new-genre><button type="button" class="chip-btn is-on" data-action="add-genre">OK</button></span>`
     : '<button type="button" class="chip-btn chip-dashed" data-action="open-genre">+ Novo</button>';
 
+  // Duas áreas por estrela: metade esquerda = n - 0,5; direita = n. Tocar na nota atual apaga.
+  const hit = (value, side) => `<button type="button" class="star-hit ${side}" data-action="set-rating" data-value="${value}" aria-label="${ratingLabel(value)}" aria-pressed="${d.rating === value}"></button>`;
   const starButtons = [1, 2, 3, 4, 5].map((n) => `
-    <button type="button" class="star-btn" data-action="set-rating" data-value="${n}" aria-label="${plural(n, 'estrela', 'estrelas')}" aria-pressed="${d.rating === n}">
-      ${icon('star', { size: 26, cls: d.rating && n <= d.rating ? 'star-on' : 'star-off' })}
-    </button>`).join('');
+    <span class="star-slot">${starIcon(n, d.rating, { size: 26 })}${hit(n - 0.5, 'left')}${hit(n, 'right')}</span>`).join('');
 
   const errors = ui.formErrors?.length
     ? `<div class="form-errors" role="alert">${ui.formErrors.map((e) => `<p>${esc(e)}</p>`).join('')}</div>`
@@ -82,9 +143,10 @@ export function formView({ state, ui, isEdit }) {
   return `
     <header class="form-top">
       <a class="btn-text muted" href="${esc(ui.backHref)}">Cancelar</a>
-      <h1 class="form-title">${isEdit ? 'Editar livro' : 'Adicionar livro'}</h1>
+      <h1 class="form-title">${!isEdit ? 'Adicionar livro' : ui.finishing ? 'Concluir leitura' : 'Editar livro'}</h1>
       <button type="submit" form="book-form" class="btn-text accent strong">Salvar</button>
     </header>
+    ${isEdit ? bookTabBar(storedBook(state, ui), 'dados') : ''}
     <form id="book-form" class="form" data-submit="save-book" novalidate>
       ${showLookup ? lookupBlock(ui) : ''}
       ${pickedCard}
@@ -121,6 +183,7 @@ export function formView({ state, ui, isEdit }) {
         ${d.format === FORMATS.KINDLE
     ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
     : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`}` : ''}
+        ${d.status === STATUS.READING ? targetDateField(d) : ''}
         <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
       </section>` : ''}
 
@@ -133,11 +196,13 @@ export function formView({ state, ui, isEdit }) {
         <span class="label">Gênero</span>
         <div class="chips-wrap">${genreChips}${newGenre}</div>
       </section>
+      ${seriesFields(state, d, isEdit)}
+      ${tagsField(state, ui, d)}
 
       ${d.status === STATUS.READ ? `
       <section class="field-group">
         <span class="label">Sua nota</span>
-        <div class="star-row">${starButtons}</div>
+        <div class="star-row" role="group" aria-label="Nota">${starButtons}<span class="star-value" aria-hidden="true">${d.rating ? formatRating(d.rating) : ''}</span></div>
       </section>
 
       <button type="button" class="card toggle-row" data-action="toggle-fav" aria-pressed="${d.favorite}">
