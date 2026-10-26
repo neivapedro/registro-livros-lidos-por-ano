@@ -260,8 +260,11 @@ export function formView({ state, ui, isEdit, today }) {
   const starButtons = [1, 2, 3, 4, 5].map((n) => `
     <span class="star-slot">${starIcon(n, d.rating, { size: 26 })}${hit(n - 0.5, 'left')}${hit(n, 'right')}</span>`).join('');
 
-  const errors = ui.formErrors?.length
-    ? `<div class="form-errors" role="alert">${ui.formErrors.map((e) => `<p>${esc(e)}</p>`).join('')}</div>`
+  // Só os erros que continuam valendo: corrigido o campo, a mensagem some no próximo desenho.
+  const current = ui.formErrors?.length ? validateBook(d, today) : [];
+  const shownErrors = (ui.formErrors || []).filter((e) => current.includes(e));
+  const errors = shownErrors.length
+    ? `<div class="form-errors" role="alert">${shownErrors.map((e) => `<p>${esc(e)}</p>`).join('')}</div>`
     : '';
 
   const showLookup = !isEdit && !ui.picked;

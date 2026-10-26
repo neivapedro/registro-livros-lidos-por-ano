@@ -1065,6 +1065,8 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
 .new-genre input { flex: 1; min-width: 0; width: auto; height: 48px; }
 .new-genre .chip-btn { min-height: 48px; flex-shrink: 0; }
 .new-genre .btn-text { flex-shrink: 0; padding: 0 6px; min-height: 48px; }
+/* Capa e "Limpar" da data alvo: alvo de toque de 44px, como o resto do formulário. */
+.form-lean .cover-edit .file-btn, .form-lean .cover-edit .btn-text, .form-lean .target-row .btn-text { min-height: 44px; }
 
 /* "Mais detalhes": botão com resumo do que está preenchido; abre com a altura animada. */
 .more { display: flex; flex-direction: column; border-top: 1px solid var(--line); }

@@ -1427,6 +1427,14 @@ document.addEventListener('change', (e) => {
   }
 });
 
+// Antes do salvar (fase de captura): gênero novo digitado sem tocar em OK também vale.
+document.addEventListener('submit', (e) => {
+  if (!e.target.closest('[data-submit="save-book"]') || !ui.draft) return;
+  const value = document.getElementById('new-genre')?.value.trim();
+  if (value) ui.draft.genre = value.slice(0, 60);
+  ui.newGenreOpen = false;
+}, true);
+
 // "Concluir" (?concluir=1): a tela abre já no status, datas e nota, uma vez por rascunho.
 let revealedDraft = null;
 function revealFinishFields() {
