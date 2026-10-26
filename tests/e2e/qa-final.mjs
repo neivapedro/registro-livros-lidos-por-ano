@@ -206,7 +206,7 @@ try {
   noErrors('concluir');
 
   step('etiquetas, série, trechos, próximas e meta de páginas');
-  await go('#/livro/duna');
+  await go('#/livro/duna/editar');
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Editar livro');
   await openMore(p);
@@ -264,7 +264,7 @@ try {
   await p.click('[data-action="clear-chart-filter"]');
 
   step('livro do ano com título longo e anotação (slide mais alto da retrospectiva)');
-  await go('#/livro/duna');
+  await go('#/livro/duna/editar');
   await onPage('livro');
   await p.fill('#f-title', 'Duna: edição especial de colecionador com ilustrações e notas do tradutor');
   await openMore(p);

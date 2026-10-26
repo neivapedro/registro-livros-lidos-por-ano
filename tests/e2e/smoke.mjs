@@ -353,8 +353,10 @@ try {
   assert.match(await page.textContent('.ring-center'), /11\s*de 13/);
 
   step('excluir e desfazer');
+  // Capa → ficha do livro → Editar (v1.4).
   await page.click('.grid-book >> nth=0');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
   await page.click('[data-action="delete-book"]');
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /10\s*de 13/);
@@ -381,7 +383,9 @@ try {
 
   step('capa pela foto');
   await page.click('.reading-link >> nth=0');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
+  await page.waitForSelector('#f-pages');
   await page.fill('#f-pages', '336');
   await page.setInputFiles('[data-cover-photo]', new URL('../../app/icons/icon-512.png', import.meta.url).pathname);
   await page.waitForFunction(() => document.querySelector('.cover-edit .cover-img')?.src.startsWith('data:image/jpeg'));
@@ -396,6 +400,14 @@ try {
   await page.click('.cover-viewer-close');
   assert.equal(await page.locator('.cover-viewer').count(), 0);
   await page.click('.btn-primary');
+  // Salvar volta para a ficha, já com a capa nova (tocar nela amplia).
+  await page.waitForSelector('.ficha-hero');
+  assert.match(await page.getAttribute('.ficha-cover .cover-img', 'src'), /^data:image\/jpeg/);
+  assert.match(await page.textContent('.ficha-progress'), /36%/);
+  await page.click('[data-action="zoom-book-cover"]');
+  await page.waitForSelector('.cover-viewer .cover-viewer-img');
+  await page.click('.cover-viewer-close');
+  await page.click('.ficha-back');
   await onPage('inicio');
   assert.match(await page.getAttribute('.reading .cover-img', 'src'), /^data:image\/jpeg/);
   assert.match(await page.textContent('.reading .rn-progress'), /pág\. 120 de 336/);
@@ -464,7 +476,8 @@ try {
   await page.goto(`${BASE}#/estante?aba=lido`);
   await page.waitForSelector('.book-row');
   await page.click('.book-row-link:has-text("Sapiens")');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
   await page.click('[data-action="reread"]');
   await onPage('inicio');
   assert.equal(await page.locator('.reading:has-text("Sapiens")').count(), 1);

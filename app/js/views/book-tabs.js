@@ -6,7 +6,9 @@ import { diarySummary, entriesNewestFirst, entryDate, entryParts } from '../diar
 import { UNITS } from '../journal.js';
 import { STATUS } from '../store.js';
 import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
-import { emptyState, esc, num, plural } from '../ui.js';
+import { dayLabel, formatMinutes, weekGroups } from '../reading-days.js';
+import { emptyState, esc, icon, num, plural } from '../ui.js';
+import { amountText, rhythmChart } from './rhythm.js';
 
 export const BOOK_TABS = ['dados', 'diario', 'trechos'];
 
@@ -125,12 +127,38 @@ function diaryTab(book, ui, today) {
       : `O diário se preenche sozinho: cada vez que você atualiza ${where} no cartão do Início, o dia fica registrado aqui.`;
     return `<section class="book-tab-panel" role="tabpanel">${emptyState('Nenhum dia registrado ainda', hint)}</section>`;
   }
-  const rows = entries.map((e) => (e.date === ui.diaryEdit ? diaryForm(book, e, today) : diaryRow(book, e, today))).join('');
+  const weeks = weekGroups(book).map((week, i) => diaryWeek(book, week, i, ui, today)).join('');
   return `
     <section class="book-tab-panel" role="tabpanel">
+      ${rhythmChart(book, today, { tall: true, hint: true })}
       ${diarySummaryTiles(book)}
       <p class="muted small">Registrado sozinho quando você atualiza ${where} no Início. Toque num dia para corrigir.</p>
-      <ol class="diary-list">${rows}</ol>
+      <div class="diary-weeks">${weeks}</div>
+    </section>`;
+}
+
+/**
+ * Uma semana do diário (segunda a domingo). A mais recente começa aberta; as outras,
+ * recolhidas. A semana do dia em correção fica sempre aberta.
+ */
+function diaryWeek(book, week, index, ui, today) {
+  const editing = week.entries.some((e) => e.date === ui.diaryEdit);
+  const chosen = ui.diaryWeeks?.[week.key];
+  const open = editing || (chosen ?? index === 0);
+  const summary = [
+    plural(week.days, 'dia', 'dias'),
+    week.amount ? amountText(week.amount, week.unit) : '',
+    week.minutes ? formatMinutes(week.minutes) : '',
+  ].filter(Boolean).join(' · ');
+  const id = `week-${week.key}`;
+  const rows = week.entries.map((e) => (e.date === ui.diaryEdit ? diaryForm(book, e, today) : diaryRow(book, e, today))).join('');
+  return `
+    <section class="diary-week${open ? ' is-open' : ''}">
+      <button type="button" class="diary-week-head" data-action="diary-week" data-week="${esc(week.key)}" aria-expanded="${open}" aria-controls="${id}">
+        <span class="diary-week-text"><span class="diary-week-title">Semana de ${esc(dayLabel(week.key, today))}</span><span class="diary-week-sum">${esc(summary)}</span></span>
+        ${icon('chevronDown', { size: 18, stroke: 2.2, cls: 'diary-week-chev' })}
+      </button>
+      <ol class="diary-list" id="${id}"${open ? '' : ' hidden'}>${rows}</ol>
     </section>`;
 }
 

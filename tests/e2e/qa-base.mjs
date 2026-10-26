@@ -237,10 +237,14 @@ await scenario('migração interrompida (cópia diferente): chave antiga fica e 
   assert.ok(await p.evaluate(() => localStorage.getItem('leituras:v1')), 'chave antiga mantida');
   assert.equal(await p.evaluate(async () => (await import('/js/db.js')).getItem('state')), null, 'cópia incompleta apagada');
   // Alteração vai para o localStorage.
+  // Capa → ficha do livro → Editar (v1.4); salvar volta para a ficha.
   await p.click('.grid-book >> nth=0');
-  await onPage(p, 'livro');
+  await p.waitForSelector('.ficha-hero');
+  await p.click('.ficha-top a:has-text("Editar")');
   await p.click('[data-action="set-rating"][data-value="2.5"]');
   await p.click('.btn-primary');
+  await p.waitForSelector('.ficha-hero');
+  await p.click('.ficha-back');
   await onPage(p, 'inicio');
   await p.waitForFunction(() => JSON.parse(localStorage.getItem('leituras:v1')).books.some((b) => b.rating === 2.5));
   await p.evaluate(() => localStorage.removeItem('qa:idb'));
@@ -503,7 +507,7 @@ await scenario('diário: lendo → lido pelo formulário com término no passado
     status: 'lendo', endDate: null, rating: null, pages: 200, currentPage: 50, startDate: '2026-10-01',
     journal: [{ date: '2026-10-05', from: 0, to: 50, unit: 'page', note: '' }],
   })]));
-  await p.goto(`${BASE}#/livro/j`);
+  await p.goto(`${BASE}#/livro/j/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="set-status"][data-value="lido"]');
   await p.fill('#f-end', '2026-10-10');
@@ -519,7 +523,7 @@ await scenario('diário: lendo → lido pelo formulário com término no passado
 await scenario('diário: "Quero ler" marcado direto como Lido não inventa um dia de leitura', async (ctx) => {
   const p = await newPage(ctx);
   await openWith(p, stateWith([book('q', { status: 'quero', startDate: null, endDate: null, rating: null, pages: 350 })]));
-  await p.goto(`${BASE}#/livro/q`);
+  await p.goto(`${BASE}#/livro/q/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="set-status"][data-value="lido"]');
   await p.fill('#f-start', '2026-09-01');
@@ -536,7 +540,7 @@ await scenario('diário: trocar o formato (físico → Kindle) não conta como l
     status: 'lendo', endDate: null, rating: null, pages: 300, currentPage: 100, startDate: '2026-10-01',
     journal: [{ date: '2026-10-10', from: 0, to: 100, unit: 'page', note: '' }],
   })]));
-  await p.goto(`${BASE}#/livro/f`);
+  await p.goto(`${BASE}#/livro/f/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="set-format"][data-value="kindle"]');
   await p.fill('#f-current', '33');
@@ -576,7 +580,7 @@ await scenario('diário: Kindle %, releitura e abandono', async (ctx) => {
   st = await waitState(p, (s) => s.books[0].status === 'lido');
   assert.deepEqual(st.books[0].journal, [{ date: '2026-10-16', from: 10, to: 100, unit: 'percent', note: '' }]);
   // Abandono com página nova.
-  await p.goto(`${BASE}#/livro/d`);
+  await p.goto(`${BASE}#/livro/d/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="set-status"][data-value="abandonado"]');
   await p.fill('#f-current', '60');
@@ -586,7 +590,7 @@ await scenario('diário: Kindle %, releitura e abandono', async (ctx) => {
   st = await waitState(p, (s) => s.books.find((b) => b.id === 'd').status === 'abandonado');
   assert.deepEqual(st.books.find((b) => b.id === 'd').journal, [{ date: '2026-10-16', from: 20, to: 60, unit: 'page', note: '' }]);
   // Releitura: diário novo vazio, o antigo continua no original.
-  await p.goto(`${BASE}#/livro/l`);
+  await p.goto(`${BASE}#/livro/l/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="reread"]');
   await onPage(p, 'inicio');
@@ -601,7 +605,7 @@ await scenario('diário: Kindle %, releitura e abandono', async (ctx) => {
 await scenario('meia estrela: 0,5, 4,5, apagar; filtro; resumo; backup v2 ida e volta', async (ctx) => {
   const p = await newPage(ctx);
   await openWith(p, stateWith([book('a', { rating: 4 }), book('b', { rating: 5 }), book('c', { rating: 3 })]));
-  await p.goto(`${BASE}#/livro/c`);
+  await p.goto(`${BASE}#/livro/c/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="set-rating"][data-value="0.5"]');
   assert.equal(await p.locator('.star-row .star-half').count(), 1);
@@ -687,7 +691,7 @@ await scenario('meia estrela: alvos de toque e tela de 320 px', async (ctx) => {
   await openWith(p, stateWith([book('a')]));
   for (const width of [320, 375, 390, 430]) {
     await p.setViewportSize({ width, height: 800 });
-    await p.goto(`${BASE}#/livro/a`);
+    await p.goto(`${BASE}#/livro/a/editar`);
     await onPage(p, 'livro');
     const overflow = await p.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     assert.ok(overflow <= 0, `${width}px: ${overflow}px sobrando`);
@@ -701,7 +705,7 @@ await scenario('meia estrela: alvos de toque e tela de 320 px', async (ctx) => {
   }
   await p.setViewportSize({ width: 390, height: 844 });
   // Teclado: Tab chega nas 10 metades, com nome acessível.
-  await p.goto(`${BASE}#/livro/a`);
+  await p.goto(`${BASE}#/livro/a/editar`);
   await onPage(p, 'livro');
   const names = await p.locator('.star-hit').evaluateAll((els) => els.map((e) => e.getAttribute('aria-label')));
   assert.deepEqual(names, ['0,5 estrela', '1 estrela', '1,5 estrela', '2 estrelas', '2,5 estrelas', '3 estrelas', '3,5 estrelas', '4 estrelas', '4,5 estrelas', '5 estrelas']);
@@ -845,7 +849,7 @@ await scenario('busca: com chave do Google consulta o Google; resultado parcial 
 await scenario('excluir e desfazer; app vazio; datas futuras', async (ctx) => {
   const p = await newPage(ctx);
   await openWith(p, stateWith([book('a'), book('b'), book('c')]));
-  await p.goto(`${BASE}#/livro/b`);
+  await p.goto(`${BASE}#/livro/b/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="delete-book"]');
   await onPage(p, 'inicio');
@@ -857,7 +861,7 @@ await scenario('excluir e desfazer; app vazio; datas futuras', async (ctx) => {
   await p.waitForSelector('.hero');
   assert.match(await p.textContent('.ring-center'), /3\s*de 12/);
   // Data futura.
-  await p.goto(`${BASE}#/livro/a`);
+  await p.goto(`${BASE}#/livro/a/editar`);
   await onPage(p, 'livro');
   await p.fill('#f-end', '2026-12-01');
   await p.click('.btn-primary');
@@ -868,7 +872,7 @@ await scenario('excluir e desfazer um livro da lista "Próximos"', async (ctx) =
   const p = await newPage(ctx);
   const want = (id) => book(id, { status: 'quero', startDate: null, endDate: null, rating: null });
   await openWith(p, stateWith([want('w1'), want('w2'), want('w3')], { upNext: ['w3', 'w2', 'w1'] }));
-  await p.goto(`${BASE}#/livro/w2`);
+  await p.goto(`${BASE}#/livro/w2/editar`);
   await onPage(p, 'livro');
   await p.click('[data-action="delete-book"]');
   await waitState(p, (s) => s.books.length === 2 && s.upNext.length === 2);
@@ -959,7 +963,7 @@ await scenario('backup com id malicioso não executa código', async (ctx) => {
   await onPage(p, 'ajustes');
   await p.setInputFiles('[data-import]', file);
   await waitState(p, (s) => s.books.length === 2);
-  for (const route of ['inicio', 'estante?aba=quero', 'estante?aba=lido', 'buscar', 'resumo/2026', 'resumo/todos', 'retro/2026', 'livro/k%22%3E%3Cb%3E']) {
+  for (const route of ['inicio', 'estante?aba=quero', 'estante?aba=lido', 'buscar', 'resumo/2026', 'resumo/todos', 'retro/2026', 'livro/k%22%3E%3Cb%3E', 'livro/k%22%3E%3Cb%3E/editar']) {
     await p.goto(`${BASE}#/${route}`);
     await p.waitForTimeout(100);
     assert.equal(await p.evaluate(() => window.__xss), undefined, `código executado em ${route}`);
@@ -980,7 +984,7 @@ await scenario('campos com letra >= 16 px (iPhone não dá zoom) nos editores', 
     .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).map((el) => el.outerHTML.slice(0, 80)));
   await p.click('[data-action="update-page"]');
   assert.deepEqual(await small(), [], 'editor de página');
-  await p.goto(`${BASE}#/livro/r`);
+  await p.goto(`${BASE}#/livro/r/editar`);
   await onPage(p, 'livro');
   await openMore(p);
   await p.selectOption('#f-genre', { label: '+ Novo gênero…' });

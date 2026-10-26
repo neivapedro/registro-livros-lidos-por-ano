@@ -26,6 +26,7 @@ import { esc, icon, largeCoverUrl } from './ui.js';
 import { allQuotesResults, allQuotesView } from './views/all-quotes.js';
 import { allTimeView } from './views/alltime.js';
 import { BOOK_TABS } from './views/book-tabs.js';
+import { bookDetailView, loadedHdCovers } from './views/book-detail.js';
 import { calendarUi, heatmapDayAt } from './views/calendar.js';
 import { compareYearsOf } from './views/charts.js';
 import { detailsHaveErrors, detailsSummary, formView, lookupResults, readingSummary } from './views/form.js';
@@ -98,6 +99,16 @@ function parseRoute() {
   return { name: parts[0] || 'inicio', params: parts.slice(1), query: new URLSearchParams(qs || ''), key: hash || 'inicio' };
 }
 
+/** #/livro/:id é a ficha; #/livro/:id/editar (ou os endereços antigos com ?concluir e ?aba) é a edição. */
+function isBookEdit(route) {
+  return route.name === 'livro' && (route.params[1] === 'editar' || route.query.has('concluir') || route.query.has('aba'));
+}
+
+/** O endereço anterior (sem '#/') é a ficha ou a edição de um livro? */
+function isBookKey(key) {
+  return Boolean(key) && key.split(/[/?]/)[0] === 'livro';
+}
+
 function go(href) {
   if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
   else location.hash = href;
@@ -116,11 +127,26 @@ function blankDraft(status) {
   };
 }
 
+/** Ficha do livro: o Voltar leva para onde a pessoa estava antes de abrir o livro. */
+function enterBookDetail(route, prev) {
+  const id = route.params[0];
+  // Vindo da edição (ou de outro livro, pela série), o Voltar continua apontando para a lista de origem.
+  if (prev && !isBookKey(prev) && !prev.startsWith('novo')) ui.detailBack = `#/${prev}`;
+  else if (!prev || !ui.detailBack) ui.detailBack = '#/inicio';
+  ui.detailId = id;
+  ui.draft = null;
+  ui.original = null;
+}
+
 function enterRoute(route) {
   const prev = previousKey;
   const prevName = prev ? prev.split(/[/?]/)[0] : null;
-  if (route.name === 'novo' || route.name === 'livro') {
-    ui.backHref = prev && !['novo', 'livro'].includes(prevName) ? `#/${prev}` : '#/inicio';
+  if (route.name === 'livro' && !isBookEdit(route)) enterBookDetail(route, prev);
+  if (route.name === 'novo' || isBookEdit(route)) {
+    // Edição: volta para a ficha do livro, a não ser que tenha vindo de outra tela
+    // (o Concluir do Início volta para o Início; um trecho da lista de Trechos, para a lista).
+    const detail = route.name === 'livro' ? `#/livro/${encodeURIComponent(route.params[0])}` : '#/inicio';
+    ui.backHref = prev && !['novo', 'livro'].includes(prevName) ? `#/${prev}` : detail;
     ui.formErrors = [];
     ui.newGenreOpen = false;
     if (route.name === 'novo') {
@@ -145,7 +171,7 @@ function enterRoute(route) {
       }
     }
   }
-  if (route.name === 'novo' || route.name === 'livro') enterBookNotes(route);
+  if (route.name === 'novo' || isBookEdit(route)) enterBookNotes(route);
   if (route.name === 'retro') ui.retroSlide = 0;
   if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
@@ -173,15 +199,17 @@ function render() {
       html = formView({ ...ctx, isEdit: false });
       showNav = false;
       break;
-    case 'livro':
-      if (!ui.draft) {
+    case 'livro': {
+      const book = isBookEdit(route) ? ui.draft : state.books.find((b) => b.id === route.params[0]);
+      if (!book) {
         toast('Livro não encontrado.');
         go('#/inicio');
         return;
       }
-      html = formView({ ...ctx, isEdit: true });
+      html = isBookEdit(route) ? formView({ ...ctx, isEdit: true }) : bookDetailView({ ...ctx, book });
       showNav = false;
       break;
+    }
     case 'estante':
       html = shelfView({ ...ctx, tab: ui.shelfTab });
       break;
@@ -567,7 +595,7 @@ function saveProgress(bookId, raw) {
     }
     ui.editingProgress = null;
     if (Math.round(value) === 100) {
-      go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+      go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
       return 100;
     }
     persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
@@ -581,7 +609,7 @@ function saveProgress(bookId, raw) {
   }
   ui.editingProgress = null;
   if (book.pages && value === book.pages) {
-    go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+    go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
     return value;
   }
   persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
@@ -601,6 +629,7 @@ function enterBookNotes(route) {
   ui.bookTab = route.name === 'livro' && BOOK_TABS.includes(tab) ? tab : 'dados';
   ui.diaryEdit = null;
   ui.quoteForm = null;
+  ui.diaryWeeks = {};
 }
 
 function currentBook() {
@@ -819,7 +848,8 @@ const actions = {
     if (index < 0) return;
     lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
-    go(ui.backHref);
+    // Vindo da ficha do livro excluído: volta para a lista de onde a ficha foi aberta.
+    go(ui.backHref.startsWith(`#/livro/${encodeURIComponent(ui.draft.id)}`) ? ui.detailBack || '#/inicio' : ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
   },
   'start-reading'(el) {
@@ -1345,7 +1375,13 @@ document.addEventListener('error', (e) => {
   if (e.target.classList?.contains('cover-img')) e.target.remove();
 }, true);
 
-window.addEventListener('hashchange', render);
+// Endereço já desenhado pela transição da capa (abaixo): o hashchange que chega depois não redesenha.
+let renderedByTransition = null;
+window.addEventListener('hashchange', () => {
+  const skip = renderedByTransition && renderedByTransition === location.hash;
+  renderedByTransition = null;
+  if (!skip) render();
+});
 
 // ---------- Formulário enxuto (v1.4): "Mais detalhes", gênero e "Concluir" ----------
 
@@ -1677,13 +1713,126 @@ initLongPress((el) => {
 });
 initSwipe();
 
+// ---------- Ficha do livro (v1.4) ----------
+// #/livro/:id mostra a ficha (views/book-detail.js); editar fica em #/livro/:id/editar.
+
+Object.assign(actions, {
+  'zoom-book-cover'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (book?.cover) openCoverViewer(book.cover, book.title || 'livro');
+  },
+  'detail-fav'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (!book) return;
+    persist(upsertBook(state, { ...book, favorite: !book.favorite }).state, book.favorite ? 'Tirado dos favoritos.' : 'Marcado como favorito do ano.');
+    render();
+  },
+  // Aba Diário: abre ou recolhe uma semana.
+  'diary-week'(el) {
+    const key = el.dataset.week;
+    ui.diaryWeeks = { ...ui.diaryWeeks, [key]: el.getAttribute('aria-expanded') !== 'true' };
+    render();
+  },
+});
+
+// Capa em alta resolução da ficha: aparece ao terminar de carregar (e não esmaece de novo).
+document.addEventListener('load', (e) => {
+  const img = e.target;
+  if (!img.classList?.contains('cover-hd')) return;
+  loadedHdCovers.add(img.getAttribute('src'));
+  img.classList.add('is-loaded');
+}, true);
+
+// Gráfico do ritmo: o toque mostra o dia (ou a semana) mais próximo, sem redesenhar a tela.
+document.addEventListener('click', (e) => {
+  const plot = e.target.closest?.('.rchart-plot');
+  if (!plot) return;
+  const bars = [...plot.querySelectorAll('.rchart-bar')];
+  if (!bars.length) return;
+  let best = null;
+  let dist = Infinity;
+  for (const bar of bars) {
+    const r = bar.getBoundingClientRect();
+    const d = Math.abs(r.left + r.width / 2 - e.clientX);
+    if (d < dist) {
+      dist = d;
+      best = bar;
+    }
+  }
+  const readout = plot.closest('[data-rchart]')?.querySelector('.rchart-readout');
+  const again = best.classList.contains('is-picked');
+  for (const bar of bars) bar.classList.remove('is-picked');
+  if (!again) best.classList.add('is-picked');
+  plot.classList.toggle('has-pick', !again);
+  if (readout) readout.textContent = again ? readout.dataset.default : best.dataset.tip;
+});
+
+/** Transição da capa ("voa" da lista para a ficha) só com suporte e sem "Reduzir movimento". */
+function canAnimateCover() {
+  return typeof document.startViewTransition === 'function'
+    && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Troca de tela com a capa como elemento compartilhado: a capa tocada (from) e a capa
+ * correspondente na tela nova (pickTarget) recebem o mesmo view-transition-name.
+ * O resto da tela só se funde, rápido. Sem suporte, é uma navegação normal.
+ */
+function navigateWithCover(href, from, pickTarget) {
+  from.style.viewTransitionName = 'book-cover';
+  const startHash = location.hash;
+  let target = null;
+  const transition = document.startViewTransition(() => {
+    from.style.viewTransitionName = '';
+    // Outra navegação chegou antes da troca (toque rápido em outra coisa): ela vale.
+    if (location.hash !== startHash) return;
+    renderedByTransition = href;
+    location.hash = href;
+    render();
+    target = pickTarget?.() || null;
+    if (target) target.style.viewTransitionName = 'book-cover';
+  });
+  transition.finished.finally(() => {
+    if (target) target.style.viewTransitionName = '';
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const link = e.target.closest?.('a[href^="#/"]');
+  if (!link || !canAnimateCover()) return;
+  const href = link.getAttribute('href');
+  // Abrir a ficha a partir de uma capa (Início, Estante, Buscar, Resumo...).
+  if (/^#\/livro\/[^/?]+$/.test(href)) {
+    const from = link.querySelector('.cover');
+    if (!from || href === location.hash) return;
+    e.preventDefault();
+    navigateWithCover(href, from);
+    return;
+  }
+  // Voltar da ficha: a capa volta para o lugar dela na lista, se estiver à vista.
+  if (link.classList.contains('ficha-back')) {
+    const from = root.querySelector('.ficha-cover .cover');
+    const id = ui.detailId;
+    if (!from || !id || href === location.hash) return;
+    e.preventDefault();
+    navigateWithCover(href, from, () => {
+      const cover = root.querySelector(`a[href="#/livro/${CSS.escape(encodeURIComponent(id))}"] .cover`);
+      if (!cover) return null;
+      const r = cover.getBoundingClientRect();
+      return r.bottom > 0 && r.top < window.innerHeight ? cover : null;
+    });
+  }
+});
+
 // ---------- Offline e atualizações ----------
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   let hadController = Boolean(navigator.serviceWorker.controller);
   // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
   const applyUpdate = () => {
-    const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
+    const route = parseRoute();
+    const busy = route.name === 'novo' || isBookEdit(route) || ui.editingProgress;
     if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
     else window.location.reload();
   };

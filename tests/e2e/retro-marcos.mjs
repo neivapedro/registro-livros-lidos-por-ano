@@ -295,7 +295,7 @@ try {
 
   step('editar um livro já lido não repete o aviso');
   await page.waitForFunction(() => !document.getElementById('toast').classList.contains('show'), null, { timeout: 8000 });
-  await page.goto(`${BASE}#/livro/r1`);
+  await page.goto(`${BASE}#/livro/r1/editar`);
   await onPage('livro');
   await page.click('.btn-primary');
   await onPage('inicio');
