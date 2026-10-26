@@ -114,6 +114,9 @@ test('próximos marcos: quanto falta', () => {
   const books = many(22, 100);
   const next = upcomingMilestones(books);
   assert.equal(next.find((m) => m.kind === 'books').detail, 'Faltam 3 livros para o 25º');
+  assert.equal(next.find((m) => m.kind === 'books').left, 3);
+  assert.equal(next.find((m) => m.kind === 'pages').left, 7800);
+  assert.equal(next.find((m) => m.id === 'big-book').left, null);
   assert.equal(next.find((m) => m.kind === 'pages').detail, 'Faltam 7.800 páginas para 10.000, contando os livros concluídos');
   assert.ok(next.some((m) => m.id === 'big-book'));
   assert.ok(next.some((m) => m.id === 'one-day'));

@@ -161,14 +161,21 @@ try {
   await shot('inicio');
   await noOverflow('início');
 
-  step('Resumo 2026: tile, meses, formato e calendário batem');
+  step('Resumo 2026: indicadores, meses, formato e calendário batem');
   await page.goto(`${BASE}#/resumo/2026`);
   await onPage('resumo');
-  assert.match(await text('.tiles-2 .tile >> nth=0'), /^6 \/ 6 livros lidos$/);
-  assert.match(await text('.tiles-2 .tile >> nth=1'), new RegExp(`^${fmt(P[2026])} páginas \\(4 com nº de págs\\.\\)$`));
-  assert.equal(await page.locator('rect.hm-future').count(), 74, 'dias depois de 18/10 marcados como futuros');
-  assert.match(await text('.split-legend-tap'), /Físico 4 livros · 1\.152 págs\. Kindle 2 livros · 416 págs\./);
+  const kpiNums = () => page.$$eval('.kpi-num', (els) => els.map((e) => e.textContent.trim()));
+  assert.equal((await kpiNums())[0], '6');
+  assert.equal(await text('.kpi >> nth=0 >> .kpi-of'), '/ 6');
+  assert.equal((await kpiNums())[1], fmt(P[2026]));
+  assert.equal(await text('.kpi-note'), '4 de 6 livros com nº de págs.');
   await shot('resumo-2026');
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
+  await page.waitForSelector('.fmt-card');
+  assert.match(await text('.split-legend-tap'), /Físico 67% 4 livros · 1\.152 págs\. Kindle 33% 2 livros · 416 págs\./);
+  await page.goto(`${BASE}#/resumo/2026?aba=ritmo`);
+  await page.waitForSelector('.calendar');
+  assert.equal(await page.locator('rect.hm-future').count(), 74, 'dias depois de 18/10 marcados como futuros');
   await page.click('[data-action="month-chart-mode"][data-mode="paginas"]');
   await page.waitForFunction(() => /Páginas por mês/.test(document.body.textContent));
   const months = await page.$$eval('.card:has(h2:text("Páginas por mês")) .bar-value', (els) => els.map((x) => Number(x.textContent.trim().replace('.', '')) || 0));
@@ -184,15 +191,20 @@ try {
   await noOverflow('resumo 2026');
 
   step('Resumo 2025 (livro que virou o ano) e ano sem livros');
-  await page.goto(`${BASE}#/resumo/2025`);
-  await onPage('resumo');
-  assert.match(await text('.tiles-2 .tile >> nth=1'), new RegExp(`^${P[2025]} páginas$`));
+  await page.goto(`${BASE}#/resumo/2025?aba=geral`);
+  await page.waitForSelector('.kpis');
+  assert.equal((await kpiNums())[1], String(P[2025]));
+  await page.goto(`${BASE}#/resumo/2025?aba=ritmo`);
+  await page.waitForSelector('.calendar');
   assert.equal(await page.locator('rect.hm-future').count(), 0);
-  await page.goto(`${BASE}#/resumo/2024`);
-  await onPage('resumo');
-  assert.match(await text('.tiles-2'), /^0 \/ 6 livros lidos — páginas/);
-  assert.equal(await page.locator('.bars-rating, .split-rows').count(), 0, 'sem gráficos num ano sem livros');
+  await page.goto(`${BASE}#/resumo/2024?aba=geral`);
+  await page.waitForSelector('.kpis');
+  assert.deepEqual(await kpiNums(), ['0', '—', '—', '—']);
+  assert.equal(await text('.kpi >> nth=0 >> .kpi-of'), '/ 6');
   assert.equal(await page.locator('a[href="#/retro/2024"]').count(), 0);
+  await page.goto(`${BASE}#/resumo/2024?aba=gostos`);
+  await page.waitForSelector('.rs-panel[data-tab="gostos"]');
+  assert.equal(await page.locator('.bars-rating, .fmt-bar').count(), 0, 'sem gráficos num ano sem livros');
   await page.goto(`${BASE}#/retro/2024`);
   await onPage('retro');
   assert.match(await text('.retro-stage'), /Nenhum livro concluído ainda\./);
@@ -200,10 +212,11 @@ try {
   step('Todos os anos: páginas e comparação');
   await page.goto(`${BASE}#/resumo/todos`);
   await page.waitForSelector('.milestones');
-  assert.match(await text('.tiles-2 .tile >> nth=1'), new RegExp(`^${fmt(P.all)} páginas$`));
+  assert.equal(await text('.kpi >> nth=1 >> .kpi-num'), fmt(P.all));
   const cmp = await page.$$eval('.cmp2-row:not(.cmp2-head)', (rows) => rows.map((r) => [...r.querySelectorAll('.cmp2-value')].map((v) => v.textContent.trim())));
   assert.deepEqual(cmp[1], [fmt(P[2026]), String(P[2025])]);
-  assert.match(await text('.milestones'), /Faltam 7\.940 páginas para 10\.000, contando os livros concluídos/);
+  await page.click('.medal-item.is-next:has-text("10.000 págs.")');
+  assert.match(await text('.medal-detail'), /Faltam 7\.940 páginas para 10\.000, contando os livros concluídos/);
   await shot('todos');
   await noOverflow('todos os anos');
 
@@ -240,7 +253,7 @@ try {
   }
 
   step('Buscar: filtro do gráfico + texto; limpar o chip mantém o texto');
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');
   await page.click('[data-action="chart-filter"][data-kind="rating"][data-value="5"]');
   await onPage('buscar');
@@ -295,7 +308,8 @@ try {
   await page.waitForFunction(() => document.getElementById('app').dataset.page !== 'livro');
   await page.goto(`${BASE}#/resumo/todos`);
   await page.waitForSelector('.milestones');
-  assert.match(await text('.milestones'), /10º livro Décimo livro/);
+  await page.click('.medal-item:has-text("10º livro")');
+  assert.match(await text('.medal-detail'), /10º livro Décimo livro/);
   assert.doesNotMatch(await text('.milestones'), /Importado/);
 
   assert.deepEqual(errors, []);

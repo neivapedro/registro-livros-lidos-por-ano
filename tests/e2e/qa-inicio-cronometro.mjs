@@ -144,7 +144,7 @@ try {
   assert.deepEqual(await smallInputs(), []);
   await page.click('[data-action="clear-filters"]');
   await page.waitForFunction(() => /Todos os 6 livros/.test(document.getElementById('search-results').textContent));
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await page.waitForSelector('.tag-count');
   const tagCounts = await page.$$eval('.tag-count', (els) => els.map((e) => e.textContent.trim()));
   assert.equal(tagCounts.filter((t) => /fantasia/i.test(t)).length, 1, `resumo: ${tagCounts}`);

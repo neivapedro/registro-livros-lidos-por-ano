@@ -235,8 +235,8 @@ try {
   const homeTiles = await p.$$eval('.tiles-3 .tile-value', (els) => els.map((e) => e.textContent.trim()));
   await p.click('#nav [data-nav="resumo"]');
   await onPage('resumo');
-  const kpis = await p.$$eval('.tiles-2 .tile-value', (els) => els.map((e) => e.textContent.trim()));
-  assert.deepEqual([kpis[0].split(' ')[0], ...kpis.slice(1)], [count, ...homeTiles]);
+  const kpis = await p.$$eval('.kpi-num', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(kpis, [count, ...homeTiles]);
   await go('#/estante?aba=lido');
   assert.match(await text('.year-head:has-text("2026")'), new RegExp(`^2026 ${count} livros$`));
   await go('#/resumo/todos');
@@ -250,7 +250,7 @@ try {
   noErrors('números');
 
   step('toque num gráfico abre a Buscar filtrada');
-  await go('#/resumo/2026');
+  await go('#/resumo/2026?aba=gostos');
   await p.click('.bars-rating [data-action="chart-filter"]');
   await onPage('buscar');
   assert.equal(await text('.filter-chip-text'), 'Filtro: nota 2 em 2026');

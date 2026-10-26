@@ -34,7 +34,9 @@ import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
 import { APP_VERSION, settingsView, storageLine } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
-import { summaryView } from './views/summary.js';
+import { SUMMARY_TABS, summaryView } from './views/summary.js';
+import { playIntro } from './views/kpi.js';
+import { curveMonthAt } from './views/scurve.js';
 import { addMinutes } from './journal.js';
 import {
   elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
@@ -141,6 +143,7 @@ function enterRoute(route) {
   if (route.name === 'retro') ui.retroSlide = 0;
   if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
+  if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
 
 function render() {
@@ -211,6 +214,7 @@ function render() {
   root.dataset.page = route.name;
   applyTints(root);
   revealFinishFields();
+  if (route.name === 'resumo') summaryIntro(route);
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;
@@ -947,6 +951,86 @@ Object.assign(actions, {
     persist(setPageGoal(state, Number(el.dataset.year), null), 'Meta de páginas removida.');
     render();
   },
+});
+
+// ---------- Resumo v1.4: abas, curva S, medalhas e movimento de entrada ----------
+// Estado só da tela: aba do resumo (lembrada na sessão), curva em livros ou páginas e mês tocado.
+Object.assign(ui, { summaryTab: 'geral', curve: 'livros', curveMonth: null });
+
+// Os números contam e a curva se desenha só na primeira vez que cada resumo aparece na sessão.
+const introSeen = new Set();
+function summaryIntro(route) {
+  const key = route.params[0] || String(ui.year);
+  if (introSeen.has(key) || !root.querySelector('.kpi-num, .sc-svg')) return;
+  introSeen.add(key);
+  playIntro(root);
+}
+
+function showSummaryTab(tab, year) {
+  if (!SUMMARY_TABS.includes(tab)) return;
+  ui.summaryTab = tab;
+  // Link direto (#/resumo/2026?aba=ritmo) sem virar uma nova página: não rola para o topo.
+  history.replaceState(null, '', `#/resumo/${year}${tab === 'geral' ? '' : `?aba=${tab}`}`);
+  currentKey = parseRoute().key;
+  render();
+  // Trocar de aba lá embaixo: volta para o começo do painel, logo abaixo das abas fixas.
+  const panel = document.getElementById('rs-panel');
+  const tabs = document.querySelector('.rs-tabs');
+  if (panel && tabs) {
+    const target = panel.getBoundingClientRect().top + window.scrollY - tabs.offsetHeight - 12;
+    if (window.scrollY > target) window.scrollTo(0, target);
+  }
+}
+
+Object.assign(actions, {
+  'summary-tab'(el) { showSummaryTab(el.dataset.tab, el.dataset.year); },
+  'curve-mode'(el) {
+    ui.curve = el.dataset.mode;
+    ui.curveMonth = null;
+    render();
+  },
+  // Medalha: o detalhe aparece embaixo da fileira, sem redesenhar (a rolagem lateral fica onde está).
+  medal(el) {
+    const section = el.closest('.milestones');
+    const panel = section?.querySelector('[data-medal-detail]');
+    if (!panel) return;
+    const on = el.getAttribute('aria-pressed') === 'true';
+    panel.dataset.hint = panel.dataset.hint || panel.textContent;
+    for (const b of section.querySelectorAll('.medal-item')) b.setAttribute('aria-pressed', 'false');
+    if (on) {
+      panel.textContent = panel.dataset.hint;
+      panel.classList.remove('is-on');
+      return;
+    }
+    el.setAttribute('aria-pressed', 'true');
+    const { title, detail, book } = el.dataset;
+    panel.innerHTML = `<span class="strong-ish">${esc(title)}</span> <span>${esc(detail)}</span>${book ? ` <a href="#/livro/${encodeURIComponent(book)}">Ver livro</a>` : ''}`;
+    panel.classList.add('is-on');
+  },
+});
+
+// Curva S: o toque vale para o mês sob o dedo (o gráfico inteiro é a área de toque).
+document.addEventListener('click', (e) => {
+  const svg = e.target.closest?.('[data-curve]');
+  if (!svg) return;
+  const month = curveMonthAt(svg, e.clientX);
+  if (month === null) return;
+  const year = Number(svg.dataset.year);
+  const same = ui.curveMonth?.year === year && ui.curveMonth.month === month;
+  ui.curveMonth = same ? null : { year, month };
+  render();
+});
+
+// Abas com as setas do teclado (padrão de abas acessíveis).
+document.addEventListener('keydown', (e) => {
+  const tab = e.target.closest?.('.rs-tab');
+  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const i = SUMMARY_TABS.indexOf(tab.dataset.tab);
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? SUMMARY_TABS.length - 1
+    : (i + (e.key === 'ArrowRight' ? 1 : -1) + SUMMARY_TABS.length) % SUMMARY_TABS.length;
+  showSummaryTab(SUMMARY_TABS[next], tab.dataset.year);
+  document.getElementById(`rs-tab-${SUMMARY_TABS[next]}`)?.focus();
 });
 
 // Mapa do ano: o toque vale para o quadradinho mais próximo (são pequenos no celular).

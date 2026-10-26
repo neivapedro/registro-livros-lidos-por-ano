@@ -1,27 +1,69 @@
-import { daysInclusive, monthInitial, monthName, monthOf, yearOf } from '../dates.js';
+// Resumo do ano (v1.4): três abas — Visão geral (indicadores + curva S), Ritmo e Gostos.
+
+import { daysInclusive, formatShort, monthInitial, monthName, monthOf, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
 import { droppedInYear, goalStreak, monthsMetInYear, yearStats, yearsWithData } from '../stats.js';
 import { topTagsInYear } from '../tags.js';
+import { dailyPages, kpiDelta, kpiSeries, previousYearBaseline, repeatedAuthors } from '../trend.js';
 import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
 import { calendarSection } from './calendar.js';
 import { formatCard, lengthChart, monthChartToggle, pagesMonthChart, pagesMonthLegend, ratingChart } from './charts.js';
 import { yearSelect } from './home.js';
+import { deltaLine, kpiTile, sparkline } from './kpi.js';
+import { sCurveCard } from './scurve.js';
 
-function kpis(s) {
+export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
+const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
+
+function tabs(active, year) {
+  const html = SUMMARY_TABS.map((t) => `
+    <button type="button" role="tab" id="rs-tab-${t}" class="rs-tab${t === active ? ' is-on' : ''}" aria-selected="${t === active}"
+      aria-controls="rs-panel" tabindex="${t === active ? 0 : -1}" data-action="summary-tab" data-tab="${t}" data-value="${t}" data-year="${year}">${TAB_LABELS[t]}</button>`).join('');
+  return `<div class="rs-tabs" role="tablist" aria-label="Seções do resumo">${html}</div>`;
+}
+
+// ---------- Visão geral ----------
+
+function kpis(state, s, year, today) {
+  const base = previousYearBaseline(state.books, year, today);
+  const series = kpiSeries(state.books, year, today);
+  const since = base ? `${base.year}${base.until ? ` até ${formatShort(base.until)}` : ''}` : '';
+  const d = (cur, prev, opts, text, long) => {
+    const delta = base ? kpiDelta(cur, prev, opts) : null;
+    return delta ? deltaLine(delta, text(delta), long(delta)) : '';
+  };
+  const abs = (n) => Math.abs(n);
+  const same = (delta, word) => (delta.dir === 'same' ? `igual a ${since}` : word);
+  const booksDelta = d(s.count, base?.count, {},
+    (x) => (x.dir === 'same' ? 'igual' : plural(abs(x.diff), 'livro', 'livros')),
+    (x) => same(x, `${plural(abs(x.diff), 'livro', 'livros')} a ${x.dir === 'up' ? 'mais' : 'menos'} que ${since}`));
+  const pagesDelta = base?.pages
+    ? d(s.pages, base.pages, {},
+      (x) => (x.dir === 'same' ? 'igual' : `${abs(x.pct)}%`),
+      (x) => same(x, `${abs(x.pct)}% ${x.dir === 'up' ? 'a mais' : 'a menos'} que ${since}`))
+    : '';
+  const ratingDelta = d(s.avgRating, base?.avgRating, { digits: 1 },
+    (x) => (x.dir === 'same' ? 'igual' : decimal(abs(x.diff))),
+    (x) => same(x, `${decimal(abs(x.diff))} ${x.dir === 'up' ? 'acima' : 'abaixo'} de ${since}`));
+  const daysDelta = d(s.avgDays, base?.avgDays, { lowerIsBetter: true },
+    (x) => (x.dir === 'same' ? 'igual' : plural(abs(x.diff), 'dia', 'dias')),
+    (x) => same(x, `${plural(abs(x.diff), 'dia', 'dias')} a ${x.dir === 'up' ? 'mais' : 'menos'} por livro que ${since}`));
+  const hasDelta = [booksDelta, pagesDelta, ratingDelta, daysDelta].some(Boolean);
   return `
-    <section class="tiles tiles-2">
-      <div class="tile"><span class="tile-value big">${s.count}<span class="tile-of"> / ${s.goal}</span></span><span class="tile-label">livros lidos</span></div>
-      <div class="tile"><span class="tile-value big">${s.pages ? num(s.pages) : '—'}</span><span class="tile-label">páginas${s.pagesKnown < s.count ? ` (${s.pagesKnown} com nº de págs.)` : ''}</span></div>
-      <div class="tile"><span class="tile-value big">${s.avgRating ? decimal(s.avgRating) : '—'}</span><span class="tile-label">nota média</span></div>
-      <div class="tile"><span class="tile-value big">${s.avgDays ? Math.round(s.avgDays) : '—'}</span><span class="tile-label">dias por livro</span></div>
-    </section>`;
+    <section class="kpis" aria-label="Indicadores de ${year}">
+      ${kpiTile({ label: 'Livros lidos', value: s.count, of: `/ ${s.goal}`, delta: booksDelta, spark: sparkline(series.count), cls: 'is-lead' })}
+      ${kpiTile({ label: 'Páginas', value: s.pages || null, delta: pagesDelta, spark: sparkline(series.pages), note: s.pagesKnown < s.count ? `${s.pagesKnown} de ${s.count} livros com nº de págs.` : '' })}
+      ${kpiTile({ label: 'Nota média', value: s.avgRating, digits: 1, delta: ratingDelta, spark: sparkline(series.avgRating) })}
+      ${kpiTile({ label: 'Dias por livro', value: s.avgDays === null ? null : Math.round(s.avgDays), delta: daysDelta, spark: sparkline(series.avgDays) })}
+    </section>
+    ${hasDelta ? `<p class="kpi-caption">Comparado a ${esc(since)}</p>` : ''}`;
 }
 
 function favoriteCard(s) {
   const b = s.favorite;
   if (!b) {
     return s.count
-      ? '<section class="card soft"><p class="muted small">Marque um livro como <strong>favorito do ano</strong> ao editá-lo para ele aparecer aqui.</p></section>'
+      ? '<p class="rs-hint muted small">Marque um livro como <strong>favorito do ano</strong> ao editá-lo para ele aparecer aqui.</p>'
       : '';
   }
   const days = b.startDate && b.startDate <= b.endDate ? ` · lido em ${plural(daysInclusive(b.startDate, b.endDate), 'dia', 'dias')}` : '';
@@ -36,6 +78,16 @@ function favoriteCard(s) {
       </span>
     </a>`;
 }
+
+function overview({ state, ui, year, today, s }) {
+  return `
+    ${kpis(state, s, year, today)}
+    ${sCurveCard({ state, ui, year, today, goal: s.goal })}
+    ${favoriteCard(s)}
+    ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
+}
+
+// ---------- Ritmo ----------
 
 function monthChart(s, today) {
   const isCurrent = s.year === yearOf(today);
@@ -77,6 +129,47 @@ function streakLine(s, streak, today) {
     </div>`;
 }
 
+function monthsCard({ state, ui, s, today, year, streak }) {
+  const pages = ui?.monthChart === 'paginas';
+  return `
+    <section class="card">
+      <div class="section-head">
+        <h2>${pages ? 'Páginas por mês' : 'Livros por mês'}</h2>
+        ${pages ? pagesMonthLegend(state, year) : '<span class="legend-target muted small"><span class="dash"></span>meta</span>'}
+      </div>
+      ${monthChartToggle(ui || {}, year)}
+      ${pages ? pagesMonthChart(state, s, today) : monthChart(s, today)}
+      ${streakLine(s, streak, today)}
+    </section>`;
+}
+
+/** Páginas por dia: no ano (por dia corrido), por dia com leitura e o melhor dia. */
+function pagesPerDayCard(state, s, year) {
+  if (!s.pages) return '';
+  const d = dailyPages(state.books, year);
+  const cell = (value, label, sub = '') => `
+    <div class="ppd-cell"><span class="ppd-value">${value}</span><span class="ppd-label">${label}</span>${sub ? `<span class="ppd-sub">${sub}</span>` : ''}</div>`;
+  return `
+    <section class="card">
+      <h2>Páginas por dia</h2>
+      <div class="ppd">
+        ${cell(num(s.pagesPerDay), 'média no ano')}
+        ${d.days ? cell(num(d.perReadingDay), 'por dia de leitura') : ''}
+        ${d.best ? cell(num(d.best.pages), 'melhor dia', formatShort(d.best.date)) : ''}
+      </div>
+    </section>`;
+}
+
+function rhythm({ state, ui, year, today, s }) {
+  const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
+  return `
+    ${calendarSection({ state, ui: ui || {}, year, today })}
+    ${monthsCard({ state, ui, s, today, year, streak })}
+    ${pagesPerDayCard(state, s, year)}`;
+}
+
+// ---------- Gostos ----------
+
 function genreBars(s) {
   if (!s.genres.length) return '';
   const max = s.genres[0].count;
@@ -88,28 +181,14 @@ function genreBars(s) {
   return `<section class="card"><h2>Gêneros mais lidos</h2><div class="hbar-list">${rows}</div></section>`;
 }
 
+/** Autores: só quem tem mais de um livro no ano; se ninguém repete, uma linha discreta. */
 function authorRank(s) {
   if (!s.authors.length) return '';
-  const rows = s.authors.slice(0, 5).map((a, i) => `
+  const list = repeatedAuthors(s.authors);
+  if (!list.length) return `<p class="rs-hint muted small">Nenhum autor repetido em ${s.year}: ${plural(s.authors.length, 'autor diferente', 'autores diferentes')}.</p>`;
+  const rows = list.slice(0, 5).map((a, i) => `
     <div class="rank-row"><span class="rank-n${i === 0 ? ' is-top' : ''}">${i + 1}</span><span class="rank-name">${esc(a.label)}</span><span class="muted small">${plural(a.count, 'livro', 'livros')}</span></div>`).join('');
   return `<section class="card"><h2>Autores mais lidos</h2>${rows}</section>`;
-}
-
-function yearCompare(state, today, selectedYear) {
-  const years = yearsWithData(state.books, yearOf(today)).slice(0, 6);
-  const rows = years.map((y) => ({ y, s: yearStats(state.books, y, getGoal(state, y), today) }));
-  const max = Math.max(...rows.map((r) => Math.max(r.s.count, r.s.goal)), 1);
-  const html = rows.map(({ y, s }) => `
-    <div class="cmp-row${y === selectedYear ? ' is-sel' : ''}">
-      <span class="cmp-year">${y}</span>
-      <div class="cmp-track">
-        <div class="cmp-fill" style="width:${(s.count / max) * 100}%"></div>
-        <span class="cmp-goal" style="left:${(s.goal / max) * 100}%" title="Meta ${s.goal}"></span>
-      </div>
-      <span class="cmp-count">${s.count}</span>
-    </div>`).join('');
-  const note = years.length < 2 ? 'O comparativo cresce a cada ano registrado.' : 'A marca branca é a meta de cada ano.';
-  return `<section class="card"><div class="section-head"><h2>Comparativo entre anos</h2></div>${html}<p class="muted small">${note}</p></section>`;
 }
 
 function droppedCard(state, year) {
@@ -131,10 +210,19 @@ function tagsCard(state, year) {
   return `<section class="card"><h2>Etiquetas mais usadas</h2><div class="chips-wrap" aria-label="Etiquetas e quantidade de livros">${chips}</div></section>`;
 }
 
+function tastes({ state, year, s }) {
+  const body = [genreBars(s), ratingChart(s), lengthChart(s), formatCard(state, s), authorRank(s), tagsCard(state, year), droppedCard(state, year)].join('');
+  return body.trim() || `<p class="rs-hint muted small">Os gostos de ${year} aparecem quando houver livros lidos no ano.</p>`;
+}
+
+// ---------- Página ----------
+
 export function summaryView({ state, ui, year, today }) {
   const currentYear = yearOf(today);
   const s = yearStats(state.books, year, getGoal(state, year), today);
-  const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
+  const tab = SUMMARY_TABS.includes(ui?.summaryTab) ? ui.summaryTab : 'geral';
+  const ctx = { state, ui: ui || {}, year, today, s };
+  const panel = tab === 'ritmo' ? rhythm(ctx) : tab === 'gostos' ? tastes(ctx) : overview(ctx);
   return `
     <header class="top">
       <a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>
@@ -144,24 +232,8 @@ export function summaryView({ state, ui, year, today }) {
       <span class="eyebrow">Resumo do ano</span>
       <h1 class="display">Seu ${year} ${year === currentYear ? '<em>até agora</em>' : '<em>em livros</em>'}</h1>
     </div>
-    ${kpis(s)}
-    ${favoriteCard(s)}
-    <section class="card">
-      ${ui?.monthChart === 'paginas'
-    ? `<div class="section-head"><h2>Páginas por mês</h2>${pagesMonthLegend(state, year)}</div>`
-    : '<div class="section-head"><h2>Livros por mês</h2><span class="legend-target muted small"><span class="dash"></span>meta</span></div>'}
-      ${monthChartToggle(ui || {}, year)}
-      ${ui?.monthChart === 'paginas' ? pagesMonthChart(state, s, today) : monthChart(s, today)}
-      ${streakLine(s, streak, today)}
-    </section>
-    ${calendarSection({ state, ui: ui || {}, year, today })}
-    ${formatCard(state, s)}
-    ${ratingChart(s)}
-    ${lengthChart(s)}
-    ${genreBars(s)}
-    ${authorRank(s)}
-    ${droppedCard(state, year)}
-    ${tagsCard(state, year)}
-    ${yearCompare(state, today, year)}
-    ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
+    ${tabs(tab, year)}
+    <div class="rs-panel" id="rs-panel" role="tabpanel" aria-labelledby="rs-tab-${tab}" data-tab="${tab}">
+      ${panel}
+    </div>`;
 }
