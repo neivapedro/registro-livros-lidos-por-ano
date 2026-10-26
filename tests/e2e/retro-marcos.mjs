@@ -282,7 +282,9 @@ try {
   step('concluir pelo cartão: aviso de marco');
   await page.goto(`${BASE}#/inicio`);
   await page.waitForSelector('.reading');
-  await page.click('.reading .btn-outline');
+  // Concluir fica no menu rápido do cartão ("Mais ações" ou tocar e segurar).
+  await page.click('.reading [data-action="quick-menu"]');
+  await page.click('.sheet-layer.is-open a:has-text("Concluir")');
   await onPage('livro');
   await page.click('.btn-primary');
   await onPage('inicio');

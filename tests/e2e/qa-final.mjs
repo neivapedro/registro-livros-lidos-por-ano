@@ -86,14 +86,20 @@ async function updateCard(title, value, re) {
 }
 /** Seletores cujo texto escolhido não cabe (o iPhone corta com "…"). */
 function cutSelects() {
-  return p.evaluate(() => [...document.querySelectorAll('#app select')].filter((el) => el.offsetParent).flatMap((el) => {
+  // Seletor invisível por cima de um chip (Buscar): quem aparece é o texto do chip, conferido à parte.
+  return p.evaluate(() => [...document.querySelectorAll('#app select')].filter((el) => el.offsetParent && getComputedStyle(el).opacity !== '0').flatMap((el) => {
     const cs = getComputedStyle(el);
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     const label = el.selectedOptions[0]?.text || '';
     const avail = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     return ctx.measureText(label).width > avail + 0.5 ? [`${el.dataset.change || el.dataset.filter}: "${label}"`] : [];
-  }));
+  }).concat([...document.querySelectorAll('#app .fchip-text')].filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => `chip: "${el.textContent}"`)));
+}
+/** Ação do menu rápido de um livro (botão "Mais ações" da linha ou do cartão). */
+async function fromMenu(scope, action) {
+  await p.click(`${scope} [data-action="quick-menu"]`);
+  await p.click(`.sheet-layer.is-open [data-action="${action}"], .sheet-layer.is-open a:has-text("${action}")`);
 }
 /** Palavras que não cabem na linha (quebram no meio) dentro dos elementos indicados. */
 function brokenWords(selector) {
@@ -164,7 +170,7 @@ try {
     if (pg) await updateCard('1984', pg, /Página atualizada/);
     if (pct) await updateCard('Poder do Hábito', pct, /Progresso atualizado/);
   }
-  assert.match(await text('.reading:has-text("1984") .pace-line'), /^Ritmo: \d+ págs\.\/dia · termina por volta de \d+ out$/);
+  assert.match(await text('.reading:has-text("1984") .rn-progress'), /^pág\. 340 de \d+ · termina ~\d+ out$/);
   noErrors('cartão');
 
   step('cronômetro: 25 minutos no 1984');
@@ -180,7 +186,7 @@ try {
 
   step('Concluir: título da tela, meia estrela, gênero novo e o aviso do marco');
   await day('2026-10-07', '22:40');
-  await p.click('.reading:has-text("1984") a.btn-outline');
+  await fromMenu('.reading:has-text("1984")', 'Concluir');
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Concluir leitura');
   await p.click('.star-slot:nth-child(5) .star-hit.left');
@@ -217,7 +223,7 @@ try {
   await p.click('.quote-form button[type="submit"]');
   await waitToast(/Trecho salvo/);
   await go('#/estante?aba=quero');
-  for (const t of ['Cem Anos', 'Mindset', 'Karamázov']) await p.click(`.book-row:has-text("${t}") [data-action="toggle-next"]`);
+  for (const t of ['Cem Anos', 'Mindset', 'Karamázov']) await fromMenu(`.book-row:has-text("${t}")`, 'toggle-next');
   await p.click('.book-row:has-text("Karamázov") [data-action="move-next"][data-delta="-1"]');
   await p.click('.book-row:has-text("Karamázov") [data-action="move-next"][data-delta="-1"]');
   assert.deepEqual((await readState()).upNext, ['karamazov', 'cem-anos', 'mindset']);
@@ -232,7 +238,7 @@ try {
   await go('#/inicio');
   await onPage('inicio');
   const count = await text('.ring-count');
-  const homeTiles = await p.$$eval('.tiles-3 .tile-value', (els) => els.map((e) => e.textContent.trim()));
+  const homeTiles = await p.$$eval('.bento .tile:not(.hero) .tile-value', (els) => els.map((e) => e.textContent.trim()));
   await p.click('#nav [data-nav="resumo"]');
   await onPage('resumo');
   const kpis = await p.$$eval('.kpi-num', (els) => els.map((e) => e.textContent.trim()));

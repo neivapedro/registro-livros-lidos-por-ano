@@ -105,6 +105,8 @@ const fmt = (n) => n.toLocaleString('pt-BR');
 const browser = await playwright.chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR',
+  // Sem a animação de abertura do Início (os números contariam a partir de 0).
+  reducedMotion: 'reduce',
 });
 const page = await context.newPage();
 await page.clock.setFixedTime(new Date('2026-10-16T12:00:00'));
@@ -138,8 +140,8 @@ async function checkNarrow(label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok(overflow <= 0, `${label}: ${overflow}px sobrando à direita em 320px`);
   const wide = await page.evaluate(() => [...document.querySelectorAll('#app *')]
-    // As medalhas deslizam dentro da própria fileira (overflow-x), não na página.
-    .filter((el) => !el.closest('.medals') && el.getBoundingClientRect().right > window.innerWidth + 0.5 && getComputedStyle(el).visibility !== 'hidden')
+    // Medalhas e chips da Buscar deslizam dentro da própria fileira (overflow-x), não na página.
+    .filter((el) => !el.closest('.medals') && !el.closest('.fchips') && el.getBoundingClientRect().right > window.innerWidth + 0.5 && getComputedStyle(el).visibility !== 'hidden')
     .map((el) => el.className?.baseVal ?? el.className).slice(0, 5));
   assert.deepEqual(wide, [], `${label}: elementos passando da tela em 320px`);
   const small = await page.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
@@ -163,7 +165,7 @@ try {
   await writeState(seed);
   await page.reload();
   await page.waitForSelector('.hero');
-  assert.match(await page.textContent('.tiles-3 .tile >> nth=0'), new RegExp(`${fmt(PAGES_2026).replace('.', '\\.')}\\s*páginas`));
+  assert.match(await page.textContent('.bento-pages'), new RegExp(`${fmt(PAGES_2026).replace('.', '\\.')}\\s*páginas`));
   assert.equal(await page.locator('.hero-pages').count(), 0, 'sem meta de páginas, sem linha extra');
 
   step('resumo: indicador de páginas (Visão geral) e mapa do ano (Ritmo)');
@@ -303,8 +305,9 @@ try {
   await page.goto(`${BASE}#/inicio`);
   await page.waitForSelector('.hero-pages');
   const projection = Math.round((PAGES_2026 / 289) * 365 / 100) * 100;
-  assert.equal((await page.textContent('.hero-pages-text')).trim(), `${fmt(PAGES_2026)} de 6.000 págs. · no ritmo de ~${fmt(projection)}`);
-  assert.doesNotMatch(await page.textContent('.hero'), /atrasad/i);
+  assert.equal(await page.getAttribute('.hero-pages-track', 'aria-label'), `${fmt(PAGES_2026)} de 6.000 págs. · no ritmo de ~${fmt(projection)}`);
+  assert.match(await page.textContent('.bento-pages'), new RegExp(`de 6\\.000 págs\\.\\s*ritmo de ~${fmt(projection).replace('.', '\\.')}`));
+  assert.doesNotMatch(await page.textContent('.bento'), /atrasad/i);
   await shot('inicio-meta-paginas');
   await checkNarrow('início com meta de páginas');
   // Gráfico mensal em páginas ganha a linha da meta mensal.

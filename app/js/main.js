@@ -43,6 +43,12 @@ import {
   sessionMinutes, sessionSummary, startSession, wholeMinutes,
 } from './timer.js';
 import { timerView } from './views/timer.js';
+import { closeSheet, openSheet } from './sheet.js';
+import { initLongPress } from './longpress.js';
+import { closeSwipe, initSwipe } from './swipe.js';
+import { introMotion } from './motion.js';
+import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
+import { finishHref } from './ui.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -151,6 +157,7 @@ function render() {
   const route = parseRoute();
   if (route.key !== currentKey) {
     ui.editingProgress = null;
+    closeSheet({ immediate: true, keepFocus: true });
     closeCoverViewer();
     previousKey = currentKey;
     currentKey = route.key;
@@ -215,6 +222,11 @@ function render() {
   applyTints(root);
   revealFinishFields();
   if (route.name === 'resumo') summaryIntro(route);
+  // Primeira vez no Início nesta sessão: o anel enche e os números contam.
+  if (route.name === 'inicio' && !introShown) {
+    introShown = true;
+    introMotion(root);
+  }
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;
@@ -560,6 +572,7 @@ function saveProgress(bookId, raw) {
     }
     persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
     render();
+    closeSheet();
     return Math.round(value);
   }
   if (!Number.isInteger(value) || value < 0 || (book.pages && value > book.pages)) {
@@ -573,6 +586,7 @@ function saveProgress(bookId, raw) {
   }
   persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
   render();
+  closeSheet();
   return value;
 }
 
@@ -760,15 +774,10 @@ const actions = {
     go('#/inicio');
   },
   'update-page'(el) {
-    ui.editingProgress = el.dataset.id;
-    render();
-    const input = document.getElementById('progress-input');
-    input?.focus();
-    input?.select();
+    openProgressSheet(el.dataset.id, el);
   },
   'cancel-progress'() {
-    ui.editingProgress = null;
-    render();
+    closeSheet();
   },
   'undo-delete'() {
     if (!lastDeleted) return;
@@ -1568,6 +1577,105 @@ document.addEventListener('visibilitychange', () => {
 });
 window.addEventListener('pagehide', saveRescue);
 syncTicker();
+
+// ---------- v1.4: folhas (Registrar leitura e menu rápido), gestos e modo da Estante ----------
+// "Registrar leitura" abre uma folha que sobe de baixo; o Salvar passa pelo mesmo saveProgress
+// de antes (diário, Kindle em %, fim do livro → Concluir, mensagens de validação).
+
+let introShown = false;
+const SHELF_MODE_KEY = 'leituras:estante-modo';
+
+function readShelfMode() {
+  try {
+    return sessionStorage.getItem(SHELF_MODE_KEY) === 'capas' ? 'capas' : 'lista';
+  } catch {
+    return 'lista';
+  }
+}
+ui.shelfMode = readShelfMode();
+
+function openProgressSheet(id, opener) {
+  const book = state.books.find((b) => b.id === id && b.status === STATUS.READING);
+  if (!book) return;
+  ui.editingProgress = id;
+  openSheet({
+    id: 'progress',
+    cls: 'sheet-progress',
+    label: esc(`Registrar leitura: ${book.title}`),
+    html: progressSheet(book, todayIso()),
+    focus: '#progress-input',
+    opener,
+    onClose: () => {
+      if (ui.editingProgress === id) ui.editingProgress = null;
+    },
+  });
+}
+
+function openQuickMenu(id, opener) {
+  const book = state.books.find((b) => b.id === id);
+  if (!book) return;
+  openSheet({ id: 'menu', cls: 'sheet-menu', label: esc(`Ações: ${book.title}`), html: quickMenu(book, state), opener });
+}
+
+/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. */
+function syncProgressRange(form, fromRange) {
+  const range = form.querySelector('#progress-range');
+  const input = form.querySelector('#progress-input');
+  if (!range || !input) return;
+  if (fromRange) {
+    input.value = range.value;
+  } else {
+    const v = Number(String(input.value).replace(',', '.'));
+    if (input.value !== '' && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
+  }
+  range.style.setProperty('--fill', `${((Number(range.value) / Number(range.max)) * 100).toFixed(1)}%`);
+}
+
+Object.assign(actions, {
+  'quick-menu'(el) { openQuickMenu(el.dataset.id, el); },
+  'progress-add'(el) {
+    const form = el.closest('[data-progress-form]');
+    const book = state.books.find((b) => b.id === form?.dataset.id);
+    const input = form?.querySelector('#progress-input');
+    if (!book || !input) return;
+    const total = progressTotal(book);
+    const typed = Number(String(input.value).trim().replace(',', '.'));
+    const saved = Number(book.format === FORMATS.KINDLE ? book.currentPercent : book.currentPage) || 0;
+    let next = (input.value.trim() !== '' && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
+    if (total) next = Math.min(total, next);
+    input.value = String(Math.max(0, Math.round(next)));
+    syncProgressRange(form, false);
+  },
+  'progress-finish'(el) {
+    closeSheet({ immediate: true, keepFocus: true });
+    go(finishHref(el.dataset.id));
+  },
+  'shelf-mode'(el) {
+    ui.shelfMode = el.dataset.value === 'capas' ? 'capas' : 'lista';
+    try {
+      sessionStorage.setItem(SHELF_MODE_KEY, ui.shelfMode);
+    } catch {
+      // Sem sessionStorage (modo privado): vale só até sair da tela.
+    }
+    render();
+  },
+  'clear-filter'(el) {
+    ui.filters = { ...ui.filters, [el.dataset.key]: '' };
+    render();
+    document.querySelector('.fchips select')?.focus({ preventScroll: true });
+  },
+});
+
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('[data-progress-form]');
+  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input')) syncProgressRange(form, e.target.id === 'progress-range');
+});
+
+initLongPress((el) => {
+  closeSwipe();
+  openQuickMenu(el.dataset.id, el);
+});
+initSwipe();
 
 // ---------- Offline e atualizações ----------
 
