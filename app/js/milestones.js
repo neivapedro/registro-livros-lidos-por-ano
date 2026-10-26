@@ -82,7 +82,7 @@ export function milestonesInYear(books, year) {
 /**
  * Próximos marcos, em tom discreto: o próximo de livros, o próximo de páginas
  * e os de livro grande e de um dia, enquanto não alcançados.
- * Cada um: { id, kind, title, detail }.
+ * Cada um: { id, kind, title, detail, left } (left: quanto falta, em livros ou páginas; null nos outros).
  */
 export function upcomingMilestones(books) {
   const done = new Set(milestones(books).map((m) => m.id));
@@ -93,7 +93,7 @@ export function upcomingMilestones(books) {
   if (nextBooks) {
     const left = nextBooks - read.length;
     out.push({
-      id: `books-${nextBooks}`, kind: 'books', title: `${nextBooks}º livro`,
+      id: `books-${nextBooks}`, kind: 'books', title: `${nextBooks}º livro`, left,
       detail: `${left === 1 ? 'Falta 1 livro' : `Faltam ${left} livros`} para o ${nextBooks}º`,
     });
   }
@@ -101,17 +101,17 @@ export function upcomingMilestones(books) {
   if (nextPages) {
     const left = nextPages - pages;
     out.push({
-      id: `pages-${nextPages}`, kind: 'pages', title: `${nf.format(nextPages)} páginas`,
+      id: `pages-${nextPages}`, kind: 'pages', title: `${nf.format(nextPages)} páginas`, left,
       // O marco soma o total dos livros concluídos; o tile "páginas" também conta o que foi
       // lido em livros em andamento e abandonados. O texto diz a regra para os números não parecerem errados.
       detail: `${left === 1 ? 'Falta 1 página' : `Faltam ${nf.format(left)} páginas`} para ${nf.format(nextPages)}, contando os livros concluídos`,
     });
   }
   if (!done.has('big-book')) {
-    out.push({ id: 'big-book', kind: 'big', title: `Primeiro livro de ${BIG_BOOK_PAGES}+ páginas`, detail: `Termine um livro com ${BIG_BOOK_PAGES} páginas ou mais` });
+    out.push({ id: 'big-book', kind: 'big', title: `Primeiro livro de ${BIG_BOOK_PAGES}+ páginas`, detail: `Termine um livro com ${BIG_BOOK_PAGES} páginas ou mais`, left: null });
   }
   if (!done.has('one-day')) {
-    out.push({ id: 'one-day', kind: 'day', title: 'Livro lido em um só dia', detail: 'Comece e termine um livro no mesmo dia' });
+    out.push({ id: 'one-day', kind: 'day', title: 'Livro lido em um só dia', detail: 'Comece e termine um livro no mesmo dia', left: null });
   }
   return out;
 }

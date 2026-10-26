@@ -281,7 +281,7 @@ try {
   await page.click('[data-action="clear-filters"]');
 
   step('resumo: etiquetas mais usadas');
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await page.waitForSelector('.tag-count');
   const tagCard = page.locator('.card:has(h2:has-text("Etiquetas mais usadas"))');
   assert.deepEqual(await tagCard.locator('.tag-count-name').allTextContents(), ['clássico', 'ficção científica', 'presente']);

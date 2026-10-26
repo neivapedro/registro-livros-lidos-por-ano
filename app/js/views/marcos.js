@@ -1,5 +1,6 @@
 // Marcos na tela: seção de Todos os anos e lista usada na retrospectiva.
 
+import { formatShort } from '../dates.js';
 import { milestones, upcomingMilestones } from '../milestones.js';
 import { esc } from '../ui.js';
 
@@ -29,22 +30,62 @@ export function milestoneList(list, { upcoming = false } = {}) {
   return `<ul class="mile-list">${list.map((m) => row(m, upcoming)).join('')}</ul>`;
 }
 
-// Gêneros novos podem ser muitos: na tela aparecem só os mais recentes.
-const GENRES_SHOWN = 3;
+// ---------- Todos os anos: marcos como medalhas (v1.4) ----------
 
-/** Seção "Marcos" de Todos os anos. */
+const nf = new Intl.NumberFormat('pt-BR');
+
+/** Rosto da medalha: numeral ou sigla curta em serifa ("10", "1k", "500+") ou ícone. */
+export function medalFace(m) {
+  const n = /^(books|pages)-(\d+)$/.exec(m.id);
+  if (n && m.kind === 'books') return { text: n[2], caption: `${n[2]}º livro` };
+  if (n && m.kind === 'pages') {
+    const v = Number(n[2]);
+    return { text: `${v / 1000}k`, caption: `${nf.format(v)} págs.` };
+  }
+  if (m.kind === 'big') return { text: '500+', caption: 'Livro de 500+' };
+  if (m.kind === 'day') return { icon: 'day', caption: 'Em um só dia' };
+  if (m.kind === 'genre') return { icon: 'genre', caption: m.title.replace(/^Novo gênero: /, '') };
+  return { icon: m.kind, caption: m.title };
+}
+
+/** "20 jan 2026" a partir da data do marco. */
+function medalDate(iso) {
+  return iso ? `${formatShort(iso)} ${iso.slice(0, 4)}` : '';
+}
+
+function leftText(m) {
+  if (m.left === null || m.left === undefined) return 'a conquistar';
+  return m.kind === 'pages' ? `faltam ${nf.format(m.left)}` : `${m.left === 1 ? 'falta' : 'faltam'} ${m.left}`;
+}
+
+function medal(m, upcoming) {
+  const f = medalFace(m);
+  const face = f.text
+    ? `<span class="medal-num${f.text.length > 3 ? ' is-long' : ''}">${esc(f.text)}</span>`
+    : milestoneIcon(f.icon, 22);
+  const sub = upcoming ? leftText(m) : medalDate(m.date);
+  // O toque mostra o detalhe logo abaixo da fileira (sem redesenhar: a rolagem fica onde está).
+  return `
+    <li>
+      <button type="button" class="medal-item${upcoming ? ' is-next' : ''}" data-action="medal" aria-pressed="false"
+        data-title="${esc(m.title)}" data-detail="${esc(m.detail)}"${m.bookId ? ` data-book="${esc(m.bookId)}"` : ''}>
+        <span class="medal${upcoming ? ' is-off' : ''}" aria-hidden="true">${face}</span>
+        <span class="medal-caption">${esc(f.caption)}</span>
+        <span class="medal-sub">${esc(sub)}</span>
+      </button>
+    </li>`;
+}
+
+/** Seção "Marcos" de Todos os anos: conquistados (mais recentes primeiro) e os próximos, pontilhados. */
 export function milestonesSection(books) {
   const all = milestones(books).reverse();
-  if (!all.length) return '';
-  const genres = all.filter((m) => m.kind === 'genre');
-  const shown = all.filter((m) => m.kind !== 'genre' || genres.indexOf(m) < GENRES_SHOWN);
-  const hidden = genres.length - Math.min(genres.length, GENRES_SHOWN);
   const next = upcomingMilestones(books);
+  if (!all.length && !next.length) return '';
   return `
     <section class="card milestones">
       <div class="section-head"><h2>Marcos</h2><span class="muted small">${all.length === 1 ? '1 alcançado' : `${all.length} alcançados`}</span></div>
-      ${milestoneList(shown)}
-      ${hidden ? `<p class="muted small">E mais ${hidden === 1 ? '1 gênero descoberto' : `${hidden} gêneros descobertos`}.</p>` : ''}
-      ${next.length ? `<span class="eyebrow">Próximos</span>${milestoneList(next, { upcoming: true })}` : ''}
+      ${all.length ? `<ul class="medals" aria-label="Marcos alcançados">${all.map((m) => medal(m, false)).join('')}</ul>` : ''}
+      ${next.length ? `<span class="eyebrow">Próximos</span><ul class="medals" aria-label="Próximos marcos">${next.map((m) => medal(m, true)).join('')}</ul>` : ''}
+      <p class="medal-detail muted small" aria-live="polite" data-medal-detail>Toque numa medalha para ver o livro e a data.</p>
     </section>`;
 }

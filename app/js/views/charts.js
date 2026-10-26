@@ -9,6 +9,7 @@ import {
 import { monthInitial, monthName, monthOf, yearOf } from '../dates.js';
 import { FORMATS, getGoal, getPageGoal } from '../store.js';
 import { yearStats, yearsWithData } from '../stats.js';
+import { ratingWindow } from '../trend.js';
 import { decimal, esc, formatRating, icon, num, plural } from '../ui.js';
 
 /** Atributos do toque que leva à busca filtrada. */
@@ -60,48 +61,38 @@ export function pagesMonthLegend(state, year) {
     : '<span class="muted small">páginas lidas</span>';
 }
 
-// ---------- Formato: livros e páginas ----------
-
-function splitBar(a, b, label) {
-  return `
-    <div class="split" role="img" aria-label="${esc(label)}">
-      ${a ? `<span class="split-a" style="flex:${a}"></span>` : ''}${b ? `<span class="split-b" style="flex:${b}"></span>` : ''}
-    </div>`;
-}
+// ---------- Formato: uma barra só, com rótulo direto ----------
 
 export function formatCard(state, s) {
   if (!s.count) return '';
   const phys = s.formats[FORMATS.PHYSICAL];
   const kin = s.formats[FORMATS.KINDLE];
   const pages = pagesByFormat(state.books, s.year);
-  const pp = pages[FORMATS.PHYSICAL];
-  const pk = pages[FORMATS.KINDLE];
-  const legend = (format, dot, name, books, pg) => `
-    <button type="button" class="split-tap" ${tapAttrs(s.year, 'format', format, `${name}: ${plural(books, 'livro', 'livros')}, ${num(pg)} páginas. Ver livros`)}>
-      <span class="dot ${dot}"></span><strong>${name}</strong>
-      <span class="muted">${plural(books, 'livro', 'livros')}${pg ? ` · ${num(pg)} págs.` : ''}</span>
+  const pct = (n) => Math.round((n / s.count) * 100);
+  const label = (format, side, name, books, pg) => `
+    <button type="button" class="fmt-label fmt-${side}" ${tapAttrs(s.year, 'format', format, `${name}: ${plural(books, 'livro', 'livros')}, ${num(pg)} páginas. Ver livros`)}>
+      <span class="fmt-name"><span class="dot ${side === 'a' ? 'dot-a' : 'dot-b'}"></span>${name} <span class="fmt-pct">${pct(books)}%</span></span>
+      <span class="fmt-detail">${plural(books, 'livro', 'livros')}${pg ? ` · ${num(pg)} págs.` : ''}</span>
     </button>`;
   return `
-    <section class="card">
+    <section class="card fmt-card">
       <h2>Formato</h2>
-      <div class="split-rows">
-        <span class="split-cap muted small">Livros</span>
-        ${splitBar(phys, kin, `${phys} físicos e ${kin} no Kindle`)}
-        ${pp + pk ? `<span class="split-cap muted small">Páginas</span>${splitBar(pp, pk, `${num(pp)} páginas no físico e ${num(pk)} no Kindle`)}` : ''}
+      <div class="fmt-bar" role="img" aria-label="${esc(`${phys} físicos e ${kin} no Kindle`)}">
+        ${phys ? `<span class="split-a" style="flex:${phys}"></span>` : ''}${kin ? `<span class="split-b" style="flex:${kin}"></span>` : ''}
       </div>
-      <div class="split-legend split-legend-tap">
-        ${legend(FORMATS.PHYSICAL, 'dot-a', 'Físico', phys, pp)}
-        ${legend(FORMATS.KINDLE, 'dot-b', 'Kindle', kin, pk)}
+      <div class="fmt-labels split-legend-tap">
+        ${phys ? label(FORMATS.PHYSICAL, 'a', 'Físico', phys, pages[FORMATS.PHYSICAL]) : ''}
+        ${kin ? label(FORMATS.KINDLE, 'b', 'Kindle', kin, pages[FORMATS.KINDLE]) : ''}
       </div>
     </section>`;
 }
 
-// ---------- Notas (meia em meia estrela) ----------
+// ---------- Notas (meia em meia estrela; só a faixa usada) ----------
 
 export function ratingChart(s) {
   const rated = s.books.filter((b) => b.rating);
   if (!rated.length) return '';
-  const dist = ratingDistribution(rated);
+  const dist = ratingWindow(ratingDistribution(rated));
   const top = Math.max(...dist.map((d) => d.count));
   const h = 72;
   const cols = dist.map((d) => {
@@ -115,7 +106,7 @@ export function ratingChart(s) {
   return `
     <section class="card">
       <div class="section-head"><h2>Notas</h2><span class="muted small">${icon('star', { size: 12, cls: 'accent' })} ${plural(rated.length, 'livro avaliado', 'livros avaliados')}</span></div>
-      <div class="bars bars-rating" style="--chart-h:${h}px">${cols}</div>
+      <div class="bars bars-rating" style="--chart-h:${h}px;--cols:${dist.length}">${cols}</div>
     </section>`;
 }
 

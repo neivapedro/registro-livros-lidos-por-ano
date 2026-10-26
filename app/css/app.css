@@ -1023,3 +1023,177 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   .retro .slide.center .cover-xl .cover-title { font-size: 20px; }
   .retro .retro-quote { display: none; }
 }
+
+/* ---------- v1.4 Resumo ---------- */
+/* Resumo do ano em 3 abas, indicadores com variação e mini-gráfico, curva S da meta,
+   gráficos mais limpos e marcos como medalhas (Todos os anos). Só tokens; o tema claro herda. */
+
+:root {
+  /* Variação favorável: verde calmo (o contrário fica em cinza, nunca vermelho). */
+  --good: #8FB996;
+  --medal-hi: color-mix(in srgb, var(--accent) 45%, #FFFFFF);
+  --medal-lo: color-mix(in srgb, var(--accent) 45%, #000000);
+}
+
+/* Abas: sublinhadas, fixas no alto ao rolar. */
+.rs-tabs {
+  position: sticky; top: var(--safe-t); z-index: 5;
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin: -4px -18px 0; padding: 0 18px;
+  background: color-mix(in srgb, var(--bg) 92%, transparent);
+  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--line-strong);
+}
+.rs-tab {
+  min-height: 48px; padding: 0 4px; border: 0; background: transparent;
+  color: var(--muted); font-size: 15px; font-weight: 700; letter-spacing: -0.1px;
+  box-shadow: inset 0 -2px 0 transparent;
+}
+.rs-tab.is-on { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.rs-tab:focus-visible { outline-offset: -4px; border-radius: 8px; }
+.rs-panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.rs-hint { padding: 0 4px; }
+.app[data-page="resumo"] { gap: 16px; }
+
+/* Indicadores em mosaico. */
+.kpis { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.kpi {
+  position: relative; min-width: 0; overflow: hidden;
+  display: flex; flex-direction: column; gap: 3px;
+  padding: 14px 14px 10px; border-radius: 20px;
+  background: var(--surface); border: 1px solid var(--line);
+}
+.kpi.is-lead { background: linear-gradient(155deg, var(--surface-warm), var(--surface) 72%); }
+.kpi-label { font-size: 12px; font-weight: 700; color: var(--muted); letter-spacing: 0.2px; }
+.kpi-value { display: flex; align-items: baseline; gap: 4px; flex-wrap: wrap; line-height: 1.05; margin-top: 2px; }
+.kpi-num {
+  position: relative; font-size: 30px; font-weight: 800; letter-spacing: -1px;
+  font-variant-numeric: tabular-nums; color: var(--text);
+}
+.kpi-of { font-size: 15px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kpi-delta { font-size: 12.5px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.kpi-delta.is-good { color: var(--good); }
+.kpi-delta.is-calm { color: var(--muted); }
+.kpi-note { font-size: 11.5px; color: var(--faint); line-height: 1.25; }
+.kpi-spark { display: block; width: 100%; height: 28px; margin-top: auto; padding-top: 6px; overflow: visible; }
+.kpi-spark-line { fill: none; stroke: var(--accent); stroke-width: 1.75; stroke-linejoin: round; stroke-linecap: round; }
+.kpi-spark-area { fill: var(--accent); fill-opacity: 0.1; stroke: none; }
+.kpi-spark-dot { fill: none; stroke: var(--accent); stroke-width: 6; stroke-linecap: round; }
+.kpi-caption { margin: -6px 4px 0; font-size: 12px; color: var(--faint); }
+/* Número contando: o texto real fica no lugar (transparente) e o que conta é desenhado por cima. */
+.kpi-num.is-counting { color: transparent; }
+.kpi-num.is-counting::after { content: attr(data-show); position: absolute; left: 0; top: 0; color: var(--text); white-space: nowrap; }
+
+/* Curva S da meta. */
+.sc-card { gap: 10px; padding: 16px 14px; }
+.sc-head { align-items: center; flex-wrap: wrap; row-gap: 8px; padding: 0 4px; }
+.sc-head h2 { white-space: nowrap; }
+.sc-head .seg-mini .seg-btn { padding: 0 12px; }
+.sc-svg { display: block; width: 100%; height: auto; overflow: visible; touch-action: manipulation; cursor: pointer; -webkit-user-select: none; user-select: none; }
+.sc-svg text { font-family: var(--sans); font-size: 11.5px; font-variant-numeric: tabular-nums; fill: var(--muted); }
+.sc-grid { stroke: var(--line-strong); stroke-width: 1; }
+.sc-base { stroke: var(--faint); stroke-width: 1; opacity: 0.7; }
+.sc-svg .sc-xlab { font-weight: 600; fill: var(--faint); }
+.sc-svg .sc-xlab.is-now { fill: var(--text); font-weight: 800; }
+.sc-svg .sc-xlab.is-sel { fill: var(--accent); font-weight: 800; }
+.sc-planned { fill: none; stroke: var(--text-soft); stroke-width: 1.5; stroke-dasharray: 4 4; opacity: 0.75; }
+.sc-fill-top { stop-color: var(--accent); stop-opacity: 0.34; }
+.sc-fill-bottom { stop-color: var(--accent); stop-opacity: 0.02; }
+.sc-line { fill: none; stroke: var(--accent); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+.sc-proj { fill: none; stroke: var(--accent); stroke-width: 2.25; stroke-dasharray: 0.1 5.5; stroke-linecap: round; }
+.sc-today { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 2 3; opacity: 0.7; }
+.sc-svg .sc-today-lab { font-size: 10.5px; font-weight: 700; fill: var(--muted); letter-spacing: 0.3px; }
+.sc-dot { fill: var(--accent); stroke: var(--surface); stroke-width: 2.5; }
+.sc-svg .sc-val { font-size: 13px; font-weight: 800; fill: var(--text); }
+.sc-svg .sc-end-planned { font-weight: 700; fill: var(--text-soft); }
+.sc-svg .sc-end-proj { font-weight: 800; fill: var(--accent); }
+.sc-svg .sc-end-real { font-weight: 800; fill: var(--text); }
+.sc-sel { stroke: var(--text-soft); stroke-width: 1; opacity: 0.45; }
+.sc-sel-real { fill: var(--accent); stroke: var(--surface); stroke-width: 2; }
+.sc-sel-planned { fill: var(--surface); stroke: var(--text-soft); stroke-width: 1.5; }
+.sc-legend { display: flex; flex-wrap: wrap; gap: 4px 14px; padding: 0 4px; font-size: 12px; color: var(--muted); }
+.sc-key { display: inline-flex; align-items: center; gap: 6px; }
+.sc-swatch { display: inline-block; width: 16px; height: 0; border-top: 2.5px solid var(--accent); border-radius: 2px; }
+.sc-key .sc-key-planned { border-top: 1.5px dashed var(--text-soft); }
+.sc-key .sc-key-proj { border-top: 2.5px dotted var(--accent); }
+.sc-readout { padding: 0 4px; font-size: 12.5px; color: var(--faint); font-variant-numeric: tabular-nums; }
+.sc-readout.is-on { padding: 8px 12px; border-radius: 12px; background: var(--surface-2); color: var(--text-soft); }
+.sc-readout strong { color: var(--text); }
+.sc-text { display: flex; flex-direction: column; gap: 2px; padding: 10px 4px 0; border-top: 1px solid var(--line); }
+.sc-headline { font-size: 15px; font-weight: 700; }
+
+/* Ritmo: páginas por dia. */
+.ppd { display: flex; gap: 8px; }
+.ppd-cell { flex: 1 1 0; min-width: 0; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); display: flex; flex-direction: column; gap: 1px; }
+.ppd-value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+.ppd-label { font-size: 12px; color: var(--muted); line-height: 1.2; }
+.ppd-sub { font-size: 11.5px; color: var(--faint); }
+
+/* Gostos: notas só na faixa usada; formato numa barra só, com rótulo direto. */
+.bars-rating { justify-content: space-around; }
+.fmt-bar { display: flex; gap: 2px; height: 12px; border-radius: 999px; overflow: hidden; }
+.fmt-labels { display: flex; justify-content: space-between; gap: 10px; margin-top: -4px; }
+.fmt-label {
+  min-width: 0; min-height: 44px; padding: 4px 0; border: 0; background: transparent; color: inherit;
+  display: flex; flex-direction: column; justify-content: center; gap: 2px; text-align: left;
+}
+.fmt-label.fmt-b { align-items: flex-end; text-align: right; margin-left: auto; }
+.fmt-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; }
+.fmt-pct { font-variant-numeric: tabular-nums; color: var(--text-soft); font-weight: 800; }
+.fmt-detail { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Todos os anos. */
+.cmp-list { display: flex; flex-direction: column; gap: 10px; }
+.cmp-count { font-variant-numeric: tabular-nums; }
+
+/* Marcos como medalhas: fileiras que deslizam dentro do cartão (a página não rola de lado). */
+.medals {
+  list-style: none; margin: 0 -18px; padding: 2px 18px 4px;
+  display: flex; gap: 6px; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scroll-padding-inline: 18px; scrollbar-width: none;
+}
+.medals::-webkit-scrollbar { display: none; }
+.medals > li { flex: 0 0 auto; scroll-snap-align: start; }
+.medal-item {
+  width: 88px; min-height: 44px; padding: 8px 4px 6px; border: 0; border-radius: 16px;
+  background: transparent; color: inherit; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center;
+}
+.medal-item[aria-pressed="true"] { background: var(--surface-2); }
+.medal {
+  width: 56px; height: 56px; border-radius: 50%; flex-shrink: 0;
+  display: grid; place-items: center;
+  background: radial-gradient(circle at 34% 28%, var(--medal-hi), var(--accent) 58%, var(--medal-lo));
+  color: var(--on-accent);
+  box-shadow: inset 0 -3px 6px color-mix(in srgb, var(--bg) 40%, transparent), inset 0 2px 2px color-mix(in srgb, var(--text) 25%, transparent);
+}
+.medal-num { font-family: var(--serif); font-size: 24px; line-height: 1; letter-spacing: -0.5px; }
+.medal-num.is-long { font-size: 18px; }
+.medal.is-off { background: transparent; box-shadow: none; border: 1.5px dashed var(--faint); color: var(--muted); }
+.medal-caption {
+  font-size: 12px; font-weight: 700; line-height: 1.2; max-width: 100%;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+.medal-sub { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.medal-item.is-next .medal-caption { color: var(--text-soft); font-weight: 600; }
+.medal-detail { min-height: 20px; }
+.medal-detail.is-on { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 12px; background: var(--surface-2); color: var(--text-soft); }
+.medal-detail.is-on a { align-self: flex-start; min-height: 44px; margin-bottom: -10px; display: inline-flex; align-items: center; font-weight: 700; }
+
+/* Movimento de entrada: só com "Reduzir movimento" desligado; parada, a página já está completa. */
+@media (prefers-reduced-motion: no-preference) {
+  .rs-tab { transition: color .15s, box-shadow .2s; }
+  .sc-svg.is-intro .sc-line { stroke-dasharray: 1; animation: sc-draw 1.1s cubic-bezier(.3, .7, .2, 1) both; }
+  .sc-svg.is-intro .sc-area { animation: sc-fade .6s .55s ease-out both; }
+  .sc-svg.is-intro .sc-planned { animation: sc-fade .5s ease-out both; }
+  .sc-svg.is-intro :is(.sc-proj, .sc-dot, .sc-val, .sc-end-proj, .sc-end-real) { animation: sc-fade .4s 1s ease-out both; }
+  @keyframes sc-draw { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+  @keyframes sc-fade { from { opacity: 0; } }
+}
+@media (max-width: 359px) {
+  .kpi { padding: 12px 12px 8px; }
+  .kpi-num { font-size: 26px; }
+  .rs-tab { font-size: 14px; }
+  .ppd { gap: 6px; }
+  .ppd-cell { padding: 10px 8px; }
+  .ppd-value { font-size: 20px; }
+}

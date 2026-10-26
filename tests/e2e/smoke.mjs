@@ -278,13 +278,17 @@ try {
   step('resumo');
   await page.click('[data-nav="resumo"]');
   await onPage('resumo');
-  await page.waitForSelector('.bars');
+  await page.waitForSelector('.sc-svg');
   assert.match(await page.textContent('.favorite'), /A Meta/);
-  assert.match(await page.textContent('body'), /George Orwell/);
   await shot('07-resumo');
+  await page.click('.rs-tab[data-tab="gostos"]');
+  await page.waitForSelector('.rs-panel[data-tab="gostos"]');
+  assert.match(await page.textContent('body'), /George Orwell/);
+  await page.click('.rs-tab[data-tab="geral"]');
+  await page.waitForSelector('.rs-panel[data-tab="geral"]');
   await page.selectOption('[data-change="summary-year"]', '2025');
   await page.waitForURL(/resumo\/2025/);
-  assert.match(await page.textContent('.tiles'), /1\s*\/ 12/);
+  assert.match(await page.textContent('.kpis'), /1\s*\/ 12/);
   await page.selectOption('[data-change="summary-year"]', '2026');
   await page.waitForURL(/resumo\/2026/);
 
@@ -430,13 +434,15 @@ try {
   await shot('14-estante-abandonei');
   await page.click('[data-nav="resumo"]');
   await onPage('resumo');
+  await page.click('.rs-tab[data-tab="gostos"]');
+  await page.waitForSelector('.rs-panel[data-tab="gostos"]');
   assert.match(await page.textContent('body'), /Abandonados/);
 
   step('todos os anos');
   await page.selectOption('[data-change="summary-year"]', 'todos');
   await page.waitForURL(/resumo\/todos/);
   await page.waitForSelector('.best-year');
-  assert.match(await page.textContent('.tiles'), /12\s*livros lidos/);
+  assert.match(await page.textContent('.kpis'), /Livros lidos\s*12/);
   assert.match(await page.textContent('.best-year'), /2026/);
   await shot('15-todos-os-anos');
 

@@ -138,7 +138,8 @@ async function checkNarrow(label) {
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   assert.ok(overflow <= 0, `${label}: ${overflow}px sobrando à direita em 320px`);
   const wide = await page.evaluate(() => [...document.querySelectorAll('#app *')]
-    .filter((el) => el.getBoundingClientRect().right > window.innerWidth + 0.5 && getComputedStyle(el).visibility !== 'hidden')
+    // As medalhas deslizam dentro da própria fileira (overflow-x), não na página.
+    .filter((el) => !el.closest('.medals') && el.getBoundingClientRect().right > window.innerWidth + 0.5 && getComputedStyle(el).visibility !== 'hidden')
     .map((el) => el.className?.baseVal ?? el.className).slice(0, 5));
   assert.deepEqual(wide, [], `${label}: elementos passando da tela em 320px`);
   const small = await page.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
@@ -165,11 +166,12 @@ try {
   assert.match(await page.textContent('.tiles-3 .tile >> nth=0'), new RegExp(`${fmt(PAGES_2026).replace('.', '\\.')}\\s*páginas`));
   assert.equal(await page.locator('.hero-pages').count(), 0, 'sem meta de páginas, sem linha extra');
 
-  step('resumo: tile de páginas e mapa do ano');
+  step('resumo: indicador de páginas (Visão geral) e mapa do ano (Ritmo)');
   await page.goto(`${BASE}#/resumo/2026`);
   await onPage('resumo');
+  assert.match(await page.textContent('.kpi >> nth=1'), new RegExp(fmt(PAGES_2026).replace('.', '\\.')));
+  await page.goto(`${BASE}#/resumo/2026?aba=ritmo`);
   await page.waitForSelector('.heatmap');
-  assert.match(await page.textContent('.tiles-2 .tile >> nth=1'), new RegExp(fmt(PAGES_2026).replace('.', '\\.')));
   assert.equal(await page.locator('.hm-svg').count(), 2);
   assert.equal(await page.locator('rect[data-date]').count(), 365);
   assert.ok(await page.locator('rect.hm-l4').count() > 0, 'há dias no tom mais forte');
@@ -236,15 +238,15 @@ try {
   await page.waitForFunction(() => !document.querySelector('.filter-chip'));
   assert.equal(await page.locator('#search-results .book-row').count(), seed.books.length);
 
-  step('faixa de tamanho, nota, formato e gênero');
-  await page.goto(`${BASE}#/resumo/2026`);
+  step('faixa de tamanho, nota, formato e gênero (aba Gostos)');
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');
   await page.click('[data-action="chart-filter"][data-kind="length"][data-value="500+"]');
   await onPage('buscar');
   assert.equal((await page.textContent('.filter-chip-text')).trim(), 'Filtro: 500+ págs. em 2026');
   assert.deepEqual(await page.$$eval('#search-results .book-row-title', (els) => els.map((e) => e.textContent.trim())), ['Duna']);
 
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');
   await page.waitForSelector('.bars-rating');
   await shotEl('.card:has(.bars-rating)', 'notas');
@@ -253,17 +255,17 @@ try {
   assert.equal((await page.textContent('.filter-chip-text')).trim(), 'Filtro: nota 4,5 em 2026');
   assert.deepEqual(await page.$$eval('#search-results .book-row-title', (els) => els.map((e) => e.textContent.trim())), ['Duna']);
 
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');
-  assert.match(await page.textContent('.split-legend-tap'), /Kindle\s*2 livros/);
-  await shotEl('.card:has(.split-rows)', 'formato');
+  assert.match(await page.textContent('.split-legend-tap'), /Kindle\s*\d+%\s*2 livros/);
+  await shotEl('.fmt-card', 'formato');
   await page.click('[data-action="chart-filter"][data-kind="format"][data-value="kindle"]');
   await onPage('buscar');
   assert.equal((await page.textContent('.filter-chip-text')).trim(), 'Filtro: Kindle em 2026');
   assert.deepEqual((await page.$$eval('#search-results .book-row-title', (els) => els.map((e) => e.textContent.trim()))).sort(), ['1984', 'Kindle sem páginas']);
   assert.equal(await page.inputValue('[data-filter="format"]'), 'kindle');
 
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');
   await shotEl('.card:has(h2:text("Tamanho dos livros"))', 'tamanho');
   await page.click('[data-action="chart-filter"][data-kind="genre"][data-value="Ficção"]');
@@ -283,7 +285,7 @@ try {
   await page.waitForFunction(() => document.querySelector('.cmp2-row:not(.cmp2-head) .cmp2-value').textContent.trim() === '1');
   await page.selectOption('[data-change="compare-a"]', '2026');
   await page.waitForFunction(() => document.querySelector('.cmp2-row:not(.cmp2-head) .cmp2-value').textContent.trim() === '6');
-  assert.match(await page.textContent('.tiles'), new RegExp(fmt(PAGES_2026 + 608).replace('.', '\\.')), 'páginas de todos os anos pela mesma regra');
+  assert.match(await page.textContent('.kpis'), new RegExp(fmt(PAGES_2026 + 608).replace('.', '\\.')), 'páginas de todos os anos pela mesma regra');
   await shotEl('.cmp2', 'comparar-anos');
   await shot('todos-os-anos');
   await checkNarrow('todos os anos');
@@ -306,7 +308,7 @@ try {
   await shot('inicio-meta-paginas');
   await checkNarrow('início com meta de páginas');
   // Gráfico mensal em páginas ganha a linha da meta mensal.
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=ritmo`);
   await onPage('resumo');
   assert.match(await page.textContent('.card:has(h2:text("Páginas por mês"))'), /500\/mês/);
   await page.goto(`${BASE}#/ajustes`);
@@ -318,7 +320,7 @@ try {
 
   step('antes do diário: só os dias de término e o aviso');
   await writeState({ ...seed, books: seed.books.map((b) => ({ ...b, journal: [] })) });
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=ritmo`);
   await page.reload();
   await page.waitForSelector('.calendar');
   assert.match(await page.textContent('.cal-note'), /O calendário fica completo conforme você atualiza a página dos livros\./);
