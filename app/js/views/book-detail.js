@@ -28,6 +28,7 @@ function fullDate(iso) {
 
 /** '22 jan → 10 fev 2026' (ano só no fim quando é o mesmo). */
 function period(start, end) {
+  if (start === end) return fullDate(end);
   if (start.slice(0, 4) === end.slice(0, 4)) return `${formatShort(start)} → ${formatShort(end)} ${end.slice(0, 4)}`;
   return `${fullDate(start)} → ${fullDate(end)}`;
 }
@@ -77,7 +78,9 @@ function readBlock(book) {
   const pages = Number(book.pages) || 0;
   const minutes = timerMinutes(book);
   const tiles = [];
-  if (days) tiles.push([num(days), days === 1 ? 'dia de leitura' : 'dias de leitura']);
+  // Do início ao fim, contando os dias sem leitura: "dias de leitura" é o que o gráfico de ritmo
+  // conta (só os dias com registro no diário), e os dois números lado a lado se contradiriam.
+  if (days) tiles.push([num(days), days === 1 ? 'dia' : 'dias corridos']);
   if (days && pages) {
     const perDay = pages / days;
     tiles.push([perDay >= 10 ? num(perDay) : decimal(perDay, 1).replace(/,0$/, ''), 'págs. por dia']);
@@ -90,26 +93,6 @@ function readBlock(book) {
   return `
     ${tiles.length >= 2 ? `<div class="ficha-stats">${tiles.map(([v, l]) => `<div><strong>${esc(v)}</strong><span>${esc(l)}</span></div>`).join('')}</div>` : ''}
     ${line ? `<p class="ficha-period">${esc(line)}</p>` : ''}`;
-}
-
-/** Mesmo formulário do cartão do Início (data-progress-form): salvar passa por saveProgress. */
-function progressEditor(b) {
-  const kindle = b.format === FORMATS.KINDLE;
-  const value = kindle ? b.currentPercent : b.currentPage;
-  const label = kindle ? 'Quantos % o Kindle mostra?' : `Em que página você está?${b.pages ? ` (de ${b.pages})` : ''}`;
-  return `
-    <form class="progress-edit ficha-progress-edit" data-progress-form data-id="${esc(b.id)}" novalidate>
-      <label class="progress-edit-label" for="progress-input">${esc(label)}</label>
-      <div class="progress-edit-row">
-        <span class="progress-edit-field">
-          <input id="progress-input" type="number" inputmode="numeric" min="0" max="${kindle ? 100 : b.pages || 20000}"
-            value="${esc(value ?? '')}" placeholder="${kindle ? '0 a 100' : 'Página'}" enterkeyhint="done">
-          <span class="progress-edit-suffix">${kindle ? '%' : 'pág.'}</span>
-        </span>
-        <button type="submit" class="btn-primary sm">Salvar</button>
-      </div>
-      <button type="button" class="btn-text small" data-action="cancel-progress">Cancelar</button>
-    </form>`;
 }
 
 function readingBlock(book, ui, today) {
@@ -127,16 +110,13 @@ function readingBlock(book, ui, today) {
       </div>`;
   } else if (p) {
     progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · informe o total de páginas para ver o %</p>`;
-  } else if (ui.editingProgress === book.id) {
-    // O formulário logo abaixo já pergunta a página.
-    progress = '';
   } else {
     progress = `<p class="ficha-progress-label">${book.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</p>`;
   }
   const paceHtml = pace || target ? `<p class="ficha-pace">${[pace, target].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join('')}</p>` : '';
-  const actions = ui.editingProgress === book.id
-    ? progressEditor(book)
-    : `<button type="button" class="btn-primary" data-action="update-page" data-id="${esc(book.id)}">Registrar leitura</button>`;
+  // Registrar leitura abre a mesma folha do Início (openProgressSheet em main.js): nada de
+  // formulário na própria ficha, que ficaria duplicado (e preso) se a tela redesenhasse por baixo.
+  const actions = `<button type="button" class="btn-primary" data-action="update-page" data-id="${esc(book.id)}">Registrar leitura</button>`;
   return `
     <section class="ficha-card">
       <span class="ficha-eyebrow">${esc(since)}</span>

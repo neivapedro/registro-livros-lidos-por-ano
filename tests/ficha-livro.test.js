@@ -83,7 +83,9 @@ test('endereço da edição', () => {
 
 test('ficha: lido mostra dias, páginas por dia, período, nota e favorito', () => {
   const html = view(book({ journal: [e('2026-10-01', 0, 128, { minutes: 50 }), e('2026-10-10', 128, 256, { minutes: 40 })] }));
-  assert.match(html, /<strong>10<\/strong><span>dias de leitura/);
+  // "dias de leitura" fica para o gráfico (dias com registro): aqui é do início ao fim.
+  assert.match(html, /<strong>10<\/strong><span>dias corridos/);
+  assert.doesNotMatch(html, /<span>dias de leitura/);
   assert.match(html, /<strong>26<\/strong><span>págs\. por dia/);
   assert.match(html, /<strong>1h 30min<\/strong><span>no cronômetro/);
   assert.match(html, /Lido em 10 dias · 1 out → 10 out 2026/);
@@ -92,6 +94,14 @@ test('ficha: lido mostra dias, páginas por dia, período, nota e favorito', () 
   assert.match(html, /href="#\/estante"/, 'Voltar para a lista de origem');
   assert.match(html, /href="#\/livro\/b1\/editar"/);
   assert.match(html, /Ritmo da leitura/);
+});
+
+test('ficha: lido num dia só e favorito só para lido', () => {
+  const html = view(book({ startDate: '2026-10-10', endDate: '2026-10-10', journal: [] }));
+  assert.match(html, /<strong>1<\/strong><span>dia<\/span>/);
+  assert.match(html, /Lido em 1 dia · 10 out 2026</);
+  assert.doesNotMatch(html, /10 out → 10 out/);
+  assert.doesNotMatch(view(book({ status: 'lendo', endDate: null, favorite: false })), /detail-fav/);
 });
 
 test('ficha: lendo tem progresso, Registrar leitura, Ler agora e Concluir', () => {
@@ -103,9 +113,11 @@ test('ficha: lendo tem progresso, Registrar leitura, Ler agora e Concluir', () =
   assert.match(html, /href="#\/livro\/b1\/editar\?concluir=1"/);
   assert.match(html, /Ritmo: /);
   assert.doesNotMatch(html, /atrasad/i);
+  // Registrar leitura usa a folha (main.js): com a folha aberta, um redesenho da ficha por baixo
+  // não pode criar um segundo formulário (e um segundo #progress-input) na tela.
   const editing = view(book({ status: 'lendo', endDate: null, currentPage: 128 }), { ui: { editingProgress: 'b1' } });
-  assert.match(editing, /data-progress-form data-id="b1"/);
-  assert.match(editing, /id="progress-input"/);
+  assert.doesNotMatch(editing, /data-progress-form|id="progress-input"/);
+  assert.match(editing, /data-action="update-page" data-id="b1">Registrar leitura/);
 });
 
 test('ficha: quero ler e abandonado', () => {

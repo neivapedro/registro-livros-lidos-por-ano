@@ -206,7 +206,7 @@ try {
   assert.equal(await page.locator('.ficha-stars .star-half').count(), 1);
   assert.equal(await page.getAttribute('.ficha-fav', 'aria-pressed'), 'true');
   assert.deepEqual((await page.locator('.ficha-stats > div').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ')),
-    ['20 dias de leitura', '16 págs. por dia', '3h 15min no cronômetro']);
+    ['20 dias corridos', '16 págs. por dia', '3h 15min no cronômetro']);
   assert.equal(await text('.ficha-period'), 'Lido em 20 dias · 22 jan → 10 fev 2026');
   // Cor predominante da capa no fundo do topo (cover-color.js).
   await page.waitForFunction(() => getComputedStyle(document.querySelector('.ficha-hero')).getPropertyValue('--tint').trim().split(' ').length === 3);

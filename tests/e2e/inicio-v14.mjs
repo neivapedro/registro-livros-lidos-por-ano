@@ -331,7 +331,7 @@ try {
   assert.equal(await page.inputValue('#progress-input'), '100');
   await page.press('#progress-input', 'Enter');
   await onPage('livro');
-  assert.match(page.url(), /#\/livro\/r2\?concluir=1$/);
+  assert.match(page.url(), /#\/livro\/r2(\/editar)?\?concluir=1$/);
   assert.equal(await page.locator('.sheet-layer.is-open').count(), 0, 'trocar de tela fecha a folha');
   await sheetGone('ao trocar de tela');
   assert.equal(book(await readState(), 'r2').currentPercent, 52, '100% não grava: vai para o Concluir');
@@ -342,7 +342,7 @@ try {
   await card.locator('[data-action="update-page"]').click();
   await page.click(`${openSheet} [data-action="progress-finish"]`);
   await onPage('livro');
-  assert.match(page.url(), /#\/livro\/r1\?concluir=1$/);
+  assert.match(page.url(), /#\/livro\/r1(\/editar)?\?concluir=1$/);
 
   step('menu rápido: tocar e segurar no cartão');
   await page.goto(`${BASE}#/inicio`);

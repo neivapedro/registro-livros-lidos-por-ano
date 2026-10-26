@@ -178,13 +178,20 @@ function enterRoute(route) {
   if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
 
+// Rolagem de cada lista (Início, Estante, Buscar...) ao abrir um livro: voltar da ficha ou da
+// edição (botão Voltar, gesto do iPhone) devolve a pessoa ao mesmo ponto da lista.
+const listScroll = new Map();
+
 function render() {
   if (!ready) return;
   const route = parseRoute();
+  let scrollY = null;
   if (route.key !== currentKey) {
     ui.editingProgress = null;
     closeSheet({ immediate: true, keepFocus: true });
     closeCoverViewer();
+    if (currentKey && !isBookKey(currentKey)) listScroll.set(currentKey, window.scrollY);
+    scrollY = isBookKey(currentKey) && !isBookKey(route.key) ? listScroll.get(route.key) || 0 : 0;
     previousKey = currentKey;
     currentKey = route.key;
     enterRoute(route);
@@ -247,6 +254,7 @@ function render() {
   }
   root.innerHTML = html;
   root.dataset.page = route.name;
+  if (scrollY) window.scrollTo(0, scrollY);
   applyTints(root);
   revealFinishFields();
   if (route.name === 'resumo') summaryIntro(route);
@@ -1733,8 +1741,16 @@ Object.assign(actions, {
   },
   'detail-fav'(el) {
     const book = state.books.find((b) => b.id === el.dataset.id);
-    if (!book) return;
-    persist(upsertBook(state, { ...book, favorite: !book.favorite }).state, book.favorite ? 'Tirado dos favoritos.' : 'Marcado como favorito do ano.');
+    if (!book || book.status !== STATUS.READ) return;
+    // Um favorito por ano (upsertBook tira o anterior): o aviso diz qual saiu.
+    const year = book.endDate ? yearOf(book.endDate) : null;
+    const replaced = !book.favorite && year
+      ? state.books.find((b) => b.id !== book.id && b.favorite && b.endDate && yearOf(b.endDate) === year)
+      : null;
+    let message = 'Marcado como favorito do ano.';
+    if (book.favorite) message = 'Tirado dos favoritos.';
+    else if (replaced) message = `Favorito de ${year}: "${book.title}" no lugar de "${replaced.title}".`;
+    persist(upsertBook(state, { ...book, favorite: !book.favorite }).state, message);
     render();
   },
   // Aba Diário: abre ou recolhe uma semana.

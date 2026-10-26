@@ -119,7 +119,7 @@ async function seedAndOpen(hash) {
 async function openBook(id, query = '') {
   await page.goto(`${BASE}#/inicio`);
   await onPage('inicio');
-  await page.goto(`${BASE}#/livro/${id}${query}`);
+  await page.goto(`${BASE}#/livro/${id}${query || '/editar'}`);
   await onPage('livro');
 }
 

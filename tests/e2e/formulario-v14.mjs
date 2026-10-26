@@ -254,7 +254,7 @@ try {
   await waitState((s) => s.books.some((b) => b.title === 'A Meta' && b.status === 'quero' && b.pages === 384));
 
   step('editar: com dados em "Mais detalhes" a seção já abre; o resumo mostra o que há quando fechada');
-  await page.goto(`${BASE}#/livro/full`);
+  await page.goto(`${BASE}#/livro/full/editar`);
   await onPage('livro');
   assert.equal(await isOpen(), true);
   assert.equal(await page.inputValue('#f-genre'), 'Ficção');
@@ -277,7 +277,7 @@ try {
   await shots('editar-lido');
 
   step('aberta sozinha, continua aberta ao limpar o último campo preenchido');
-  await page.goto(`${BASE}#/livro/alvo`);
+  await page.goto(`${BASE}#/livro/alvo/editar`);
   await onPage('livro');
   assert.equal(await isOpen(), true);
   await page.click('[data-action="clear-target-date"]');
@@ -285,7 +285,7 @@ try {
   assert.equal(await isOpen(), true);
 
   step('editar com cada status');
-  await page.goto(`${BASE}#/livro/plain`);
+  await page.goto(`${BASE}#/livro/plain/editar`);
   await onPage('livro');
   assert.equal(await isOpen(), false, 'sem nada nos detalhes, a seção começa fechada');
   await page.click('[data-action="set-status"][data-value="quero"]');
@@ -324,7 +324,7 @@ try {
   await page.fill('#f-drop', 'Não era o momento.');
   await shots('editar-abandonado');
   await page.click(saveBtn);
-  await page.waitForSelector('.hero');
+  await page.waitForSelector('.hero, .ficha-hero');
   const dropped = bookIn(await waitState((s) => bookIn(s, 'plain').status === 'abandonado'), 'plain');
   assert.equal(dropped.format, 'kindle');
   assert.equal(dropped.currentPercent, 40);
@@ -347,7 +347,7 @@ try {
   await page.screenshot({ path: join(SHOTS, 'formulario-v14-concluir-390.png') });
   await page.click('[data-action="set-rating"][data-value="4.5"]');
   await page.click(saveBtn);
-  await page.waitForSelector('.hero');
+  await page.waitForSelector('.hero, .ficha-hero');
   const done = bookIn(await waitState((s) => bookIn(s, 'lendo').status === 'lido'), 'lendo');
   assert.equal(done.rating, 4.5);
   assert.equal(done.endDate, '2026-10-16');
