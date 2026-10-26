@@ -37,7 +37,8 @@ function ranking(title, list) {
 function formatCard(s) {
   const phys = s.formats[FORMATS.PHYSICAL];
   const kin = s.formats[FORMATS.KINDLE];
-  const pct = (n) => Math.round((n / s.count) * 100);
+  // Os dois % somam 100 (1 de 8 e 7 de 8 não viram 13% + 88%).
+  const pct = (n) => (n === kin && phys ? 100 - Math.round((phys / s.count) * 100) : Math.round((n / s.count) * 100));
   const label = (side, name, n) => `
     <span class="fmt-label fmt-${side}">
       <span class="fmt-name"><span class="dot ${side === 'a' ? 'dot-a' : 'dot-b'}"></span>${name} <span class="fmt-pct">${pct(n)}%</span></span>

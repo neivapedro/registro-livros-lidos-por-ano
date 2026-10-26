@@ -1120,7 +1120,9 @@ document.addEventListener('change', (e) => {
     render();
   } else if (t.dataset.change === 'summary-year') {
     if (t.value !== 'todos') ui.year = Number(t.value);
-    go(`#/resumo/${t.value}`);
+    // A aba continua a mesma no outro ano, e o endereço diz qual é (voltar/avançar e link direto).
+    const aba = t.value !== 'todos' && ui.summaryTab !== 'geral' ? `?aba=${ui.summaryTab}` : '';
+    go(`#/resumo/${t.value}${aba}`);
   } else if (t.dataset.filter && t.dataset.filter !== 'q') {
     ui.filters[t.dataset.filter] = t.value;
     render();

@@ -50,7 +50,9 @@ export function monthValues(c, m) {
 function valueLabel(x, y, c) {
   const below = c.goal && c.deviation < 0;
   const nearEnd = c.today.x > 10.6;
-  const anchor = below && !nearEnd ? 'start' : 'end';
+  // Começo do ano: à esquerda do ponto ficam os rótulos do eixo y, então o número vai para a direita.
+  const nearStart = c.today.x < 1.2;
+  const anchor = nearStart || (below && !nearEnd) ? 'start' : 'end';
   const dx = anchor === 'start' ? 8 : -8;
   return `<text class="sc-val" x="${(x + dx).toFixed(1)}" y="${(below ? y + 18 : y - 9).toFixed(1)}" text-anchor="${anchor}">${esc(curveAmount(c.kind, c.realized))}</text>`;
 }

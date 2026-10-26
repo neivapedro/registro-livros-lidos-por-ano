@@ -37,8 +37,9 @@ function kpis(state, s, year, today) {
   const booksDelta = d(s.count, base?.count, {},
     (x) => (x.dir === 'same' ? 'igual' : plural(abs(x.diff), 'livro', 'livros')),
     (x) => same(x, `${plural(abs(x.diff), 'livro', 'livros')} a ${x.dir === 'up' ? 'mais' : 'menos'} que ${since}`));
-  const pagesDelta = base?.pages
-    ? d(s.pages, base.pages, {},
+  // Sem páginas no ano o bloco mostra "—": sem variação ao lado (um "▼ 100%" sob um traço confunde).
+  const pagesDelta = base?.pages && s.pages
+    ? d(s.pages, base.pages, { byPct: true },
       (x) => (x.dir === 'same' ? 'igual' : `${abs(x.pct)}%`),
       (x) => same(x, `${abs(x.pct)}% ${x.dir === 'up' ? 'a mais' : 'a menos'} que ${since}`))
     : '';
@@ -147,14 +148,16 @@ function monthsCard({ state, ui, s, today, year, streak }) {
 function pagesPerDayCard(state, s, year) {
   if (!s.pages) return '';
   const d = dailyPages(state.books, year);
+  // Abaixo de 10 com uma casa: 0,4 pág./dia não vira "0" num ano com páginas lidas.
+  const perDay = (n) => (n < 10 ? decimal(n) : num(n));
   const cell = (value, label, sub = '') => `
     <div class="ppd-cell"><span class="ppd-value">${value}</span><span class="ppd-label">${label}</span>${sub ? `<span class="ppd-sub">${sub}</span>` : ''}</div>`;
   return `
     <section class="card">
       <h2>Páginas por dia</h2>
       <div class="ppd">
-        ${cell(num(s.pagesPerDay), 'média no ano')}
-        ${d.days ? cell(num(d.perReadingDay), 'por dia de leitura') : ''}
+        ${cell(perDay(s.pagesPerDay), 'média no ano')}
+        ${d.days ? cell(perDay(d.perReadingDay), 'por dia de leitura') : ''}
         ${d.best ? cell(num(d.best.pages), 'melhor dia', formatShort(d.best.date)) : ''}
       </div>
     </section>`;

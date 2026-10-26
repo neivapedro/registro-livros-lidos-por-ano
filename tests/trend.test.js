@@ -92,7 +92,7 @@ test('curva S: textos à frente, em linha e sem palavras de cobrança', () => {
   // 31 de dezembro: não divide por zero.
   const last = sCurve({ monthly: [1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0], goal: 12, year: 2026, today: '2026-12-31' });
   assert.equal(last.perMonth, null);
-  assert.equal(curveText(last).detail, 'Faltam 1 livro até 31 dez');
+  assert.equal(curveText(last).detail, 'Falta 1 livro até 31 dez');
 });
 
 test('curva S de páginas: meses somam o total do ano e a projeção é a do Início', () => {
@@ -191,4 +191,58 @@ test('notas: só a faixa usada, com no mínimo 5 colunas', () => {
 test('autores: só os repetidos', () => {
   assert.deepEqual(repeatedAuthors([{ label: 'A', count: 2 }, { label: 'B', count: 1 }]), [{ label: 'A', count: 2 }]);
   assert.deepEqual(repeatedAuthors([{ label: 'B', count: 1 }]), []);
+});
+
+// ---------- QA do Resumo 1.4 ----------
+
+test('QA: projeção só depois das primeiras semanas (1 livro em 1º de janeiro não "projeta" 365)', () => {
+  const monthly = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+  const jan1 = sCurve({ monthly, goal: 15, year: 2026, today: '2026-01-01' });
+  assert.equal(jan1.projection, null);
+  assert.doesNotMatch(curveText(jan1).detail, /ritmo atual/);
+  assert.equal(sCurve({ monthly, goal: 15, year: 2026, today: '2026-01-20' }).projection, null);
+  const later = sCurve({ monthly, goal: 15, year: 2026, today: '2026-01-21' });
+  assert.equal(later.projection.to.v, Math.round((1 / 21) * 365 * 10) / 10);
+  const pages = sCurve({ monthly: [80, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], goal: 5000, year: 2026, today: '2026-01-02', kind: 'paginas' });
+  assert.equal(pages.projection, null);
+});
+
+test('QA: "falta 1" no singular, "faltam" no plural', () => {
+  const dec = (n) => curveText(sCurve({ monthly: [n, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], goal: 12, year: 2026, today: '2026-12-15' })).detail;
+  assert.match(dec(11), /^Falta 1 livro até 31 dez/);
+  assert.match(dec(9), /^Faltam 3 livros até 31 dez/);
+  const pg = (n) => curveText(sCurve({ monthly: [n, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0], goal: 3000, year: 2026, today: '2026-12-15', kind: 'paginas' })).detail;
+  assert.match(pg(2999), /^Falta 1 pág\. até 31 dez/);
+  assert.match(pg(2000), /^Faltam 1\.000 págs\. até 31 dez/);
+});
+
+test('QA: ano futuro sem "abaixo da meta" e sem variação contra o ano anterior', () => {
+  const books = sample();
+  const c = sCurve({ monthly: booksByMonth(books, 2027), goal: 12, year: 2027, today: TODAY });
+  assert.equal(c.isFuture, true);
+  assert.deepEqual(curveText(c), { headline: 'Meta de 12 livros', detail: 'Previsto: 1 por mês' });
+  assert.equal(previousYearBaseline(books, 2027, TODAY), null);
+  const p = sCurve({ monthly: Array(12).fill(0), goal: 6000, year: 2027, today: TODAY, kind: 'paginas' });
+  assert.deepEqual(curveText(p), { headline: 'Meta de 6.000 páginas', detail: 'Previsto: ~500 por mês' });
+});
+
+test('QA: variação em % segue o % arredondado (sem "▼ 0%" nem -0)', () => {
+  assert.deepEqual(kpiDelta(2000, 2004, { byPct: true }), { dir: 'same', diff: -4, pct: 0, favorable: null });
+  assert.ok(Object.is(kpiDelta(2000, 2004).pct, 0), 'sem -0');
+  assert.equal(kpiDelta(2100, 2000, { byPct: true }).dir, 'up');
+  assert.equal(kpiDelta(1, 0, { byPct: true }).dir, 'up', 'sem % (ano anterior 0): usa a diferença');
+});
+
+test('QA: mesmo dia do ano anterior nas viradas (1º jan, 31 dez, 29 fev)', () => {
+  const books = [
+    book('x', { endDate: '2025-01-01', startDate: '2025-01-01', rating: 4 }),
+    book('y', { endDate: '2025-12-31', startDate: '2025-12-01', rating: 2 }),
+    book('z', { endDate: '2027-02-28', startDate: '2027-02-01', rating: 5 }),
+  ];
+  assert.equal(previousYearBaseline(books, 2026, '2026-01-01').count, 1);
+  assert.equal(previousYearBaseline(books, 2026, '2026-12-31').count, 2);
+  assert.equal(previousYearBaseline(books, 2026, '2026-12-31').avgRating, 3);
+  const leap = previousYearBaseline(books, 2028, '2028-02-29');
+  assert.equal(leap.until, '2027-02-28');
+  assert.equal(leap.count, 1);
 });

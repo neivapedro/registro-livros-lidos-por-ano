@@ -1265,6 +1265,8 @@ p, .muted.small, .more-summary { text-wrap: pretty; }
   display: flex; flex-direction: column; justify-content: center; gap: 2px; text-align: left;
 }
 .fmt-label.fmt-b { align-items: flex-end; text-align: right; margin-left: auto; }
+/* Só Kindle: a legenda fica à esquerda, como as outras (sozinha à direita parecia solta). */
+.fmt-label.fmt-b:only-child { align-items: flex-start; text-align: left; margin-left: 0; }
 .fmt-name { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; font-weight: 700; }
 .fmt-pct { font-variant-numeric: tabular-nums; color: var(--text-soft); font-weight: 800; }
 .fmt-detail { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
