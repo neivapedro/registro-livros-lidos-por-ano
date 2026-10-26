@@ -62,6 +62,12 @@ async function waitState(p, predicate, what = '') {
   throw new Error(`Estado salvo não chegou ao esperado ${what}: ${JSON.stringify(last)?.slice(0, 300)}`);
 }
 const onPage = (p, name) => p.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
+
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore(p) {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
 const toastText = (p) => p.textContent('#toast');
 const waitToast = (p, re) => p.waitForFunction((src) => new RegExp(src).test(document.getElementById('toast').textContent), re.source);
 
@@ -973,7 +979,9 @@ await scenario('campos com letra >= 16 px (iPhone não dá zoom) nos editores', 
   assert.deepEqual(await small(), [], 'editor de página');
   await p.goto(`${BASE}#/livro/r`);
   await onPage(p, 'livro');
-  await p.click('[data-action="open-genre"]');
+  await openMore(p);
+  await p.selectOption('#f-genre', { label: '+ Novo gênero…' });
+  await p.waitForSelector('#new-genre');
   assert.deepEqual(await small(), [], 'formulário lendo');
   await p.click('[data-action="set-status"][data-value="abandonado"]');
   await p.click('[data-action="set-format"][data-value="kindle"]');

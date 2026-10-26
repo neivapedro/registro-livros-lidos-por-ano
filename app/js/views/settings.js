@@ -30,23 +30,30 @@ export function storageLine(info) {
   return parts.length ? `<p class="muted small storage-info">${parts.join(' · ')}</p>` : '';
 }
 
+/** Grupo de ajustes no estilo do iPhone: título fora do cartão, cartão, nota de rodapé. */
+function group(id, title, body, foot = '', cls = '') {
+  return `
+    <section class="set-group" aria-labelledby="set-${id}">
+      <h2 class="set-head" id="set-${id}">${esc(title)}</h2>
+      <div class="card set-card${cls ? ` ${cls}` : ''}">${body}
+      </div>${foot ? `
+      <p class="set-foot">${foot}</p>` : ''}
+    </section>`;
+}
+
 /** Chave opcional do Google Books (guardada fora do backup; veja prefs.js). */
 function googleKeyCard(hasKey) {
-  return `
-    <section class="card gkey">
-      <h2>Busca de livros</h2>
-      <p class="muted small">Opcional: com uma chave gratuita do Google Books a busca por título encontra mais livros brasileiros.</p>
-      <div class="field">
-        <label for="gb-key">Chave do Google Books</label>
-        <input id="gb-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AIza…)" data-gkey>
-      </div>
-      <p class="small gkey-status${hasKey ? ' is-on' : ''}" role="status">${hasKey ? `${icon('check', { size: 14, stroke: 2.4 })}Chave configurada` : 'Sem chave — usando BrasilAPI e Open Library'}</p>
-      <div class="two-cols">
-        <button type="button" class="btn-primary sm" data-action="save-gkey">Salvar</button>
-        <button type="button" class="btn-ghost" data-action="remove-gkey"${hasKey ? '' : ' disabled'}>Remover</button>
-      </div>
-      <p class="muted small">A chave fica só neste aparelho e não vai para o backup.</p>
-    </section>`;
+  return group('gkey', 'Busca de livros', `
+        <p class="muted small">Opcional: com uma chave gratuita do Google Books a busca por título encontra mais livros brasileiros.</p>
+        <div class="field">
+          <label for="gb-key">Chave do Google Books</label>
+          <input id="gb-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AIza…)" data-gkey>
+        </div>
+        <p class="small gkey-status${hasKey ? ' is-on' : ''}" role="status">${hasKey ? `${icon('check', { size: 14, stroke: 2.4 })}Chave configurada` : 'Sem chave — usando BrasilAPI e Open Library'}</p>
+        <div class="two-cols">
+          <button type="button" class="btn-primary sm" data-action="save-gkey">Salvar</button>
+          <button type="button" class="btn-ghost" data-action="remove-gkey"${hasKey ? '' : ' disabled'}>Remover</button>
+        </div>`, 'A chave fica só neste aparelho e não vai para o backup.', 'gkey');
 }
 
 export function settingsView({ state, ui, today }) {
@@ -61,38 +68,26 @@ export function settingsView({ state, ui, today }) {
       <h1 class="top-title">Ajustes</h1>
       <span class="icon-btn-spacer"></span>
     </header>
-
-    <section class="card">
-      <h2>Meta de leitura</h2>
-      ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
-      ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
-      ${pageGoalSettings(state, year)}
-    </section>
-
-    <section class="card">
-      <h2>Backup dos dados</h2>
-      <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
-      <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>
-      ${storageLine(ui?.storageInfo)}
-      <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
-      <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
-      <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
-      <p class="muted small">A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.</p>
-    </section>
+${group('meta', 'Meta de leitura', `
+        ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
+        ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
+        ${pageGoalSettings(state, year)}`)}
+${group('backup', 'Backup dos dados', `
+        <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
+        <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>
+        ${storageLine(ui?.storageInfo)}
+        <div class="set-actions">
+          <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
+          <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
+          <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
+        </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.')}
 ${googleKeyCard(Boolean(ui?.googleKey))}
-
-    <section class="card">
-      <h2>Instalar no celular</h2>
-      <div class="howto">
-        <p><strong>Android (Chrome):</strong> menu ⋮ → <em>Adicionar à tela inicial</em> ou <em>Instalar app</em>.</p>
-        <p><strong>iPhone (Safari):</strong> botão Compartilhar → <em>Adicionar à Tela de Início</em>.</p>
-        <p class="muted small">Instalado, o Leituras abre como um app e funciona sem internet (só a busca de livros precisa de conexão).</p>
-      </div>
-    </section>
-
-    <section class="card">
-      <h2>Sobre</h2>
-      <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books, com a chave).</p>
-      <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>
-    </section>`;
+${group('instalar', 'Instalar no celular', `
+        <div class="howto">
+          <p><strong>Android (Chrome):</strong> menu ⋮ → <em>Adicionar à tela inicial</em> ou <em>Instalar app</em>.</p>
+          <p><strong>iPhone (Safari):</strong> botão Compartilhar → <em>Adicionar à Tela de Início</em>.</p>
+        </div>`, 'Instalado, o Leituras abre como um app e funciona sem internet (só a busca de livros precisa de conexão).')}
+${group('sobre', 'Sobre', `
+        <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books, com a chave).</p>
+        <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>`)}`;
 }

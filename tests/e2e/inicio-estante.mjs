@@ -117,6 +117,12 @@ const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const toastHas = (re) => page.waitForFunction((src) => new RegExp(src).test(document.getElementById('toast').textContent), re.source);
 
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore(p = page) {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
 async function noOverflow(label) {
   for (const width of [430, 375, 320]) {
     await page.setViewportSize({ width, height: 844 });
@@ -307,6 +313,7 @@ try {
   await onPage('novo');
   assert.deepEqual(await page.locator('#series-names option').evaluateAll((els) => els.map((e) => e.value)), ['Duna']);
   await page.fill('#f-title', 'Duna: contos');
+  await openMore();
   await page.fill('#f-series', 'Duna');
   await page.fill('#f-series-n', '2,5');
   await page.click('.btn-primary:has-text("Salvar livro")');

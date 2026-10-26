@@ -61,6 +61,12 @@ const noErrors = (where) => assert.deepEqual(errors, [], `erros no console em ${
 const onPage = (name) => p.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const readState = () => p.evaluate(async () => (await import('/js/db.js')).getItem('state'));
 const text = (sel) => p.innerText(sel).then((t) => t.replace(/\s+/g, ' ').trim());
+
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore() {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
 const toast = () => p.waitForSelector('#toast.show').then((el) => el.textContent());
 const waitToast = (re) => p.waitForFunction((src) => document.querySelector('#toast.show') && new RegExp(src).test(document.getElementById('toast').textContent), re.source);
 async function day(iso, hh = '21:30') {
@@ -178,7 +184,8 @@ try {
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Concluir leitura');
   await p.click('.star-slot:nth-child(5) .star-hit.left');
-  await p.click('[data-action="open-genre"]');
+  await openMore(p);
+  await p.selectOption('#f-genre', { label: '+ Novo gênero…' });
   await p.fill('#new-genre', 'Distopia');
   await p.press('#new-genre', 'Enter');
   await p.click('.form-top button[type="submit"]');
@@ -196,6 +203,7 @@ try {
   await go('#/livro/duna');
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Editar livro');
+  await openMore(p);
   await p.fill('#f-series', 'Duna');
   await p.fill('#f-series-n', '1');
   await p.fill('#f-tag', 'ficção científica, clássico,');
@@ -253,6 +261,7 @@ try {
   await go('#/livro/duna');
   await onPage('livro');
   await p.fill('#f-title', 'Duna: edição especial de colecionador com ilustrações e notas do tradutor');
+  await openMore(p);
   await p.fill('#f-notes', 'Uma saga sobre poder, religião e ecologia que continua atual depois de sessenta anos; cada releitura mostra uma camada nova da história.');
   await p.click('.form-top button[type="submit"]');
   await waitToast(/Alterações salvas/);

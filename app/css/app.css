@@ -1023,3 +1023,131 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   .retro .slide.center .cover-xl .cover-title { font-size: 20px; }
   .retro .retro-quote { display: none; }
 }
+
+/* ---------- v1.4 Formulário e tipografia ---------- */
+/* Formulário enxuto (essencial primeiro, "Mais detalhes" recolhível, barra de salvar fixa),
+   acabamento tipográfico global (números alinhados, títulos de lista, contraste, rótulos)
+   e Ajustes em grupos. Só tokens: o tema claro redefine as variáveis e herda tudo. */
+
+.form-lean { gap: 22px; }
+
+/* Título, autor e páginas num só cartão, com divisórias finas (como os Ajustes do iPhone). */
+.field-stack {
+  display: flex; flex-direction: column; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
+}
+.field-stack > .field { background: transparent; border: 0; border-radius: 0; }
+.field-stack > .field + .field {
+  background-image: linear-gradient(var(--line-strong), var(--line-strong));
+  background-size: calc(100% - 14px) 1px; background-position: right top; background-repeat: no-repeat;
+}
+.field-stack > .field:focus-within { outline: 1px solid var(--accent); outline-offset: -1px; }
+.field-stack > .field:first-child { border-top-left-radius: 16px; border-top-right-radius: 16px; }
+.field-stack > .field:last-child { border-bottom-left-radius: 16px; border-bottom-right-radius: 16px; }
+
+/* Formato: uma linha só, ao lado do status (muda o progresso entre páginas e %). */
+.format-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-left: 2px; }
+.format-label { font-size: 14px; font-weight: 600; color: var(--text-soft); }
+.format-row .seg-mini { grid-template-columns: repeat(2, minmax(84px, auto)); }
+
+/* Gênero: seletor nativo, o campo inteiro é tocável. */
+.select-field { position: relative; padding: 0; }
+.select-field label { position: absolute; top: 10px; left: 14px; pointer-events: none; }
+.select-field select {
+  appearance: none; -webkit-appearance: none;
+  width: 100%; min-height: 64px; padding: 30px 44px 10px 14px;
+  border: 0; border-radius: 16px; outline: none; background: transparent;
+  font-size: 16px; font-weight: 700; color: var(--text);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.select-chevron { position: absolute; right: 14px; top: 50%; translate: 0 -50%; pointer-events: none; color: var(--muted); }
+.new-genre { display: flex; align-items: center; gap: 8px; }
+.new-genre input { flex: 1; min-width: 0; width: auto; height: 48px; }
+.new-genre .chip-btn { min-height: 48px; flex-shrink: 0; }
+.new-genre .btn-text { flex-shrink: 0; padding: 0 6px; min-height: 48px; }
+
+/* "Mais detalhes": botão com resumo do que está preenchido; abre com a altura animada. */
+.more { display: flex; flex-direction: column; border-top: 1px solid var(--line); }
+.more-toggle {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 64px;
+  padding: 14px 2px; border: 0; background: transparent; color: var(--text); text-align: left;
+}
+.more-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.more-title { font-size: 16px; font-weight: 700; }
+.more-summary { font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.more.is-open .more-summary { display: none; }
+.more-chevron { flex-shrink: 0; color: var(--muted); transition: transform .28s ease; }
+.more.is-open .more-chevron { transform: rotate(180deg); }
+.more-body {
+  display: grid; grid-template-rows: 0fr; visibility: hidden;
+  transition: grid-template-rows .3s ease, visibility 0s linear .3s;
+}
+.more.is-open .more-body { grid-template-rows: 1fr; visibility: visible; transition: grid-template-rows .3s ease, visibility 0s; }
+.more-inner { min-height: 0; overflow: hidden; display: flex; flex-direction: column; gap: 22px; }
+.more-inner > :first-child { margin-top: 4px; }
+.more-inner > :last-child { margin-bottom: 2px; }
+/* Dentro da área recolhível o contorno de foco fica para dentro (senão seria cortado). */
+.more-inner :focus-visible { outline-offset: -2px; }
+
+/* Barra de salvar: acompanha a rolagem e respeita a área segura; com o teclado aberto
+   (campo de texto em foco) volta ao fim do formulário para não cobrir o que se digita. */
+.form-actions {
+  position: sticky; bottom: 0; z-index: 4;
+  margin: 0 -18px; padding: 16px 18px calc(12px + var(--safe-b));
+  background: linear-gradient(to bottom, transparent, var(--bg) 16px);
+}
+.form:has(:is(input:not([type="file"]), textarea, select):focus) .form-actions { position: relative; }
+/* O aviso (toast) aparece acima da barra de salvar, não sobre ela. */
+body:has(.form-actions) .toast { bottom: calc(100px + var(--safe-b)); }
+html:has(.form-actions) { scroll-padding: calc(72px + var(--safe-t)) 0 calc(104px + var(--safe-b)); }
+
+/* Fim do formulário: ações raras e destrutivas, discretas e longe do Salvar. */
+.form-quiet { display: flex; flex-direction: column; margin-top: 10px; border-top: 1px solid var(--line); }
+.quiet-btn {
+  display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px;
+  padding: 10px 2px; border: 0; background: transparent; color: var(--text); text-align: left; font-size: 15px;
+}
+.quiet-btn + .quiet-btn { border-top: 1px solid var(--line); }
+.quiet-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.quiet-btn.danger { color: var(--danger); font-weight: 700; gap: 10px; }
+
+/* ---------- Tipografia (V15) ---------- */
+
+/* Números com largura fixa onde eles se alinham ou mudam (contadores, gráficos, diário, metas). */
+.tile-value, .tile-of, .ring-count, .ring-sub, .hero-pages-text, .bar-value, .bar-label,
+.cmp-count, .cmp-year, .cmp2-value, .cmp2-cell, .cal-num, .cal-detail-line, .cal-foot,
+.diary-date, .diary-day, .diary-delta, .diary-range, .diary-sub, .progress-text, .pace-line,
+.step-value, .tag-count-n, .book-tab-count, .seg-count, .grid-meta, .grid-rating, .star-value,
+.hbar-head, .streak-text, .split-legend, .timer-clock, .book-row-author, .result-text .small,
+.page-goal-field input, .progress-edit-field input, .field input, .tnum, table {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Títulos de livro em lista: a serifada é estreita; um pouco maior e mais solta fica legível. */
+.book-row-title { font-size: 21px; line-height: 1.12; letter-spacing: 0.15px; }
+.result-title { font-size: 20px; line-height: 1.12; letter-spacing: 0.15px; }
+
+/* Rótulos em caixa alta com o mesmo espaçamento em todo o app. */
+.label, .eyebrow, .list-head, .set-head { letter-spacing: 0.1em; font-weight: 700; }
+
+h1, h2, .serif-title, .display, .empty-title, .more-title { text-wrap: balance; }
+p, .muted.small, .more-summary { text-wrap: pretty; }
+
+/* Contraste (AA, 4,5:1): texto que usava o tom "faint" passa para "muted". */
+.faint, .cal-wd, .mile.is-next .mile-detail, .retro-note.faint { color: var(--muted); }
+@supports (color: color-mix(in srgb, red, blue)) {
+  ::placeholder, .field input::placeholder, .search-box input::placeholder,
+  .tag-input input::placeholder, textarea::placeholder {
+    color: color-mix(in srgb, var(--muted) 75%, var(--faint));
+  }
+}
+
+/* ---------- Ajustes em grupos ---------- */
+
+.set-group { display: flex; flex-direction: column; gap: 8px; }
+.set-head { font-size: 12px; text-transform: uppercase; color: var(--muted); padding: 0 4px; }
+.set-foot { font-size: 13px; color: var(--muted); padding: 0 4px; }
+.set-card { gap: 14px; }
+.set-card > .stepper-row + .stepper-row { padding-top: 14px; border-top: 1px solid var(--line); }
+.set-actions { display: flex; flex-direction: column; gap: 10px; }
+.set-card .howto { gap: 10px; }

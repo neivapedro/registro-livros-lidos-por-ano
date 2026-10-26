@@ -28,7 +28,7 @@ import { allTimeView } from './views/alltime.js';
 import { BOOK_TABS } from './views/book-tabs.js';
 import { calendarUi, heatmapDayAt } from './views/calendar.js';
 import { compareYearsOf } from './views/charts.js';
-import { formView, lookupResults, readingSummary } from './views/form.js';
+import { detailsHaveErrors, detailsSummary, formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
@@ -210,6 +210,7 @@ function render() {
   root.innerHTML = html;
   root.dataset.page = route.name;
   applyTints(root);
+  revealFinishFields();
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;
@@ -686,6 +687,8 @@ function saveBook() {
   const errors = validateBook(d, todayIso());
   if (errors.length) {
     ui.formErrors = errors;
+    // Erro em gênero/série/etiquetas/data alvo: "Mais detalhes" abre para mostrá-lo.
+    if (detailsHaveErrors(d, todayIso())) ui.moreDetails = { draft: d, open: true };
     render();
     document.querySelector('.form-errors')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     return;
@@ -1250,6 +1253,61 @@ document.addEventListener('error', (e) => {
 }, true);
 
 window.addEventListener('hashchange', render);
+
+// ---------- Formulário enxuto (v1.4): "Mais detalhes", gênero e "Concluir" ----------
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+Object.assign(actions, {
+  // Abre/fecha sem redesenhar a tela: a altura anima (CSS) e o foco fica no botão.
+  'toggle-more'(el) {
+    if (!ui.draft) return;
+    const open = el.getAttribute('aria-expanded') !== 'true';
+    ui.moreDetails = { draft: ui.draft, open };
+    el.setAttribute('aria-expanded', String(open));
+    const box = el.closest('.more');
+    box?.classList.toggle('is-open', open);
+    // Fechando: o resumo passa a mostrar o que foi preenchido lá dentro.
+    const summary = box?.querySelector('.more-summary');
+    if (!open && summary) summary.innerHTML = detailsSummary(ui.draft);
+    // Botão na metade de baixo da tela: sobe um pouco para mostrar o que abriu.
+    if (open && el.getBoundingClientRect().top > window.innerHeight * 0.55) {
+      el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    }
+  },
+  'close-genre'() {
+    ui.newGenreOpen = false;
+    render();
+    document.getElementById('f-genre')?.focus({ preventScroll: true });
+  },
+});
+
+// Seletor de gênero: "Sem gênero" apaga; "+ Novo gênero…" abre o campo de texto.
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (!('genreSelect' in t.dataset) || !ui.draft) return;
+  if (t.selectedOptions[0] && 'newGenreOption' in t.selectedOptions[0].dataset) {
+    t.value = ui.draft.genre || '';
+    actions['open-genre']();
+    return;
+  }
+  ui.draft.genre = t.value || null;
+  if (ui.newGenreOpen) {
+    ui.newGenreOpen = false;
+    render();
+  }
+});
+
+// "Concluir" (?concluir=1): a tela abre já no status, datas e nota, uma vez por rascunho.
+let revealedDraft = null;
+function revealFinishFields() {
+  if (!ui.finishing || !ui.draft || revealedDraft === ui.draft) return;
+  const status = document.getElementById('f-status');
+  if (!status) return;
+  revealedDraft = ui.draft;
+  const last = document.querySelector('.star-row') || document.getElementById('f-period') || status;
+  if (last.getBoundingClientRect().bottom > window.innerHeight - 96) status.scrollIntoView({ block: 'start' });
+}
 
 // ---------- Cronômetro de leitura ----------
 // A sessão fica no localStorage (fora do estado e do backup: é passageira) e o tempo

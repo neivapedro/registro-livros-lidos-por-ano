@@ -123,6 +123,12 @@ const shot = (name) => page.screenshot({ path: join(SHOTS, `${name}.png`), fullP
 const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore(p = page) {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
 try {
   step('migração dos dados do localStorage (versão 1.2) para o IndexedDB');
   {
@@ -165,8 +171,9 @@ try {
   await page.locator('#f-start').dispatchEvent('change');
   await page.fill('#f-end', '2026-09-21');
   await page.locator('#f-end').dispatchEvent('change');
-  await page.click('[data-action="set-genre"][data-value="Gestão"]');
   await page.click('[data-action="set-rating"][data-value="5"]');
+  await openMore();
+  await page.selectOption('#f-genre', 'Gestão');
   await page.click('[data-action="toggle-fav"]');
   await page.fill('#f-notes', 'A restrição dita o ritmo do sistema inteiro.');
   assert.match(await page.textContent('.form'), /Lido em 19 dias/);

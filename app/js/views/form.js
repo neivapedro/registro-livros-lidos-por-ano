@@ -1,14 +1,14 @@
-import { daysInclusive, isIsoDate, yearOf } from '../dates.js';
+import { daysInclusive, formatShort, isIsoDate, yearOf } from '../dates.js';
 import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
-import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags } from '../store.js';
+import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags, validateBook } from '../store.js';
 import { hasTag } from '../tags.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
 
-function segmented(options, current, action, label) {
+function segmented(options, current, action, label, cls = '') {
   const buttons = options.map(([value, text]) => `
     <button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="${action}" data-value="${esc(value)}" aria-pressed="${value === current}">${esc(text)}</button>`).join('');
-  return `<div class="segmented" role="group" aria-label="${esc(label)}" style="--seg-count:${options.length}">${buttons}</div>`;
+  return `<div class="segmented${cls ? ` ${cls}` : ''}" role="group" aria-label="${esc(label)}" style="--seg-count:${options.length}">${buttons}</div>`;
 }
 
 export function lookupResults(lookup) {
@@ -118,17 +118,142 @@ function tagsField(state, ui, d) {
       </section>`;
 }
 
+// ---------- "Mais detalhes" (v1.4) ----------
+// O formulário mostra primeiro o essencial; gênero, série, etiquetas, data alvo,
+// favorito e anotações ficam numa seção recolhível. Ela abre sozinha quando algum
+// desses campos já tem valor (nada fica escondido sem aviso) ou quando um erro
+// de validação está lá dentro. A escolha de abrir/fechar vale enquanto o mesmo
+// rascunho estiver aberto (ui.moreDetails guarda o rascunho a que se refere).
+
+const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
+
+/** Algum campo de "Mais detalhes" (dos que aparecem neste status) está preenchido? */
+export function detailsFilled(d) {
+  return filled(d.genre) || filled(d.series) || filled(d.seriesNumber) || (d.tags || []).length > 0
+    || filled(d.notes)
+    || (d.status === STATUS.READING && filled(d.targetDate))
+    || (d.status === STATUS.READ && d.favorite === true);
+}
+
+/** Algum erro de validação vem de um campo de "Mais detalhes"? */
+export function detailsHaveErrors(d, today) {
+  const without = { ...d, seriesNumber: null, targetDate: null, tags: [] };
+  return validateBook(d, today).length > validateBook(without, today).length;
+}
+
+/**
+ * Aberta ou fechada: a escolha feita neste rascunho; sem escolha, aberta se houver algo preenchido.
+ * Depois de aberta sozinha, fica aberta (limpar o último campo não a recolhe debaixo do dedo).
+ */
+export function detailsOpen(ui) {
+  const m = ui.moreDetails;
+  if (m && m.draft === ui.draft) return m.open;
+  if (!detailsFilled(ui.draft)) return false;
+  ui.moreDetails = { draft: ui.draft, open: true };
+  return true;
+}
+
+/** Linha sob "Mais detalhes": o que está preenchido, ou o que dá para preencher. */
+export function detailsSummary(d) {
+  const parts = [];
+  if (filled(d.genre)) parts.push(d.genre);
+  if (filled(d.series)) parts.push(filled(d.seriesNumber) ? `${d.series} nº ${formatSeriesNumber(d.seriesNumber)}` : d.series);
+  const tags = (d.tags || []).length;
+  if (tags) parts.push(plural(tags, 'etiqueta', 'etiquetas'));
+  if (d.status === STATUS.READING && isIsoDate(d.targetDate)) parts.push(`terminar até ${formatShort(d.targetDate)}`);
+  if (d.status === STATUS.READ && d.favorite) parts.push('favorito');
+  if (filled(d.notes)) parts.push(d.status === STATUS.DROPPED ? 'com observações' : 'com anotações');
+  if (parts.length) return parts.map(esc).join(' · ');
+  const hints = ['Gênero', 'série', 'etiquetas'];
+  if (d.status === STATUS.READING) hints.push('data alvo');
+  if (d.status === STATUS.READ) hints.push('favorito');
+  hints.push(d.status === STATUS.DROPPED ? 'observações' : 'anotações');
+  return esc(`${hints.slice(0, -1).join(', ')} e ${hints[hints.length - 1]}`);
+}
+
+/** Gênero: um seletor compacto (no iPhone, a roda nativa) com "Novo gênero…" no fim. */
+function genreField(state, ui, d) {
+  const genres = allGenres(state);
+  if (d.genre && !genres.includes(d.genre)) genres.push(d.genre);
+  const options = genres.map((g) => `<option value="${esc(g)}"${g === d.genre ? ' selected' : ''}>${esc(g)}</option>`).join('');
+  const newGenre = ui.newGenreOpen ? `
+        <div class="new-genre">
+          <label class="sr-only" for="new-genre">Novo gênero</label>
+          <input id="new-genre" type="text" maxlength="60" autocomplete="off" enterkeyhint="done" placeholder="Nome do novo gênero" data-new-genre>
+          <button type="button" class="chip-btn is-on" data-action="add-genre">OK</button>
+          <button type="button" class="btn-text small" data-action="close-genre">Cancelar</button>
+        </div>` : '';
+  return `
+      <section class="field-group">
+        <div class="field select-field">
+          <label for="f-genre">Gênero</label>
+          <select id="f-genre" data-genre-select>
+            <option value=""${d.genre ? '' : ' selected'}>Sem gênero</option>
+            ${options}
+            <option value="" data-new-genre-option>+ Novo gênero…</option>
+          </select>
+          ${icon('chevronDown', { size: 18, stroke: 2, cls: 'select-chevron' })}
+        </div>${newGenre}
+      </section>`;
+}
+
+function favoriteToggle(d) {
+  return `
+      <button type="button" class="card toggle-row" data-action="toggle-fav" aria-pressed="${d.favorite}">
+        ${icon('heart', { size: 22, cls: 'accent', fill: d.favorite ? 'currentColor' : 'none' })}
+        <span class="toggle-text"><span class="strong">Favorito do ano</span><span class="muted small">Aparece em destaque no resumo${isIsoDate(d.endDate) ? ` de ${yearOf(d.endDate)}` : ''}</span></span>
+        <span class="switch${d.favorite ? ' is-on' : ''}"><span class="switch-knob"></span></span>
+      </button>`;
+}
+
+function moreDetails(state, ui, d, isEdit) {
+  const open = detailsOpen(ui);
+  return `
+      <div class="more${open ? ' is-open' : ''}">
+        <button type="button" class="more-toggle" data-action="toggle-more" aria-expanded="${open}" aria-controls="more-details">
+          <span class="more-text"><span class="more-title">Mais detalhes</span><span class="more-summary">${detailsSummary(d)}</span></span>
+          ${icon('chevronDown', { size: 20, stroke: 2, cls: 'more-chevron' })}
+        </button>
+        <div class="more-body" id="more-details" role="region" aria-label="Mais detalhes">
+          <div class="more-inner">
+            ${genreField(state, ui, d)}
+            ${seriesFields(state, d, isEdit)}
+            ${tagsField(state, ui, d)}
+            ${d.status === STATUS.READING ? `<section class="field-group">${targetDateField(d)}</section>` : ''}
+            ${d.status === STATUS.READ ? favoriteToggle(d) : ''}
+            <section class="field-group">
+              <label class="label" for="f-notes">${d.status === STATUS.DROPPED ? 'Observações' : 'Anotações'}</label>
+              <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
+            </section>
+          </div>
+        </div>
+      </div>`;
+}
+
+/** Datas e progresso que fazem sentido para o status (nada para "Quero ler"). */
+function periodFields(d) {
+  if (d.status === STATUS.WANT) return '';
+  const tracksProgress = d.status === STATUS.READING || d.status === STATUS.DROPPED;
+  const progress = !tracksProgress ? '' : d.format === FORMATS.KINDLE
+    ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
+    : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`;
+  const finished = d.status === STATUS.READ || d.status === STATUS.DROPPED;
+  return `
+      <section class="field-group" id="f-period">
+        <span class="label">Período de leitura</span>
+        <div class="two-cols">
+          <div class="field"><label for="f-start">Início</label><input id="f-start" type="date" value="${esc(d.startDate || '')}" data-field="startDate"></div>
+          ${finished ? `<div class="field"><label for="f-end">${d.status === STATUS.READ ? 'Término' : 'Parei em'}</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate"></div>` : ''}
+        </div>
+        ${progress}
+        <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
+      </section>`;
+}
+
 export function formView({ state, ui, isEdit, today }) {
   // Livro já salvo tem as abas Diário e Trechos (views/book-tabs.js).
   if (isEdit && ui.bookTab && ui.bookTab !== 'dados') return bookTabScreen({ state, ui, today });
   const d = ui.draft;
-  const genres = allGenres(state);
-  if (d.genre && !genres.includes(d.genre)) genres.push(d.genre);
-  const genreChips = genres.map((g) => `
-    <button type="button" class="chip-btn${g === d.genre ? ' is-on' : ''}" data-action="set-genre" data-value="${esc(g)}" aria-pressed="${g === d.genre}">${esc(g)}</button>`).join('');
-  const newGenre = ui.newGenreOpen
-    ? `<span class="new-genre"><label class="sr-only" for="new-genre">Novo gênero</label><input id="new-genre" type="text" maxlength="60" placeholder="Novo gênero" data-new-genre><button type="button" class="chip-btn is-on" data-action="add-genre">OK</button></span>`
-    : '<button type="button" class="chip-btn chip-dashed" data-action="open-genre">+ Novo</button>';
 
   // Duas áreas por estrela: metade esquerda = n - 0,5; direita = n. Tocar na nota atual apaga.
   const hit = (value, side) => `<button type="button" class="star-hit ${side}" data-action="set-rating" data-value="${value}" aria-label="${ratingLabel(value)}" aria-pressed="${d.rating === value}"></button>`;
@@ -143,6 +268,7 @@ export function formView({ state, ui, isEdit, today }) {
   const pickedCard = !isEdit && ui.picked
     ? `<div class="picked">${cover(d, { size: 'sm' })}<span class="picked-text"><span class="serif-title">${esc(d.title)}</span><span class="muted small">${esc(d.authors)}</span></span><button type="button" class="btn-text" data-action="unpick">Trocar</button></div>`
     : '';
+  const canReread = isEdit && ui.original?.status === STATUS.READ;
 
   return `
     <header class="form-top">
@@ -151,15 +277,17 @@ export function formView({ state, ui, isEdit, today }) {
       <button type="submit" form="book-form" class="btn-text accent strong">Salvar</button>
     </header>
     ${isEdit ? bookTabBar(storedBook(state, ui), 'dados') : ''}
-    <form id="book-form" class="form" data-submit="save-book" novalidate>
+    <form id="book-form" class="form form-lean" data-submit="save-book" novalidate>
       ${showLookup ? lookupBlock(ui) : ''}
       ${pickedCard}
 
       <section class="field-group">
         <span class="label">${showLookup ? 'Ou preencha os dados' : 'Dados do livro'}</span>
-        <div class="field"><label for="f-title">Título</label><input id="f-title" type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
-        <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
-        <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+        <div class="field-stack">
+          <div class="field"><label for="f-title">Título</label><input id="f-title" type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
+          <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
+          <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+        </div>
         <div class="cover-edit">
           ${d.cover
     ? `<button type="button" class="cover-zoom" data-action="zoom-cover" aria-label="Ver capa ampliada">${cover(d, { size: 'sm' })}<span class="cover-zoom-hint" aria-hidden="true">${icon('search', { size: 12, stroke: 2.4 })}</span></button>`
@@ -171,49 +299,22 @@ export function formView({ state, ui, isEdit, today }) {
         </div>
       </section>
 
-      <section class="field-group">
+      <section class="field-group" id="f-status">
         <span class="label">Status</span>
         ${segmented(Object.entries(STATUS_LABELS), d.status, 'set-status', 'Status')}
-      </section>
-
-      ${d.status !== STATUS.WANT ? `
-      <section class="field-group">
-        <span class="label">Período de leitura</span>
-        <div class="two-cols">
-          <div class="field"><label for="f-start">Início</label><input id="f-start" type="date" value="${esc(d.startDate || '')}" data-field="startDate"></div>
-          ${d.status === STATUS.READ || d.status === STATUS.DROPPED ? `<div class="field"><label for="f-end">${d.status === STATUS.READ ? 'Término' : 'Parei em'}</label><input id="f-end" type="date" value="${esc(d.endDate || '')}" data-field="endDate"></div>` : ''}
+        <div class="format-row">
+          <span class="format-label" aria-hidden="true">Formato</span>
+          ${segmented(Object.entries(FORMAT_LABELS), d.format, 'set-format', 'Formato', 'seg-mini')}
         </div>
-        ${d.status === STATUS.READING || d.status === STATUS.DROPPED ? `
-        ${d.format === FORMATS.KINDLE
-    ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
-    : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`}` : ''}
-        ${d.status === STATUS.READING ? targetDateField(d) : ''}
-        <div id="reading-summary" aria-live="polite">${readingSummary(d)}</div>
-      </section>` : ''}
-
-      <section class="field-group">
-        <span class="label">Formato</span>
-        ${segmented(Object.entries(FORMAT_LABELS), d.format, 'set-format', 'Formato')}
       </section>
 
-      <section class="field-group">
-        <span class="label">Gênero</span>
-        <div class="chips-wrap">${genreChips}${newGenre}</div>
-      </section>
-      ${seriesFields(state, d, isEdit)}
-      ${tagsField(state, ui, d)}
+      ${periodFields(d)}
 
       ${d.status === STATUS.READ ? `
       <section class="field-group">
         <span class="label">Sua nota</span>
         <div class="star-row" role="group" aria-label="Nota">${starButtons}<span class="star-value" aria-hidden="true">${d.rating ? formatRating(d.rating) : ''}</span></div>
-      </section>
-
-      <button type="button" class="card toggle-row" data-action="toggle-fav" aria-pressed="${d.favorite}">
-        ${icon('heart', { size: 22, cls: 'accent', fill: d.favorite ? 'currentColor' : 'none' })}
-        <span class="toggle-text"><span class="strong">Favorito do ano</span><span class="muted small">Aparece em destaque no resumo${isIsoDate(d.endDate) ? ` de ${yearOf(d.endDate)}` : ''}</span></span>
-        <span class="switch${d.favorite ? ' is-on' : ''}"><span class="switch-knob"></span></span>
-      </button>` : ''}
+      </section>` : ''}
 
       ${d.status === STATUS.DROPPED ? `
       <section class="field-group">
@@ -221,14 +322,21 @@ export function formView({ state, ui, isEdit, today }) {
         <textarea id="f-drop" rows="3" maxlength="10000" placeholder="Não prendeu, não era o momento, conteúdo fraco…" data-field="dropReason">${esc(d.dropReason || '')}</textarea>
       </section>` : ''}
 
-      <section class="field-group">
-        <label class="label" for="f-notes">${d.status === STATUS.DROPPED ? 'Observações' : 'Anotações'}</label>
-        <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
-      </section>
+      ${moreDetails(state, ui, d, isEdit)}
 
       ${errors}
-      <button type="submit" class="btn-primary">Salvar livro</button>
-      ${isEdit && ui.original?.status === STATUS.READ ? `<button type="button" class="btn-ghost" data-action="reread">Ler de novo</button>` : ''}
-      ${isEdit ? `<button type="button" class="btn-danger" data-action="delete-book">${icon('trash', { size: 18 })}Excluir livro</button>` : ''}
+      <div class="form-actions">
+        <button type="submit" class="btn-primary">Salvar livro</button>
+      </div>
+      ${isEdit ? `
+      <div class="form-quiet">
+        ${canReread ? `
+        <button type="button" class="quiet-btn" data-action="reread">
+          <span class="quiet-text"><span class="strong-ish">Ler de novo</span><span class="muted small">Começa uma nova leitura; a anterior continua no registro.</span></span>
+          ${icon('chevronRight', { size: 18, stroke: 2, cls: 'muted' })}
+        </button>` : ''}
+        <button type="button" class="quiet-btn danger" data-action="delete-book">${icon('trash', { size: 18 })}<span>Excluir livro</span></button>
+      </div>` : ''}
     </form>`;
 }
+
