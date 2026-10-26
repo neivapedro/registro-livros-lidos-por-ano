@@ -1,13 +1,16 @@
 import { formatShort, yearOf } from '../dates.js';
-import { FORMAT_LABELS, STATUS, getGoal } from '../store.js';
-import { paceLines } from '../pace.js';
+import { FORMATS, STATUS, getGoal, getPageGoal } from '../store.js';
+import { forecastFinish, paceLines } from '../pace.js';
 import { countByStatus, goalStreak, yearStats, yearsWithData } from '../stats.js';
-import { cover, decimal, esc, formatRating, icon, num, plural, emptyState, progressBar } from '../ui.js';
-import { timerBanner, timerButton } from './timer.js';
+import { pageGoalLine, pageGoalProgress } from '../charts.js';
+import {
+  GLYPHS, cover, emptyState, esc, finishHref, formatRating, icon, num, plural, progressOf, progressRing,
+} from '../ui.js';
+import { timerBanner } from './timer.js';
 import { firstUpNext } from '../upnext.js';
-import { pageGoalHero } from './charts.js';
 
-const RING_C = 2 * Math.PI * 56;
+const RING_R = 50;
+const RING_C = 2 * Math.PI * RING_R;
 
 export function yearSelect(years, selected, action, { withAll = false } = {}) {
   // O ano escolhido sempre aparece, mesmo que tenha ficado sem livros.
@@ -17,106 +20,126 @@ export function yearSelect(years, selected, action, { withAll = false } = {}) {
   return `<label class="year-pill"><span class="sr-only">Ano</span><select data-change="${action}">${options}</select>${icon('chevronDown', { size: 16, stroke: 2 })}</label>`;
 }
 
-function hero(stats, streak, isCurrentYear, pagesLine = '') {
+// ---------- Mosaico (bento): meta, páginas, nota e dias ----------
+
+function ringTile(stats, streak, isCurrentYear) {
   const dash = (RING_C * stats.progress).toFixed(1);
   const pct = Math.round(stats.progress * 100);
   let line;
   if (stats.remaining === 0) line = 'Meta batida!';
-  else if (isCurrentYear) line = `Faltam ${plural(stats.remaining, 'livro', 'livros')} até dezembro`;
-  else line = `Faltaram ${plural(stats.remaining, 'livro', 'livros')}`;
+  else if (isCurrentYear) line = `<span class="bento-pct">${pct}%</span> · faltam ${stats.remaining}`;
+  else line = `<span class="bento-pct">${pct}%</span> · faltaram ${stats.remaining}`;
   const streakChip = isCurrentYear && streak.current > 0
-    ? `<span class="pill-accent">${icon('flame', { size: 14 })}${streak.current === 1 ? '1 mês na meta' : `${streak.current} meses seguidos`}</span>`
-    : `<span class="pill-muted">Meta mensal: ${plural(stats.monthlyTarget, 'livro', 'livros')}</span>`;
+    ? `<span class="pill-accent bento-streak">${icon('flame', { size: 13 })}${streak.current === 1 ? '1 mês na meta' : `${streak.current} meses seguidos`}</span>`
+    : `<span class="pill-muted bento-streak">${plural(stats.monthlyTarget, 'livro', 'livros')} por mês</span>`;
   // Sem livros: sem o arco (com a ponta arredondada, um traço de tamanho zero vira um ponto).
   return `
-    <section class="card hero">
+    <div class="tile bento-ring hero">
+      <span class="eyebrow">Meta ${stats.year}</span>
       <div class="ring">
-        <svg width="132" height="132" viewBox="0 0 132 132" role="img" aria-label="${stats.count} de ${stats.goal} livros da meta">
-          <circle cx="66" cy="66" r="56" fill="none" stroke="var(--line-strong)" stroke-width="11"/>
-          ${stats.progress > 0 ? `<circle cx="66" cy="66" r="56" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
-            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 66 66)" class="ring-progress"/>` : ''}
+        <svg viewBox="0 0 120 120" role="img" aria-label="${stats.count} de ${stats.goal} livros da meta">
+          <circle cx="60" cy="60" r="${RING_R}" fill="none" stroke="var(--line-strong)" stroke-width="11"/>
+          ${stats.progress > 0 ? `<circle cx="60" cy="60" r="${RING_R}" fill="none" stroke="var(--accent)" stroke-width="11" stroke-linecap="round"
+            stroke-dasharray="${dash} ${RING_C.toFixed(1)}" transform="rotate(-90 60 60)" class="ring-progress"/>` : ''}
         </svg>
-        <div class="ring-center"><span class="ring-count">${stats.count}</span><span class="ring-sub">de ${plural(stats.goal, 'livro', 'livros')}</span></div>
+        <div class="ring-center" aria-hidden="true"><span class="ring-count" data-count="${stats.count}">${stats.count}</span><span class="ring-sub">de ${stats.goal}</span></div>
       </div>
-      <div class="hero-text">
-        <span class="eyebrow">Meta ${stats.year}</span>
-        <span class="hero-pct">${pct}%</span>
-        <span class="muted small">${line}</span>
-        ${streakChip}
+      <span class="bento-line">${line}</span>
+      ${streakChip}
+    </div>`;
+}
+
+function pagesTile(state, stats, today) {
+  const goal = getPageGoal(state, stats.year);
+  const value = stats.pages ? `<span class="tile-value" data-count="${Math.round(stats.pages)}">${num(stats.pages)}</span>` : '<span class="tile-value">—</span>';
+  if (!goal) return `<div class="tile bento-pages">${value}<span class="tile-label">páginas</span></div>`;
+  const p = pageGoalProgress(stats.pages, goal, stats.year, today);
+  const note = p.met ? 'meta batida' : p.projection ? `ritmo de ~${num(p.projection)}` : '';
+  return `
+    <div class="tile bento-pages">
+      ${value}<span class="tile-label">de ${num(goal)} págs.</span>
+      <div class="hero-pages">
+        <span class="hero-pages-track" role="img" aria-label="${esc(pageGoalLine(p))}"><span class="hero-pages-fill" style="width:${(p.progress * 100).toFixed(1)}%"></span></span>
+        ${note ? `<span class="hero-pages-text">${esc(note)}</span>` : ''}
       </div>
-      ${pagesLine}
+    </div>`;
+}
+
+function bento(state, stats, streak, isCurrentYear, today) {
+  const rating = stats.avgRating
+    ? `<span class="tile-value"><span data-count="${stats.avgRating.toFixed(1)}" data-decimals="1">${stats.avgRating.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}</span>${icon('star', { size: 15, cls: 'accent' })}</span>`
+    : '<span class="tile-value">—</span>';
+  const days = stats.avgDays ? `<span class="tile-value" data-count="${Math.round(stats.avgDays)}">${Math.round(stats.avgDays)}</span>` : '<span class="tile-value">—</span>';
+  return `
+    <section class="bento" aria-label="Números de ${stats.year}">
+      ${ringTile(stats, streak, isCurrentYear)}
+      ${pagesTile(state, stats, today)}
+      <div class="tile">${rating}<span class="tile-label">nota média</span></div>
+      <div class="tile">${days}<span class="tile-label">dias por livro</span></div>
     </section>`;
 }
 
-function statTiles(stats) {
-  const rating = stats.avgRating ? decimal(stats.avgRating) : '—';
-  return `
-    <section class="tiles tiles-3">
-      <div class="tile"><span class="tile-value">${stats.pages ? num(stats.pages) : '—'}</span><span class="tile-label">páginas</span></div>
-      <div class="tile"><span class="tile-value">${rating}${stats.avgRating ? icon('star', { size: 15, cls: 'accent' }) : ''}</span><span class="tile-label">nota média</span></div>
-      <div class="tile"><span class="tile-value">${stats.avgDays ? Math.round(stats.avgDays) : '—'}</span><span class="tile-label">dias por livro</span></div>
-    </section>`;
+// ---------- "Lendo agora" ----------
+
+/** '3 nov'; em outro ano, '3 jan 2027'. */
+function shortDate(iso, today) {
+  return iso.slice(0, 4) === today.slice(0, 4) ? formatShort(iso) : `${formatShort(iso)} ${iso.slice(0, 4)}`;
 }
 
-function updateLabel(b) {
-  const kindle = b.format === 'kindle';
-  const has = kindle ? b.currentPercent != null : b.currentPage != null;
-  return `${has ? 'Atualizar' : 'Informar'} ${kindle ? '%' : 'página'}`;
+/** "pág. 264 de 420 · termina ~3 nov" (ou "38% no Kindle · …"). */
+function progressLine(b, today) {
+  const p = progressOf(b);
+  if (!p) return `<span class="rn-progress muted">${b.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`;
+  const where = b.format === FORMATS.KINDLE ? `${p.pct}% no Kindle` : p.label;
+  // Sem o total de páginas não há % nem previsão.
+  if (p.pct === null) return `<span class="rn-progress">${esc(where)} <span class="muted">· informe o total de páginas para ver o %</span></span>`;
+  const finish = forecastFinish(b, today);
+  return `<span class="rn-progress">${esc(where)}${finish ? ` · <span class="nowrap">termina ~${esc(shortDate(finish, today))}</span>` : ''}</span>`;
 }
 
-function progressEditor(b) {
-  const kindle = b.format === 'kindle';
-  const value = kindle ? b.currentPercent : b.currentPage;
-  const label = kindle ? 'Quantos % o Kindle mostra?' : `Em que página você está?${b.pages ? ` (de ${b.pages})` : ''}`;
+// Só com data-alvo: quanto ler por dia (sem tom de cobrança).
+function targetLine(b, today) {
+  const { target } = paceLines(b, today);
+  return target ? `<p class="pace-line"><span>${esc(target)}</span></p>` : '';
+}
+
+function moreButton(b) {
+  return `<button type="button" class="rn-icon rn-more" data-action="quick-menu" data-id="${esc(b.id)}" aria-label="Mais ações: ${esc(b.title)}">${GLYPHS.more}</button>`;
+}
+
+function timerButton(b, session) {
+  const running = session?.bookId === b.id;
+  return `<button type="button" class="rn-icon btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(b.id)}">${GLYPHS.play}<span class="sr-only">${running ? 'Ler agora: voltar ao cronômetro' : 'Ler agora'}</span></button>`;
+}
+
+function readingCard(b, session, today) {
+  const p = progressOf(b);
+  const done = p?.pct === 100;
+  const main = done
+    ? `<a class="btn-primary rn-main" href="${finishHref(b.id)}">${icon('check', { size: 18, stroke: 2.2 })}Concluir</a>`
+    : `<button type="button" class="btn-primary rn-main" data-action="update-page" data-id="${esc(b.id)}">Registrar leitura</button>`;
   return `
-    <form class="progress-edit" data-progress-form data-id="${esc(b.id)}" novalidate>
-      <label class="progress-edit-label" for="progress-input">${esc(label)}</label>
-      <div class="progress-edit-row">
-        <span class="progress-edit-field">
-          <input id="progress-input" type="number" inputmode="numeric" min="0" max="${kindle ? 100 : b.pages || 20000}"
-            value="${esc(value ?? '')}" placeholder="${kindle ? '0 a 100' : 'Página'}" enterkeyhint="done">
-          <span class="progress-edit-suffix">${kindle ? '%' : 'pág.'}</span>
-        </span>
-        <button type="submit" class="btn-primary sm">Salvar</button>
-        <button type="button" class="btn-text small" data-action="cancel-progress">Cancelar</button>
+    <article class="card reading" data-tint="${esc(b.cover || '')}" data-tint-title="${esc(b.title)}" data-longpress data-id="${esc(b.id)}">
+      <div class="rn-top">
+        <span class="rn-cover">${cover(b, { size: 'md' })}${p?.pct != null ? progressRing(p.pct) : ''}</span>
+        <div class="rn-text">
+          <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}"><span class="serif-title">${esc(b.title)}</span></a>
+          <span class="rn-author">${esc(b.authors || 'Autor não informado')}</span>
+          ${progressLine(b, today)}
+          ${targetLine(b, today)}
+        </div>
       </div>
-    </form>`;
+      <div class="rn-actions">${main}${timerButton(b, session)}${moreButton(b)}</div>
+    </article>`;
 }
 
-function readingNow(books, editingId, session, today) {
+function readingNow(books, session, today) {
   if (!books.length) return '';
-  const cards = books.map((b) => `
-    <div class="card reading">
-      <div class="reading-main">
-      <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}">
-        ${cover(b, { size: 'md' })}
-        <span class="reading-text">
-          <span class="serif-title">${esc(b.title)}</span>
-          <span class="muted small">${esc(b.authors || 'Autor não informado')}</span>
-          <span class="chips"><span class="chip">${FORMAT_LABELS[b.format]}</span>${b.startDate ? `<span class="chip">desde ${formatShort(b.startDate)}</span>` : ''}</span>
-        </span>
-      </a>
-      <a class="btn-outline" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>
-      ${timerButton(b, session)}
-      </div>
-      ${editingId === b.id ? progressEditor(b) : `
-      <div class="reading-progress">
-        ${progressBar(b) || `<span class="muted small">${b.format === 'kindle' ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`}
-        <button type="button" class="btn-text accent small" data-action="update-page" data-id="${esc(b.id)}">${updateLabel(b)}</button>
-      </div>${paceInfo(b, today)}`}
-    </div>`).join('');
   return `
     <section class="section">
       <div class="section-head"><h2>Lendo agora</h2><span class="muted small">${plural(books.length, 'livro', 'livros')}</span></div>
-      ${cards}
+      ${books.map((b) => readingCard(b, session, today)).join('')}
     </section>`;
-}
-
-// Ritmo e previsão: só informa, sem cobrar (nunca "atrasado").
-function paceInfo(b, today) {
-  const { pace, target } = paceLines(b, today);
-  if (!pace && !target) return '';
-  return `<p class="pace-line">${[pace, target].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join('')}</p>`;
 }
 
 // Sem leitura em andamento: sugere o primeiro da lista de próximas.
@@ -126,18 +149,19 @@ function nextUpCard(state) {
   return `
     <section class="section">
       <div class="section-head"><h2>Próxima leitura</h2><a class="link" href="#/estante?aba=quero">Ver fila</a></div>
-      <div class="card reading next-up">
-        <div class="reading-main">
-          <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}">
-            ${cover(b, { size: 'md' })}
-            <span class="reading-text">
-              <span class="serif-title">${esc(b.title)}</span>
-              <span class="muted small">${esc(b.authors || 'Autor não informado')}</span>
-            </span>
-          </a>
+      <article class="card reading next-up" data-tint="${esc(b.cover || '')}" data-tint-title="${esc(b.title)}" data-longpress data-id="${esc(b.id)}">
+        <div class="rn-top">
+          <span class="rn-cover">${cover(b, { size: 'md' })}</span>
+          <div class="rn-text">
+            <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}"><span class="serif-title">${esc(b.title)}</span></a>
+            <span class="rn-author">${esc(b.authors || 'Autor não informado')}</span>
+            ${b.pages ? `<span class="rn-progress muted">${num(b.pages)} páginas</span>` : ''}
+          </div>
         </div>
-        <button type="button" class="btn-primary sm" data-action="start-reading" data-id="${esc(b.id)}">Começar a ler</button>
-      </div>
+        <div class="rn-actions">
+          <button type="button" class="btn-primary rn-main" data-action="start-reading" data-id="${esc(b.id)}">Começar a ler</button>${moreButton(b)}
+        </div>
+      </article>
     </section>`;
 }
 
@@ -178,9 +202,8 @@ export function homeView({ state, ui, year, today }) {
       </div>
     </header>
     ${timerBanner(state.books, ui?.session)}
-    ${hero(stats, streak, year === currentYear, pageGoalHero(state, stats, today))}
-    ${statTiles(stats)}
-    ${year === currentYear ? readingNow(reading, ui?.editingProgress, ui?.session, today) : ''}
+    ${bento(state, stats, streak, year === currentYear, today)}
+    ${year === currentYear ? readingNow(reading, ui?.session, today) : ''}
     ${year === currentYear && !reading.length ? nextUpCard(state) : ''}
     ${readGrid(stats)}
     ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;

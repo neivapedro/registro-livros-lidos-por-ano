@@ -45,6 +45,8 @@ const browser = await playwright.chromium.launch();
 const contextOptions = {
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR',
   acceptDownloads: true,
+  // Sem a animação de abertura do Início (os números contariam a partir de 0).
+  reducedMotion: 'reduce',
 };
 
 // ---------- Ajudantes ----------
@@ -611,12 +613,12 @@ await scenario('meia estrela: 0,5, 4,5, apagar; filtro; resumo; backup v2 ida e 
   assert.match(await p.textContent('.book-grid'), /4,5/);
   assert.doesNotMatch(await p.textContent('.book-grid'), /4\.5/);
   // Nota média com meia estrela: (4 + 5 + 4,5) / 3 = 4,5
-  assert.match(await p.textContent('.tiles'), /4,5/);
+  assert.match(await p.textContent('.bento'), /4,5/);
   await p.goto(`${BASE}#/buscar`);
   await onPage(p, 'buscar');
   await p.selectOption('[data-filter="minRating"]', '4.5');
   assert.equal(await p.locator('#search-results .book-row').count(), 2);
-  assert.match(await p.getAttribute('#search-results .book-row:has-text("Livro c") .stars', 'aria-label'), /Nota 4,5 de 5/);
+  assert.match(await p.getAttribute('#search-results .book-row:has-text("Livro c") .li-rating', 'aria-label'), /Nota 4,5 de 5/);
   await p.goto(`${BASE}#/resumo/2026`);
   await onPage(p, 'resumo');
   assert.match(await p.textContent('#app'), /4,5/);
@@ -957,10 +959,11 @@ await scenario('backup com id malicioso não executa código', async (ctx) => {
     assert.equal(await p.evaluate(() => window.__xss), undefined, `código executado em ${route}`);
     assert.equal(await p.locator('#app img[src="x"], #app b, #app i:not(.icon):not(.hm-key)').count(), 0, `HTML injetado em ${route}`);
   }
-  // O botão "Começar" do livro com id estranho funciona.
+  // O "Começar" (menu rápido da fila) do livro com id estranho funciona.
   await p.goto(`${BASE}#/estante?aba=quero`);
   await onPage(p, 'estante');
-  await p.click('[data-action="start-reading"]');
+  await p.click('[data-action="quick-menu"]');
+  await p.click('.sheet-layer.is-open [data-action="start-reading"]');
   await waitState(p, (s) => s.books.some((b) => b.status === 'lendo'));
 });
 

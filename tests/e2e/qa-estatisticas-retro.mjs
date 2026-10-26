@@ -92,6 +92,8 @@ const fmt = (n) => n.toLocaleString('pt-BR');
 const browser = await playwright.chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR', acceptDownloads: true,
+  // Sem a animação de abertura do Início (os números contariam a partir de 0).
+  reducedMotion: 'reduce',
 });
 const page = await context.newPage();
 await page.clock.setFixedTime(new Date('2026-10-18T12:00:00'));
@@ -154,10 +156,11 @@ try {
   assert.deepEqual(P, { 2025: 462, 2026: 1568, all: 2230 });
 
   step('Início: páginas e meta de páginas');
-  assert.match(await text('.ring-center'), /^6 de 6 livros$/);
-  assert.match(await text('.tiles-3 .tile >> nth=0'), new RegExp(`^${fmt(P[2026])} páginas$`));
-  assert.equal(await text('.hero-pages-text'), `${fmt(P[2026])} de 3.000 págs. · no ritmo de ~2.000`);
-  assert.doesNotMatch(await text('.hero'), /atrasad/i);
+  assert.match(await text('.ring-center'), /^6 de 6$/);
+  assert.equal(await page.getAttribute('.hero svg', 'aria-label'), '6 de 6 livros da meta');
+  assert.equal(await text('.bento-pages'), `${fmt(P[2026])} de 3.000 págs. ritmo de ~2.000`);
+  assert.equal(await page.getAttribute('.hero-pages-track', 'aria-label'), `${fmt(P[2026])} de 3.000 págs. · no ritmo de ~2.000`);
+  assert.doesNotMatch(await text('.bento'), /atrasad/i);
   await shot('inicio');
   await noOverflow('início');
 

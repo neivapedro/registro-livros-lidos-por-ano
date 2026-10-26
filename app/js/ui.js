@@ -204,3 +204,101 @@ export function bookRow(book, { action = '' } = {}) {
 export function emptyState(title, text, cta = '') {
   return `<div class="empty">${icon('book', { size: 28, cls: 'accent' })}<p class="empty-title">${esc(title)}</p><p class="empty-text">${esc(text)}</p>${cta}</div>`;
 }
+
+// ---------- v1.4: linhas compactas, grade de capas e anel de progresso ----------
+
+/** Endereço do "Concluir" de um livro em leitura. */
+export function finishHref(id) {
+  return `#/livro/${encodeURIComponent(id)}?concluir=1`;
+}
+
+/** Ícones pequenos das listas, do cartão de leitura e dos menus (decorativos). */
+export const GLYPHS = {
+  more: '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="5.5" cy="12" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="18.5" cy="12" r="1.8"/></svg>',
+  play: '<svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 4.5v15a1 1 0 0 0 1.5.86l12.5-7.5a1 1 0 0 0 0-1.72L8.5 3.64A1 1 0 0 0 7 4.5z"/></svg>',
+  list: '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r=".8" fill="currentColor"/><circle cx="4.5" cy="12" r=".8" fill="currentColor"/><circle cx="4.5" cy="18" r=".8" fill="currentColor"/></svg>',
+  grid: '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="6.5" height="9" rx="1.2"/><rect x="13.5" y="4" width="6.5" height="9" rx="1.2"/><rect x="4" y="15.5" width="6.5" height="4.5" rx="1.2"/><rect x="13.5" y="15.5" width="6.5" height="4.5" rx="1.2"/></svg>',
+  up: '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 15l6-6 6 6"/></svg>',
+  down: '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>',
+  pencil: '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20h4L19 9l-4-4L4 16z"/><path d="M13.5 6.5l4 4"/></svg>',
+  flag: '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4M5 4h11l-2 4 2 4H5"/></svg>',
+  queue: '<svg class="icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h10M4 12h10M4 18h6M18 14v8M14 18h8"/></svg>',
+};
+
+/** Anelzinho de progresso (canto da capa no cartão "Lendo agora"). pct de 0 a 100. */
+export function progressRing(pct) {
+  const r = 13;
+  const c = 2 * Math.PI * r;
+  const p = Math.max(0, Math.min(100, pct));
+  const dash = ((p / 100) * c).toFixed(1);
+  return `<span class="cov-ring" role="img" aria-label="${p}% lido"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="cov-ring-track"/>${p > 0 ? `<circle cx="16" cy="16" r="${r}" class="cov-ring-fill" stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg><span class="cov-ring-pct" aria-hidden="true">${p}</span></span>`;
+}
+
+/** "★ 4,5" à direita da linha (com rótulo para leitor de tela). */
+export function ratingBadge(rating) {
+  if (!rating) return '';
+  return `<span class="li-rating" role="img" aria-label="Nota ${formatRating(rating)} de 5">${icon('star', { size: 12 })}${formatRating(rating)}</span>`;
+}
+
+/** Livros com menu rápido (tocar e segurar): os em leitura e os da fila. */
+export function hasQuickMenu(book) {
+  return book.status === STATUS.READING || book.status === STATUS.WANT;
+}
+
+/** Texto curto de quando/como, ao lado do autor. withYear: na Buscar (sem cabeçalho de ano). */
+function itemWhen(book, withYear) {
+  const y = (iso) => (withYear ? ` ${iso.slice(0, 4)}` : '');
+  if (book.status === STATUS.READ) return book.endDate ? `${formatShort(book.endDate)}${y(book.endDate)}` : 'lido';
+  if (book.status === STATUS.READING) {
+    const p = progressOf(book);
+    return p?.pct != null ? `lendo · ${p.pct}%` : 'lendo';
+  }
+  if (book.status === STATUS.DROPPED) return book.endDate ? `parou em ${formatShort(book.endDate)}${y(book.endDate)}` : 'abandonado';
+  if (withYear) return 'quero ler';
+  return [book.genre, book.format === FORMATS.KINDLE ? 'Kindle' : ''].filter(Boolean).join(' · ');
+}
+
+/**
+ * Linha compacta (52–60px) das listas agrupadas: capa pequena, título em serifa,
+ * "Autor · data" e nota à direita; série e etiquetas numa linha discreta, se houver.
+ * tools: botões à direita (fora do link). swipe: botões revelados ao deslizar. badge: sobre a capa.
+ */
+export function bookItem(book, { withYear = false, tools = '', swipe = '', badge = '', extra = '' } = {}) {
+  const author = (book.authors || 'Autor não informado').split(',')[0].trim();
+  const when = itemWhen(book, withYear);
+  const second = [book.reread ? 'Releitura' : '', seriesLabel(book), ...(book.tags || [])].filter(Boolean).join(' · ');
+  const fav = book.favorite ? ` ${icon('heart', { size: 12, cls: 'accent', label: 'Favorito do ano' })}` : '';
+  return `
+    <li class="book-row li${swipe ? ' swipe' : ''}"${hasQuickMenu(book) ? ' data-longpress' : ''} data-id="${esc(book.id)}"${swipe ? ' data-swipe' : ''}>
+      ${swipe ? `<div class="swipe-actions" aria-hidden="true">${swipe}</div>` : ''}
+      <div class="li-main${swipe ? ' swipe-content' : ''}">
+        <a class="book-row-link li-link" href="#/livro/${encodeURIComponent(book.id)}">
+          <span class="li-cover">${cover(book, { size: 'li', showText: false })}${badge}</span>
+          <span class="li-text">
+            <span class="book-row-title li-title">${esc(book.title)}${fav}</span>
+            <span class="li-sub">${esc(author)}${when ? ` · ${esc(when)}` : ''}</span>
+            ${second ? `<span class="li-extra">${esc(second)}</span>` : ''}${extra}
+          </span>
+          ${ratingBadge(book.rating)}
+        </a>
+        ${tools}
+      </div>
+    </li>`;
+}
+
+/** Bloco de linhas com cabeçalho que fica preso no topo ao rolar (como os Ajustes do iPhone). */
+export function itemGroup(title, count, rows) {
+  const head = title ? `<h2 class="year-head group-head">${title}${count ? ` <span class="muted small">${count}</span>` : ''}</h2>` : '';
+  return `<section class="group-section">${head}<ul class="group" role="list">${rows}</ul></section>`;
+}
+
+/** Capa na grade do modo "Capas" (4 colunas). */
+export function coverItem(book, { badge = '' } = {}) {
+  const author = (book.authors || '').split(',')[0].trim();
+  return `
+    <li class="cg-item">
+      <a class="cg-link" href="#/livro/${encodeURIComponent(book.id)}"${hasQuickMenu(book) ? ' data-longpress' : ''} data-id="${esc(book.id)}" aria-label="${esc(book.title)}${author ? `, ${esc(author)}` : ''}">
+        ${cover(book, { size: 'fill' })}${badge}${book.favorite ? `<span class="fav-badge">${icon('heart', { size: 11 })}</span>` : ''}
+      </a>
+    </li>`;
+}

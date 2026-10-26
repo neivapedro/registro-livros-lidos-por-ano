@@ -76,6 +76,7 @@ const seed = {
 const browser = await playwright.chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 375, height: 812 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'pt-BR', acceptDownloads: true,
+  reducedMotion: 'reduce',
 });
 const page = await context.newPage();
 await page.clock.install({ time: new Date(`${TODAY}T09:00:00`) });
@@ -116,9 +117,15 @@ try {
   const card = page.locator('.reading:has-text("Guerra dos Tronos")');
   assert.equal(await card.locator('.btn-timer').count(), 1);
   assert.equal(await card.locator('.pace-line').count(), 1);
-  assert.match(await card.locator('.pace-line').textContent(), /Ritmo: 28 págs\.\/dia · termina por volta de 3 nov/);
+  assert.match(await card.locator('.rn-progress').textContent(), /termina ~3 nov$/);
   assert.match(await card.locator('.pace-line').textContent(), /Para terminar até 15 nov: 16 págs\.\/dia/);
-  assert.equal(await page.locator('.reading:has-text("Começado hoje") .pace-line').count(), 0, 'livro começado hoje não tem ritmo');
+  assert.doesNotMatch(await page.locator('.reading:has-text("Começado hoje") .rn-progress').textContent(), /termina/, 'livro começado hoje não tem previsão');
+  // O ritmo por dia fica na folha "Registrar leitura".
+  await card.locator('[data-action="update-page"]').click();
+  await page.waitForSelector('.sheet-layer.is-open .psheet');
+  assert.match(await page.textContent('.psheet-head'), /Ritmo: 28 págs\.\/dia/);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.psheet', { state: 'detached' });
   for (const width of [320, 375, 430]) {
     await page.setViewportSize({ width, height: 812 });
     assert.ok(await overflow() <= 0, `${width}px: rolagem horizontal`);
@@ -126,7 +133,7 @@ try {
     assert.ok(title.width >= 110, `${width}px: título espremido (${Math.round(title.width)}px)`);
     const timerBtn = await card.locator('.btn-timer').boundingBox();
     const pace = await card.locator('.pace-line').boundingBox();
-    assert.ok(timerBtn.y + timerBtn.height <= pace.y, `${width}px: botão sobre a linha de ritmo`);
+    assert.ok(pace.y + pace.height <= timerBtn.y, `${width}px: botão sobre a linha da data-alvo`);
     // A barra de navegação fica fixa embaixo: some só para a captura do cartão.
     await card.screenshot({ path: join(SHOTS, `qa-cartao-${width}.png`), mask: [], style: '#nav { display: none !important; }' });
   }
@@ -206,7 +213,10 @@ try {
   await onPage('inicio');
   st = await waitState((s) => book(s, 'r1').journal.some((e) => e.date === TODAY && e.minutes === 25));
   assert.deepEqual(book(st, 'r1').journal.at(-1), { date: TODAY, from: 120, to: 150, unit: 'page', note: '', minutes: 25 });
-  assert.match(await page.textContent('.reading:has-text("Guerra dos Tronos") .pace-line'), /Ritmo: 29 págs\.\/dia/);
+  await page.click('.reading:has-text("Guerra dos Tronos") [data-action="update-page"]');
+  assert.match(await page.textContent('.sheet-layer.is-open .psheet-head'), /Ritmo: 29 págs\.\/dia/);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.psheet', { state: 'detached' });
 
   step('backup → apagar → importar: nada se perde');
   // Sessão aberta antes de apagar: não pode voltar depois de importar.

@@ -2,32 +2,50 @@ import { yearOf } from '../dates.js';
 import { groupBySeries } from '../series.js';
 import { FORMAT_LABELS, MAX_UP_NEXT, STATUS } from '../store.js';
 import { booksReadInYear, countByStatus, readBooks } from '../stats.js';
-import { bookRow, chip, cover, emptyState, esc, icon, plural } from '../ui.js';
+import { GLYPHS, bookItem, chip, cover, coverItem, emptyState, esc, itemGroup, plural } from '../ui.js';
 import { drawCandidates, wantQueue } from '../upnext.js';
 
 const TABS = [[STATUS.WANT, 'Quero ler'], [STATUS.READING, 'Lendo'], [STATUS.READ, 'Lidos'], [STATUS.DROPPED, 'Abandonei']];
 
 const DICE = '<svg class="icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="4"/><circle cx="9" cy="9" r="1.2" fill="currentColor"/><circle cx="15" cy="15" r="1.2" fill="currentColor"/><circle cx="15" cy="9" r="1.2" fill="currentColor"/><circle cx="9" cy="15" r="1.2" fill="currentColor"/></svg>';
 
-const startButton = (b) => `<button type="button" class="btn-outline sm" data-action="start-reading" data-id="${esc(b.id)}">Começar</button>`;
+/** Botão "Mais ações" (abre o menu rápido): o caminho de teclado e leitor de tela para o que o gesto faz. */
+function moreButton(b) {
+  return `<button type="button" class="li-btn li-more" data-action="quick-menu" data-id="${esc(b.id)}" aria-label="Mais ações: ${esc(b.title)}">${GLYPHS.more}</button>`;
+}
 
-/** Próximas: posição, subir/descer e desmarcar. Resto da fila: marcar como próxima. */
-function queueTools(b, index, count) {
-  if (index < 0) {
-    return `<div class="row-tools"><button type="button" class="chip-btn sm" data-action="toggle-next" data-id="${esc(b.id)}" aria-pressed="false" aria-label="Marcar ${esc(b.title)} como próxima leitura">+ Próxima</button></div>`;
-  }
+/** Botões que aparecem ao deslizar a linha para a esquerda (só toque; fora da ordem do Tab). */
+function swipeButtons(b, isNext) {
+  return `<button type="button" class="swipe-btn swipe-start" data-action="start-reading" data-id="${esc(b.id)}" tabindex="-1">${GLYPHS.play}<span>Começar</span></button>`
+    + `<button type="button" class="swipe-btn swipe-next" data-action="toggle-next" data-id="${esc(b.id)}" tabindex="-1">${GLYPHS.queue}<span>${isNext ? 'Tirar' : 'Próxima'}</span></button>`;
+}
+
+/** Próximas: posição sobre a capa, subir/descer e "Mais ações". */
+function nextTools(b, index, count) {
   return `
-    <div class="row-tools">
-      <span class="next-pos" aria-hidden="true">${index + 1}º</span>
-      <button type="button" class="icon-btn sm" data-action="move-next" data-delta="-1" data-id="${esc(b.id)}" aria-label="Subir ${esc(b.title)} na lista"${index === 0 ? ' disabled' : ''}>${icon('chevronDown', { size: 18, stroke: 2, cls: 'flip' })}</button>
-      <button type="button" class="icon-btn sm" data-action="move-next" data-delta="1" data-id="${esc(b.id)}" aria-label="Descer ${esc(b.title)} na lista"${index === count - 1 ? ' disabled' : ''}>${icon('chevronDown', { size: 18, stroke: 2 })}</button>
-      <button type="button" class="chip-btn sm is-on" data-action="toggle-next" data-id="${esc(b.id)}" aria-pressed="true" aria-label="Tirar ${esc(b.title)} das próximas">${icon('check', { size: 14, stroke: 2.4 })}Próxima</button>
+    <div class="li-tools">
+      <button type="button" class="li-btn" data-action="move-next" data-delta="-1" data-id="${esc(b.id)}" aria-label="Subir ${esc(b.title)} na lista"${index === 0 ? ' disabled' : ''}>${GLYPHS.up}</button>
+      <button type="button" class="li-btn" data-action="move-next" data-delta="1" data-id="${esc(b.id)}" aria-label="Descer ${esc(b.title)} na lista"${index === count - 1 ? ' disabled' : ''}>${GLYPHS.down}</button>
+      ${moreButton(b)}
     </div>`;
 }
 
+const posBadge = (i) => `<span class="next-pos">${i + 1}º</span>`;
+
+function modeToggle(mode) {
+  const btn = (value, label, glyph) => `<button type="button" class="mini-seg-btn${mode === value ? ' is-on' : ''}" data-action="shelf-mode" data-value="${value}" aria-pressed="${mode === value}">${glyph}${label}</button>`;
+  return `<div class="mini-seg" role="group" aria-label="Mostrar como">${btn('lista', 'Lista', GLYPHS.list)}${btn('capas', 'Capas', GLYPHS.grid)}</div>`;
+}
+
+function toolsRow(mode, extra = '') {
+  return `<div class="shelf-tools">${modeToggle(mode)}${extra}</div>`;
+}
+
+const coverGrid = (items) => `<ul class="cover-grid" role="list">${items}</ul>`;
+
 function drawSelect(name, label, options, value) {
   const opts = options.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('');
-  return `<label class="filter"><span class="sr-only">${esc(label)}</span><select data-draw="${name}">${opts}</select>${icon('chevronDown', { size: 14, stroke: 2 })}</label>`;
+  return `<label class="filter"><span class="sr-only">${esc(label)}</span><select data-draw="${name}">${opts}</select><svg class="icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg></label>`;
 }
 
 /** Painel do sorteio: filtros opcionais e o livro sorteado. */
@@ -68,78 +86,93 @@ function drawPanel(books, draw) {
     </section>`;
 }
 
-function wantList(state, ui) {
+function wantList(state, ui, mode) {
   const { next, rest } = wantQueue(state);
   if (!next.length && !rest.length) {
     return emptyState('A fila está vazia', 'Adicione os livros que você quer ler a seguir.',
       '<a class="btn-outline" href="#/novo?status=quero">Adicionar à fila</a>');
   }
   const draw = ui?.draw;
-  const top = draw
-    ? drawPanel(state.books, draw)
-    : `<button type="button" class="btn-ghost draw-open" data-action="draw-open" aria-expanded="false">${DICE}Sortear um livro da fila</button>`;
-  const nextRows = next.map((b, i) => bookRow(b, { action: startButton(b) + queueTools(b, i, next.length) })).join('');
-  const restRows = rest.map((b) => bookRow(b, { action: startButton(b) + queueTools(b, -1, 0) })).join('');
-  const nextHead = `<h2 class="list-head">Próximas <span class="muted small">${next.length} de ${MAX_UP_NEXT}</span></h2>`;
+  const drawBtn = `<button type="button" class="chip-btn sm draw-open" data-action="draw-open" aria-expanded="false">${DICE}Sortear</button>`;
+  const top = toolsRow(mode, draw ? '' : drawBtn) + (draw ? drawPanel(state.books, draw) : '');
+  const add = '<a class="btn-ghost add-queue" href="#/novo?status=quero">+ Adicionar à fila</a>';
+  if (mode === 'capas') {
+    const items = next.map((b, i) => coverItem(b, { badge: posBadge(i) })).join('') + rest.map((b) => coverItem(b)).join('');
+    return top + coverGrid(items) + add;
+  }
+  const nextHead = `<h2 class="list-head group-head">Próximas <span class="muted small">${next.length} de ${MAX_UP_NEXT}</span></h2>`;
+  const nextRows = next.map((b, i) => bookItem(b, { badge: posBadge(i), tools: nextTools(b, i, next.length), swipe: swipeButtons(b, true) })).join('');
+  const restRows = rest.map((b) => bookItem(b, { tools: moreButton(b), swipe: swipeButtons(b, false) })).join('');
+  const restHead = next.length ? '<h2 class="list-head group-head">Restante da fila</h2>' : '';
   return top
-    + (next.length ? nextHead + nextRows : '')
-    + (rest.length && next.length ? '<h2 class="list-head">Restante da fila</h2>' : '')
-    + restRows
-    + '<a class="btn-ghost" href="#/novo?status=quero">+ Adicionar à fila</a>';
+    + (next.length ? `<section class="group-section">${nextHead}<ul class="group" role="list">${nextRows}</ul></section>` : '')
+    + (rest.length ? `<section class="group-section">${restHead}<ul class="group" role="list">${restRows}</ul></section>` : '')
+    + '<p class="shelf-hint muted small">Deslize uma linha para a esquerda para começar ou marcar como próxima. Toque e segure para mais opções.</p>'
+    + add;
 }
 
-function readingList(books) {
+function readingList(books, mode) {
   const reading = books.filter((b) => b.status === STATUS.READING);
   if (!reading.length) {
     return emptyState('Nenhuma leitura em andamento', 'Na aba "Quero ler", toque em "Começar" para iniciar um livro.');
   }
-  return reading.map((b) => bookRow(b, {
-    action: `<a class="btn-outline sm" href="#/livro/${encodeURIComponent(b.id)}?concluir=1">Concluir</a>`,
-  })).join('');
+  if (mode === 'capas') return toolsRow(mode) + coverGrid(reading.map((b) => coverItem(b)).join(''));
+  return toolsRow(mode) + itemGroup('', '', reading.map((b) => bookItem(b, { tools: moreButton(b) })).join(''));
 }
 
 /** Lidos agrupados por série (os de fora de série no fim, do mais recente ao mais antigo). */
-function readBySeries(books) {
+function readBySeries(books, mode) {
   const read = readBooks(books).sort((a, b) => b.endDate.localeCompare(a.endDate));
-  return groupBySeries(read).map((g) => `<h2 class="year-head">${g.name ? esc(g.name) : 'Fora de séries'} <span class="muted small">${plural(g.books.length, 'livro', 'livros')}</span></h2>${g.books.map((b) => bookRow(b)).join('')}`).join('');
+  return groupBySeries(read).map((g) => {
+    const title = g.name ? esc(g.name) : 'Fora de séries';
+    const count = plural(g.books.length, 'livro', 'livros');
+    if (mode === 'capas') return `<section class="group-section"><h2 class="year-head group-head">${title} <span class="muted small">${count}</span></h2>${coverGrid(g.books.map((b) => coverItem(b)).join(''))}</section>`;
+    return itemGroup(title, count, g.books.map((b) => bookItem(b)).join(''));
+  }).join('');
 }
 
-function readList(books, groupSeries = false) {
+function readList(books, groupSeries, mode) {
   const read = readBooks(books);
   if (!read.length) return emptyState('Nenhum livro concluído', 'Os livros que você terminar aparecem aqui, separados por ano.');
-  const toggle = read.some((b) => b.series)
-    ? `<div class="list-tools"><button type="button" class="chip-btn sm${groupSeries ? ' is-on' : ''}" data-action="toggle-group-series" aria-pressed="${groupSeries}">Agrupar por série</button></div>`
+  const seriesBtn = read.some((b) => b.series)
+    ? `<button type="button" class="chip-btn sm${groupSeries ? ' is-on' : ''}" data-action="toggle-group-series" aria-pressed="${groupSeries}">Agrupar por série</button>`
     : '';
-  if (toggle && groupSeries) return toggle + readBySeries(books);
+  const top = toolsRow(mode, seriesBtn);
+  if (seriesBtn && groupSeries) return top + readBySeries(books, mode);
   const years = [...new Set(read.map((b) => yearOf(b.endDate)))].sort((a, b) => b - a);
-  const byYear = years.map((y) => {
+  return top + years.map((y) => {
     const list = booksReadInYear(books, y);
-    return `<h2 class="year-head">${y} <span class="muted small">${plural(list.length, 'livro', 'livros')}</span></h2>${list.map((b) => bookRow(b)).join('')}`;
+    const count = plural(list.length, 'livro', 'livros');
+    if (mode === 'capas') return `<section class="group-section"><h2 class="year-head group-head">${y} <span class="muted small">${count}</span></h2>${coverGrid(list.map((b) => coverItem(b)).join(''))}</section>`;
+    return itemGroup(String(y), count, list.map((b) => bookItem(b)).join(''));
   }).join('');
-  return toggle + byYear;
 }
 
-function droppedList(books) {
+function droppedList(books, mode) {
   const dropped = books.filter((b) => b.status === STATUS.DROPPED)
     .sort((a, b) => (b.endDate || b.updatedAt).localeCompare(a.endDate || a.updatedAt));
   if (!dropped.length) {
     return emptyState('Nenhum livro abandonado', 'Quando largar um livro, marque o status "Abandonei" e conte o porquê.');
   }
-  return dropped.map((b) => bookRow(b) + (b.dropReason
-    ? `<p class="drop-reason"><span class="eyebrow">Por que parei</span>${esc(b.dropReason)}</p>` : '')).join('');
+  if (mode === 'capas') return toolsRow(mode) + coverGrid(dropped.map((b) => coverItem(b)).join(''));
+  const rows = dropped.map((b) => bookItem(b, {
+    extra: b.dropReason ? `<span class="li-extra drop-reason"><span class="eyebrow">Por que parei</span> ${esc(b.dropReason)}</span>` : '',
+  })).join('');
+  return toolsRow(mode) + itemGroup('', '', rows);
 }
 
 export function shelfView({ state, ui, tab }) {
   const counts = countByStatus(state.books);
+  const mode = ui?.shelfMode === 'capas' ? 'capas' : 'lista';
   const tabs = TABS.map(([value, label]) => `
     <a class="seg-btn${value === tab ? ' is-on' : ''}" href="#/estante?aba=${value}" aria-current="${value === tab ? 'page' : 'false'}">${label} <span class="seg-count">${counts[value]}</span></a>`).join('');
   let body;
-  if (tab === STATUS.WANT) body = wantList(state, ui);
-  else if (tab === STATUS.READING) body = readingList(state.books);
-  else if (tab === STATUS.DROPPED) body = droppedList(state.books);
-  else body = readList(state.books, ui?.groupSeries);
+  if (tab === STATUS.WANT) body = wantList(state, ui, mode);
+  else if (tab === STATUS.READING) body = readingList(state.books, mode);
+  else if (tab === STATUS.DROPPED) body = droppedList(state.books, mode);
+  else body = readList(state.books, ui?.groupSeries, mode);
   return `
     <header class="top"><h1 class="display sm">Estante</h1></header>
-    <nav class="segmented tabs-4" style="--seg-count:4" aria-label="Listas">${tabs}</nav>
-    <div class="list">${body}</div>`;
+    <nav class="segmented tabs-4 shelf-tabs" style="--seg-count:4" aria-label="Listas">${tabs}</nav>
+    <div class="list shelf-list" data-mode="${mode}">${body}</div>`;
 }
