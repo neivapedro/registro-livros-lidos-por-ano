@@ -6,6 +6,7 @@ import { MAX_UP_NEXT } from './store.js';
 import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
+import { applyTints } from './cover-color.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
@@ -208,6 +209,7 @@ function render() {
   }
   root.innerHTML = html;
   root.dataset.page = route.name;
+  applyTints(root);
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;

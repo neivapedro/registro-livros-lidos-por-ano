@@ -68,6 +68,11 @@ function hash(str) {
   return Math.abs(h);
 }
 
+/** Cor de fundo da capa desenhada deste título (a mesma usada em cover()). */
+export function coverFallbackColor(title) {
+  return COVER_PALETTE[hash(title || '') % COVER_PALETTE.length][0];
+}
+
 /**
  * Capa do livro: a imagem real quando existe, sobre uma capa desenhada
  * (que aparece se a imagem não carregar ou estiver offline).
