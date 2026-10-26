@@ -152,8 +152,12 @@ try {
   await noOverflow('Início');
 
   step('"Quero terminar até" no formulário');
+  // Tocar no livro abre a ficha (v1.4); a data aparece no ritmo e se edita em "Editar".
   await physicalCard.locator('.reading-link').click();
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  assert.match(await page.textContent('.ficha-pace'), /Para terminar até 15 nov: 6 págs\.\/dia/);
+  await page.click('.ficha-top >> text=Editar');
+  await page.waitForSelector('#f-target');
   assert.equal(await page.inputValue('#f-target'), '2026-11-15');
   await page.click('[data-action="clear-target-date"]');
   assert.equal(await page.inputValue('#f-target'), '');
@@ -161,6 +165,10 @@ try {
   await page.locator('#f-target').scrollIntoViewIfNeeded();
   await page.screenshot({ path: join(SHOTS, 'inicio-estante-02-form-data-alvo.png') });
   await page.click('.btn-primary:has-text("Salvar livro")');
+  // Salvar volta para a ficha, já com a data nova; o Voltar da ficha leva ao Início.
+  await page.waitForSelector('.ficha-hero');
+  assert.match(await page.textContent('.ficha-pace'), /Para terminar até 25 out: 18 págs\.\/dia/);
+  await page.click('.ficha-back');
   await onPage('inicio');
   assert.equal(await physicalCard.locator('.pace-line span').nth(1).textContent(), 'Para terminar até 25 out: 18 págs./dia');
   assert.equal((await waitState((s) => s.books.find((b) => b.id === 'r1').targetDate === '2026-10-25')).books.length, seed.books.length);
@@ -243,7 +251,7 @@ try {
   assert.equal(await page.locator('.next-up').count(), 0);
 
   step('etiquetas no formulário');
-  await page.goto(`${BASE}#/livro/w9`);
+  await page.goto(`${BASE}#/livro/w9/editar`);
   await onPage('livro');
   assert.match(await page.textContent('.form'), /Usadas antes/);
   await page.locator('#f-tag').pressSequentially('presente,');
@@ -291,18 +299,20 @@ try {
   await noOverflow('Resumo');
 
   step('série: próximo volume, resumo e agrupamento');
-  await page.goto(`${BASE}#/livro/d1`);
+  await page.goto(`${BASE}#/livro/d1/editar`);
   await onPage('livro');
   assert.match(await page.textContent('.series-info'), /Próximo da série: nº 2 — O Messias de Duna/);
   assert.match(await page.textContent('.series-info'), /Você leu 2 de 3 cadastrados nesta série/);
   assert.equal(await page.inputValue('#f-series'), 'Duna');
   await page.locator('.series-info').scrollIntoViewIfNeeded();
   await page.screenshot({ path: join(SHOTS, 'inicio-estante-09-form-serie.png') });
+  // O próximo volume abre a ficha dele, com o chip da série e o link para o seguinte.
   await page.click('.series-info a');
-  await page.waitForURL(/#\/livro\/d2/);
-  await page.waitForFunction(() => document.getElementById('f-title')?.value === 'O Messias de Duna');
-  assert.match(await page.textContent('.series-info'), /nº 3 — Os Filhos de Duna/);
-  await page.click('text=Cancelar');
+  await page.waitForURL(/#\/livro\/d2$/);
+  await page.waitForFunction(() => document.querySelector('.ficha-title')?.textContent === 'O Messias de Duna');
+  assert.match(await page.textContent('.ficha-series .ficha-chip'), /Duna · nº 2/);
+  assert.match(await page.textContent('.ficha-next'), /Próximo: nº 3 · Os Filhos de Duna/);
+  await page.click('.ficha-back');
   await page.goto(`${BASE}#/novo?status=lido`);
   await onPage('novo');
   assert.deepEqual(await page.locator('#series-names option').evaluateAll((els) => els.map((e) => e.value)), ['Duna']);

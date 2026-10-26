@@ -275,7 +275,7 @@ try {
   assert.equal(await addRead('Décimo livro'), 'Marco alcançado: 10º livro');
   const saved = await waitState((st) => st.books.some((b) => b.title === 'Décimo livro'));
   const tenth = saved.books.find((b) => b.title === 'Décimo livro');
-  await page.goto(`${BASE}#/livro/${tenth.id}`);
+  await page.goto(`${BASE}#/livro/${tenth.id}/editar`);
   await onPage('livro');
   await page.click('#book-form button[type="submit"]');
   await page.waitForFunction(() => document.getElementById('app').dataset.page !== 'livro');
@@ -289,7 +289,7 @@ try {
   await page.setInputFiles('[data-import]', backupPath);
   await waitState((st) => st.books.some((b) => b.id === 'imp'));
   assert.equal(await toastText(), 'Backup importado com sucesso.');
-  await page.goto(`${BASE}#/livro/imp`);
+  await page.goto(`${BASE}#/livro/imp/editar`);
   await onPage('livro');
   await page.click('[data-action="delete-book"]');
   await page.waitForFunction(() => document.getElementById('app').dataset.page !== 'livro');

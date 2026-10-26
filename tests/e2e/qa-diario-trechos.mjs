@@ -133,9 +133,15 @@ const toastHas = (re) => page.waitForFunction((src) => new RegExp(src).test(docu
 const openBook = async (id, tab = '') => {
   await page.goto(`${BASE}#/inicio`);
   await onPage('inicio');
-  await page.goto(`${BASE}#/livro/${id}${tab ? `?aba=${tab}` : ''}`);
+  await page.goto(`${BASE}#/livro/${id}/editar${tab ? `?aba=${tab}` : ''}`);
   await onPage('livro');
 };
+// Diário agrupado por semana (v1.4): abre todas antes de tocar num dia antigo.
+async function openAllWeeks() {
+  while (await page.locator('.diary-week-head[aria-expanded="false"]').count()) {
+    await page.click('.diary-week-head[aria-expanded="false"] >> nth=0');
+  }
+}
 async function layoutProblems(label, { targets = true } = {}) {
   const out = [];
   for (const width of [320, 375, 390, 430]) {
@@ -168,6 +174,10 @@ try {
 
   step('todos os status: as três abas abrem, sem erro e sem estourar a largura');
   for (const id of ['want', 'read', 'reread', 'drop', 'knp', 'switched', 'xss', 'long']) {
+    // Ficha do livro (v1.4) do mesmo livro.
+    await page.goto(`${BASE}#/livro/${id}`);
+    await page.waitForSelector('.ficha-hero');
+    problems.push(...await layoutProblems(`${id}/ficha`));
     await openBook(id);
     for (const tab of ['dados', 'diario', 'trechos']) {
       await page.click(`[data-tab="${tab}"]`);
@@ -236,7 +246,8 @@ try {
   await openBook('knp', 'diario');
   const knpTiles = (await page.locator('.diary-summary .tile').allInnerTexts()).map((t) => t.replace(/\s+/g, ' '));
   assert.deepEqual(knpTiles, ['2 dias de leitura', '30% registrados', '15% por dia de leitura']);
-  await page.click('[data-action="diary-edit"][data-date="2026-10-15"]');
+  await openAllWeeks();
+  await page.click('[data-action=\"diary-edit\"][data-date="2026-10-15"]');
   await page.fill('#d-to', '35.5');
   await page.press('#d-note', 'Enter');
   const knp = bookIn(await waitState((s) => bookIn(s, 'knp').journal[1].to === 36), 'knp');
@@ -302,7 +313,8 @@ try {
   await page.fill('#f-title', 'Título Novo');
   await page.click('[data-tab="diario"]');
   await page.waitForSelector('[data-action="book-save"]');
-  await page.click('[data-action="diary-edit"][data-date="2026-10-15"]');
+  await openAllWeeks();
+  await page.click('[data-action=\"diary-edit\"][data-date="2026-10-15"]');
   await page.fill('#d-to', '110');
   await page.click('[data-diary-form] button[type="submit"]');
   await waitState((s) => bookIn(s, 'long').journal[0].to === 110);
@@ -343,7 +355,8 @@ try {
 
   step('sem mudança em Dados, salvar no diário/trechos não faz aparecer o Salvar');
   await openBook('read', 'diario');
-  await page.click('[data-action="diary-edit"][data-date="2026-09-20"]');
+  await openAllWeeks();
+  await page.click('[data-action=\"diary-edit\"][data-date="2026-09-20"]');
   await page.fill('#d-note', 'Terminei no parque.');
   await page.click('[data-diary-form] button[type="submit"]');
   await waitState((s) => bookIn(s, 'read').journal[1].note === 'Terminei no parque.');
@@ -367,7 +380,8 @@ try {
   await onPage('livro');
   await page.click('[data-tab="diario"]');
   await page.waitForSelector('[data-action="book-save"]');
-  await page.click('[data-action="diary-edit"][data-date="2026-10-12"]');
+  await openAllWeeks();
+  await page.click('[data-action=\"diary-edit\"][data-date="2026-10-12"]');
   await page.fill('#d-to', '45');
   await page.click('[data-diary-form] button[type="submit"]');
   await waitState((s) => bookIn(s, 'reread').journal[0].to === 45);
@@ -379,7 +393,8 @@ try {
 
   step('diário: corrigir com Enter e com data de outro ano');
   await openBook('drop', 'diario');
-  await page.click('[data-action="diary-edit"][data-date="2026-05-10"]');
+  await openAllWeeks();
+  await page.click('[data-action=\"diary-edit\"][data-date="2026-05-10"]');
   await page.fill('#d-date', '2025-12-31');
   await page.press('#d-to', 'Enter');
   await waitState((s) => bookIn(s, 'drop').journal[0].date === '2025-12-31');

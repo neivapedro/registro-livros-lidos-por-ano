@@ -148,7 +148,7 @@ try {
   await page.waitForSelector('.tag-count');
   const tagCounts = await page.$$eval('.tag-count', (els) => els.map((e) => e.textContent.trim()));
   assert.equal(tagCounts.filter((t) => /fantasia/i.test(t)).length, 1, `resumo: ${tagCounts}`);
-  await page.goto(`${BASE}#/livro/w3`);
+  await page.goto(`${BASE}#/livro/w3/editar`);
   await page.waitForSelector('#f-tag');
   const used = await page.$$eval('[data-action="add-tag"]', (els) => els.map((e) => e.dataset.value));
   assert.equal(used.filter((t) => t.toLowerCase() === 'fantasia').length, 1, `usadas antes: ${used}`);
@@ -160,10 +160,10 @@ try {
   await onPage('resumo');
   let st = await waitState((s) => book(s, 'w3').seriesNumber === 2.5);
   assert.equal(book(st, 'w3').series, 'gelo e fogo');
-  await page.goto(`${BASE}#/livro/l1`);
+  await page.goto(`${BASE}#/livro/l1/editar`);
   await page.waitForSelector('.series-info');
   assert.match(await page.textContent('.series-info'), /Próximo da série: nº 1 — A Guerra dos Tronos/);
-  await page.goto(`${BASE}#/livro/r1`);
+  await page.goto(`${BASE}#/livro/r1/editar`);
   await page.waitForSelector('.series-info');
   assert.match(await page.textContent('.series-info'), /Próximo da série: nº 2,5 — Terceiro/);
   assert.match(await page.textContent('.series-info'), /Você leu 1 de 3/);
@@ -171,7 +171,7 @@ try {
   step('excluir um livro das próximas e desfazer: volta ao mesmo lugar da fila');
   await page.goto(`${BASE}#/estante?aba=quero`);
   await page.waitForSelector('.next-pos');
-  await page.goto(`${BASE}#/livro/w1`);
+  await page.goto(`${BASE}#/livro/w1/editar`);
   await page.waitForSelector('[data-action="delete-book"]');
   await page.click('[data-action="delete-book"]');
   await waitState((s) => !book(s, 'w1') && s.upNext.join() === 'w2');

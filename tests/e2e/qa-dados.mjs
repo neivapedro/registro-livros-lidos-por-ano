@@ -433,7 +433,7 @@ await scenario('toque duplo em Salvar não cria o livro duas vezes (nem duas rel
   assert.equal(st.books.filter((b) => b.title === 'Livro do toque duplo').length, 1);
   assert.equal(st.books.length, V2.books.length + 1);
 
-  await p.goto(`${BASE}#/livro/l2`);
+  await p.goto(`${BASE}#/livro/l2/editar`);
   await onPage(p, 'livro');
   await p.evaluate(() => {
     const btn = document.querySelector('[data-action="reread"]');
@@ -533,8 +533,12 @@ await scenario('todas as telas em 375 e 320 px: sem erro, sem sobra à direita, 
     for (const aba of ['dados', 'diario', 'trechos']) await visit(`livro/r1?aba=${aba}`, 'livro', `livro-${aba}`);
     await p.click('[data-action="quote-new"]');
     await check('livro-trechos-novo');
-    await visit('livro/k1', 'livro', 'livro-kindle');
-    await visit('livro/d1', 'livro', 'livro-abandonado');
+    // Ficha do livro (v1.4) e edição, por status.
+    await visit('livro/r1', 'livro', 'ficha-lido');
+    await visit('livro/k1', 'livro', 'ficha-kindle');
+    await visit('livro/d1', 'livro', 'ficha-abandonado');
+    await visit('livro/k1/editar', 'livro', 'livro-kindle');
+    await visit('livro/d1/editar', 'livro', 'livro-abandonado');
     await visit('trechos', 'trechos');
     await visit('retro/2026', 'retro', 'retro-1');
     for (let i = 0; i < 4; i += 1) await p.click('.tap-next');

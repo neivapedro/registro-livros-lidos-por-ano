@@ -115,6 +115,12 @@ async function noOverflow(label) {
     assert.ok(overflow <= 0, `${label}: ${overflow}px sobrando à direita em ${width}px`);
   }
 }
+// Diário agrupado por semana (v1.4): só a mais recente começa aberta.
+async function openAllWeeks() {
+  while (await page.locator('.diary-week-head[aria-expanded="false"]').count()) {
+    await page.click('.diary-week-head[aria-expanded="false"] >> nth=0');
+  }
+}
 async function smallFields() {
   return page.evaluate(() => [...document.querySelectorAll('input, select, textarea')]
     .filter((el) => parseFloat(getComputedStyle(el).fontSize) < 16).map((el) => el.outerHTML.slice(0, 60)));
@@ -138,7 +144,7 @@ try {
   assert.equal(await page.locator('.book-tabs').count(), 0);
 
   step('aba Dados continua o formulário de antes');
-  await page.goto(`${BASE}#/livro/b1`);
+  await page.goto(`${BASE}#/livro/b1/editar`);
   await onPage('livro');
   await page.waitForSelector('.book-tabs');
   const tabs = (await page.locator('.book-tab').allTextContents()).map((t) => t.replace(/\s+/g, ' ').trim());
@@ -153,6 +159,14 @@ try {
   await page.click('[data-tab="diario"]');
   await page.waitForSelector('.diary-list');
   assert.equal(await page.locator('[data-action="book-save"]').count(), 0, 'sem mudanças em Dados, sem Salvar');
+  // Semanas, da mais recente para a mais antiga; só a primeira aberta.
+  const weeks = (await page.locator('.diary-week-title').allTextContents());
+  assert.deepEqual(weeks, ['Semana de 12 out', 'Semana de 5 out', 'Semana de 22 dez 2025']);
+  assert.deepEqual(await page.locator('.diary-week-head').evaluateAll((els) => els.map((e) => e.getAttribute('aria-expanded'))), ['true', 'false', 'false']);
+  assert.equal(await page.locator('.diary-list:visible .diary-row').count(), 1);
+  // Gráfico por semana (o diário passa de 90 dias): barras na escala do tempo.
+  assert.match(await page.textContent('.rchart-range'), /págs\. por semana/);
+  await openAllWeeks();
   const tiles = (await page.locator('.diary-summary .tile').allInnerTexts()).map((t) => t.replace(/\s+/g, ' '));
   assert.deepEqual(tiles, ['3 dias de leitura', '164 págs. registradas', '55 págs. por dia de leitura']);
   const rows = (await page.locator('.diary-row').allInnerTexts()).map((t) => t.replace(/\s+/g, ' ').trim());
@@ -193,6 +207,7 @@ try {
   assert.match(await page.innerText('.diary-row >> nth=0'), /13\s+OUT/);
 
   step('excluir entrada e desfazer');
+  await openAllWeeks();
   await page.click('[data-action="diary-edit"][data-date="2025-12-28"]');
   await page.click('[data-action="diary-delete"]');
   await waitState((s) => bookIn(s, 'b1').journal.length === 2);
@@ -278,7 +293,9 @@ try {
   await page.click('[data-tab="diario"]');
   await page.waitForSelector('[data-action="book-save"]');
   await page.click('[data-action="book-save"]');
-  await onPage('inicio');
+  // Abriu a edição direto pelo endereço: salvar volta para a ficha do livro.
+  await page.waitForSelector('.ficha-hero');
+  assert.match(await page.textContent('.ficha-title'), /Dom Casmurro \(ed\. comentada\)/);
   const afterSave = bookIn(await waitState((s) => bookIn(s, 'b1').title === 'Dom Casmurro (ed. comentada)'), 'b1');
   assert.equal(afterSave.quotes.length, 2);
   assert.equal(afterSave.journal.length, 3);
@@ -299,7 +316,7 @@ try {
   await page.click('[data-action="quote-cancel"]');
 
   step('diário vazio');
-  await page.goto(`${BASE}#/livro/r1`);
+  await page.goto(`${BASE}#/livro/r1/editar`);
   await onPage('livro');
   await page.click('[data-tab="diario"]');
   assert.match(await page.textContent('.empty'), /se preenche sozinho/);
