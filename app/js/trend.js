@@ -81,6 +81,10 @@ export function pagesReadUntil(books, year, untilIso) {
   return total;
 }
 
+// Projeção só depois das primeiras semanas: em 1º de janeiro, 1 livro "projetaria" 365
+// (e esticaria o eixo da curva). Antes disso, a curva mostra só o realizado e o previsto.
+export const MIN_PROJECTION_DAYS = 21;
+
 function roundTo(n, digits) {
   const f = 10 ** digits;
   return Math.round(n * f) / f;
@@ -96,7 +100,7 @@ function roundTo(n, digits) {
  *  today: { x, v, planned } só no ano corrente;
  *  projection: { from: { x, v }, to: { x: 12, v } } só no ano corrente com algo realizado;
  *  realized, plannedNow, deviation (realizado − previsto hoje), perMonth (para fechar a meta),
- *  monthsLeft, isCurrent, isPast.
+ *  monthsLeft, isCurrent, isPast, isFuture.
  */
 export function sCurve({ monthly, goal, year, today, kind = 'livros' }) {
   const ty = yearOf(today);
@@ -115,8 +119,8 @@ export function sCurve({ monthly, goal, year, today, kind = 'livros' }) {
   }
   const plannedNow = goal ? plannedAt(goal, pos) : null;
   let projection = null;
-  if (isCurrent && realized > 0 && pos < 12) {
-    const elapsed = daysElapsedInYear(year, today);
+  const elapsed = daysElapsedInYear(year, today);
+  if (isCurrent && realized > 0 && pos < 12 && elapsed >= MIN_PROJECTION_DAYS) {
     const total = isLeapYear(year) ? 366 : 365;
     // Páginas: a mesma projeção do Início (pageGoalProgress), para os números baterem.
     const end = kind === 'paginas'
@@ -141,6 +145,7 @@ export function sCurve({ monthly, goal, year, today, kind = 'livros' }) {
     perMonth: goal && missing > 0 && monthsLeft >= 1 ? missing / monthsLeft : null,
     isCurrent,
     isPast,
+    isFuture: year > ty,
     cumulative: cum,
   };
 }
@@ -173,6 +178,8 @@ function durationOf(b) {
 export function previousYearBaseline(books, year, today) {
   const prev = year - 1;
   const isCurrent = year === yearOf(today);
+  // Ano que ainda não começou: comparar o nada com o ano anterior só mostraria quedas.
+  if (year > yearOf(today)) return null;
   const until = isCurrent ? sameDayLastYear(today) : `${prev}-12-31`;
   const allYear = booksReadInYear(books, prev);
   const allPages = pagesReadUntil(books, prev, `${prev}-12-31`);
@@ -194,11 +201,14 @@ export function previousYearBaseline(books, year, today) {
  * Devolve null quando não há como comparar.
  * Arredonda como a tela mostra: digits casas decimais (nota média: 1; livros e dias: 0).
  */
-export function kpiDelta(current, previous, { lowerIsBetter = false, digits = 0 } = {}) {
+export function kpiDelta(current, previous, { lowerIsBetter = false, digits = 0, byPct = false } = {}) {
   if (current === null || current === undefined || previous === null || previous === undefined) return null;
   const diff = roundTo(roundTo(current, digits) - roundTo(previous, digits), digits);
-  const dir = diff > 0 ? 'up' : diff < 0 ? 'down' : 'same';
-  const pct = previous > 0 ? Math.round(((current - previous) / previous) * 100) : null;
+  // + 0 tira o "-0" (2.000 × 2.004 págs. arredonda para 0%, não "-0%").
+  const pct = previous > 0 ? Math.round(((current - previous) / previous) * 100) + 0 : null;
+  // byPct: a tela mostra o %, então a seta segue o % arredondado (0% é "igual", não "▼ 0%").
+  const by = byPct && pct !== null ? pct : diff;
+  const dir = by > 0 ? 'up' : by < 0 ? 'down' : 'same';
   const favorable = dir === 'same' ? null : (dir === 'up') !== lowerIsBetter;
   return { dir, diff, pct, favorable };
 }
@@ -330,6 +340,10 @@ export function curveText(c) {
       detail: c.isCurrent ? capitalize(proj) : '',
     };
   }
+  if (c.isFuture) {
+    // O ano ainda não começou: nada "abaixo da meta", só o plano.
+    return { headline: `Meta de ${goalText} ${k === 'paginas' ? 'páginas' : 'livros'}`, detail: `Previsto: ${k === 'paginas' ? `~${nf0.format(nice(c.goal / 12))}` : curveAmount(k, c.goal / 12)} por mês` };
+  }
   if (!c.isCurrent) {
     return { headline: `${curveAmount(k, c.realized)} de ${goalText} · ${withUnit(c.goal - c.realized)} abaixo da meta`, detail: '' };
   }
@@ -341,6 +355,6 @@ export function curveText(c) {
     : `${withUnit(Math.abs(dev))} ${dev < 0 ? 'abaixo do' : 'à frente do'} previsto`;
   const close = c.perMonth !== null
     ? `para fechar ${goalText}: ${k === 'paginas' ? `~${nf0.format(nice(c.perMonth))}` : curveAmount(k, c.perMonth)} por mês`
-    : `faltam ${withUnit(c.missing)} até 31 dez`;
+    : `${['livro', 'pág.'].includes(unitOf(k, c.missing)) ? 'falta' : 'faltam'} ${withUnit(c.missing)} até 31 dez`;
   return { headline, detail: capitalize([close, proj].filter(Boolean).join(' · ')) };
 }

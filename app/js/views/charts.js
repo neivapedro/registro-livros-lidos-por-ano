@@ -68,7 +68,8 @@ export function formatCard(state, s) {
   const phys = s.formats[FORMATS.PHYSICAL];
   const kin = s.formats[FORMATS.KINDLE];
   const pages = pagesByFormat(state.books, s.year);
-  const pct = (n) => Math.round((n / s.count) * 100);
+  // Os dois % somam 100 (1 de 8 e 7 de 8 não viram 13% + 88%).
+  const pct = (n) => (n === kin && phys ? 100 - Math.round((phys / s.count) * 100) : Math.round((n / s.count) * 100));
   const label = (format, side, name, books, pg) => `
     <button type="button" class="fmt-label fmt-${side}" ${tapAttrs(s.year, 'format', format, `${name}: ${plural(books, 'livro', 'livros')}, ${num(pg)} páginas. Ver livros`)}>
       <span class="fmt-name"><span class="dot ${side === 'a' ? 'dot-a' : 'dot-b'}"></span>${name} <span class="fmt-pct">${pct(books)}%</span></span>
