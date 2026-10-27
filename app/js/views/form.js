@@ -82,7 +82,7 @@ function seriesFields(state, d, isEdit) {
     const s = seriesInfo(state.books, d);
     const lines = [];
     if (s.next) {
-      lines.push(`Próximo da série: <a href="#/livro/${encodeURIComponent(s.next.id)}">nº ${esc(formatSeriesNumber(s.next.seriesNumber))} — ${esc(s.next.title)}</a>`);
+      lines.push(`Próximo da série: <a class="inline-link" href="#/livro/${encodeURIComponent(s.next.id)}">nº ${esc(formatSeriesNumber(s.next.seriesNumber))} — ${esc(s.next.title)}</a>`);
     }
     if (s.total > 1) lines.push(`Você leu ${s.read} de ${s.total} cadastrados nesta série`);
     info = lines.length ? `<div class="series-info">${lines.map((l) => `<p class="muted small">${l}</p>`).join('')}</div>` : '';

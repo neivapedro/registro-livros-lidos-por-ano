@@ -234,6 +234,10 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .section-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
 .section-head h2 { font-size: 17px; }
 .link { font-size: 13px; font-weight: 700; }
+/* Links pequenos no cabeçalho das seções e no meio do texto: a área de toque chega a 44px
+   (sem mudar o desenho: a margem negativa devolve o espaço). */
+.section-head .link { display: inline-flex; align-items: center; min-height: 44px; margin: -13px -8px; padding: 0 8px; }
+.inline-link { display: inline-block; padding: 13px 0; margin: -13px 0; }
 
 .chips { display: flex; gap: 6px; flex-wrap: wrap; }
 .chip { font-size: 11px; font-weight: 600; padding: 4px 9px; border-radius: 999px; background: var(--surface-2); color: var(--text-soft); white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
@@ -409,7 +413,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 }
 .btn-text.accent { color: var(--accent); }
 .btn-text.strong { font-weight: 800; }
-.btn-text.small { font-size: 13px; min-height: 40px; }
+.btn-text.small { font-size: 13px; min-height: 44px; }
 
 .form { display: flex; flex-direction: column; gap: 24px; }
 .field-group { display: flex; flex-direction: column; gap: 10px; }
@@ -1654,11 +1658,14 @@ body.sheet-open { overflow: hidden; }
 .shelf-tools .chip-btn.sm { min-height: 44px; }
 .mini-seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--surface); border: 1px solid var(--line); }
 .mini-seg-btn {
+  position: relative;
   min-height: 40px; padding: 0 14px; border: 0; border-radius: 999px;
   background: transparent; color: var(--muted); font-size: 13px; font-weight: 700;
   display: inline-flex; align-items: center; gap: 6px;
 }
 .mini-seg-btn.is-on { background: var(--surface-2); color: var(--text); }
+/* Toque de 46px: a área cobre também a borda da cápsula (o desenho continua o mesmo). */
+.mini-seg-btn::after { content: ''; position: absolute; inset: -4px 0; }
 .shelf-hint { text-align: center; font-size: 12px; padding: 0 12px; text-wrap: balance; }
 @media (hover: hover) and (pointer: fine) { .shelf-hint { display: none; } }
 .add-queue { border-style: dashed; border-radius: 999px; min-height: 48px; }

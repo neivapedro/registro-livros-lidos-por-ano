@@ -113,35 +113,57 @@ function isBookKey(key) {
 
 function go(href) {
   if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
-  else location.hash = href;
+  else {
+    tagHistoryEntry();
+    location.hash = href;
+  }
 }
 
-// Cada entrada do histórico leva um número (history.state.n) e guardamos qual tela ela mostra.
-// Assim, sair da edição (Salvar, Cancelar, Voltar, Excluir) volta PELO histórico, como o gesto
-// de voltar do iPhone, em vez de empilhar a tela de antes de novo: o voltar seguinte leva para
-// onde a pessoa estava antes da ficha, e não de volta ao formulário.
+// Cada entrada do histórico tem um número e guardamos qual tela ela mostra. Assim, sair da
+// edição (Salvar, Cancelar, Voltar, Excluir) volta PELO histórico, como o gesto de voltar do
+// iPhone, em vez de empilhar a tela de antes de novo: o voltar seguinte leva para onde a pessoa
+// estava antes da ficha, e não de volta ao formulário.
+// O número só é gravado na entrada (history.state.n) quando o próprio app sai dela (link, botão),
+// nunca no meio de um redesenho: é a única forma de voltar a ela pelo histórico.
 let historyIndex = 0;
+let replacingEntry = false;
 const historyKeys = new Map();
 
 function trackHistory(key) {
-  let n = history.state?.n;
-  if (!Number.isInteger(n)) {
-    n = historyIndex + 1;
-    try {
-      history.replaceState({ ...(history.state || {}), n }, '');
-    } catch { /* sem acesso ao histórico: sair da edição só troca a entrada atual */ }
-  }
-  historyIndex = n;
-  historyKeys.set(n, key);
+  const tagged = history.state?.n;
+  if (Number.isInteger(tagged)) historyIndex = tagged;
+  else if (!replacingEntry) historyIndex += 1;
+  replacingEntry = false;
+  historyKeys.set(historyIndex, key);
 }
+
+/** Antes de o app trocar de tela: a entrada atual guarda o seu número. */
+function tagHistoryEntry() {
+  if (!historyIndex || history.state?.n === historyIndex) return;
+  try {
+    history.replaceState({ ...(history.state || {}), n: historyIndex }, '');
+  } catch { /* sem acesso ao histórico: sair da edição só troca a entrada atual */ }
+}
+
+// Links do app (telas, barra de baixo, capas): a entrada atual é marcada antes de sair dela.
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('a[href^="#/"]')) tagHistoryEntry();
+}, true);
+
+// Volta pelo histórico já pedida (ela chega depois, no hashchange): um segundo toque rápido em
+// Salvar ou Cancelar não volta mais uma tela (o que poderia até sair do app).
+let leavingAt = 0;
+addEventListener('hashchange', () => { leavingAt = 0; });
 
 /** Sai da edição (ou do livro novo) para href: volta pelo histórico se href é a tela de onde se veio. */
 function leaveForm(href) {
+  if (leavingAt && Date.now() - leavingAt < 1500) return;
   const key = href.replace(/^#\/?/, '') || 'inicio';
   // Só atravessa telas do próprio livro (ficha, edição, livro novo) no caminho de volta.
   for (let n = historyIndex - 1; historyKeys.has(n); n -= 1) {
     const k = historyKeys.get(n);
     if (k === key) {
+      leavingAt = Date.now();
       history.go(n - historyIndex);
       return;
     }
@@ -149,7 +171,10 @@ function leaveForm(href) {
   }
   // Aberta por um link direto (ou depois de recarregar): troca a entrada da edição pela tela.
   if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
-  else location.replace(href);
+  else {
+    replacingEntry = true;
+    location.replace(href);
+  }
 }
 
 function blankDraft(status) {
@@ -1899,6 +1924,7 @@ function navigateWithCover(href, from, pickTarget) {
     // Outra navegação chegou antes da troca (toque rápido em outra coisa): ela vale.
     if (location.hash !== startHash) return;
     renderedByTransition = href;
+    tagHistoryEntry();
     location.hash = href;
     render();
     target = pickTarget?.() || null;
