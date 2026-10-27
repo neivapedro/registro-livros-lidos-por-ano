@@ -5,7 +5,7 @@ import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 
-export const APP_VERSION = '1.4.3';
+export const APP_VERSION = '1.4.4';
 
 function stepper(label, value, action, hint) {
   return `
