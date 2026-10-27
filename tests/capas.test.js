@@ -381,3 +381,28 @@ test('normalizeCoverUrl é estável (normalizar de novo não muda) e não mexe e
   assert.equal(largeCoverUrl('https://covers.openlibrary.org/b/isbn/9788535914849-M.jpg?default=false'),
     'https://covers.openlibrary.org/b/isbn/9788535914849-L.jpg?default=false');
 });
+
+test('sw: capa guardada há mais de 14 dias é conferida em segundo plano; a recente, não', async () => {
+  const log = [];
+  const sw = loadSw({ fetchImpl: fakeNetwork({ log }) });
+  const url = 'https://covers.openlibrary.org/b/id/9-M.jpg';
+  // Primeira vez: baixa e guarda (com a data).
+  await respond(sw, imgRequest(url));
+  const first = log.length;
+  assert.ok(first >= 1);
+  // Logo depois: vem do cache, sem ir à rede.
+  await respond(sw, imgRequest(url));
+  assert.equal(log.length, first, 'recente: não confere');
+  // 15 dias depois: devolve a guardada e confere em segundo plano.
+  sw.get('meta').saved[url] -= 15 * 24 * 3600 * 1000;
+  const res = await respond(sw, imgRequest(url));
+  assert.ok(res, 'responde com a guardada');
+  assert.ok(log.length > first, 'conferiu na rede');
+  assert.ok(Date.now() - sw.get('meta').saved[url] < 60000, 'data renovada');
+  // Sem rede na conferência: a guardada continua lá.
+  const offline = loadSw({ fetchImpl: fakeNetwork({ online: () => false }) });
+  const store = await offline.caches.open('leituras-capas');
+  await store.put(url, fakeResponse('cors'));
+  await respond(offline, imgRequest(url));
+  assert.ok(await store.match(url), 'sem rede: não apaga');
+});

@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.4.1';
+const VERSION = 'v1.4.2';
 const CACHE = `leituras-${VERSION}`;
 
 // Capas dos livros (Google Books, Open Library, BrasilAPI...): ficam num cache próprio, que
@@ -20,6 +20,9 @@ const QUOTA_SHARE = 0.4;
 const FIT_TTL_MS = 7 * 24 * 3600 * 1000;
 // Se um site deixa ou não ler a imagem é conferido de novo depois de 30 dias.
 const HOST_RECHECK_MS = 30 * 24 * 3600 * 1000;
+// Capa guardada há mais que isso é conferida de novo em segundo plano (sem esperar por ela):
+// se o site trocou a imagem, a nova substitui a antiga; sem rede, fica a guardada.
+const COVER_REFRESH_MS = 14 * 24 * 3600 * 1000;
 // Pré-carga das capas: poucas por vez, para não disputar a rede com a tela.
 const WARM_CONCURRENCY = 3;
 const WARM_TIMEOUT_MS = 15000;
@@ -265,13 +268,14 @@ function loadMeta(cache) {
 }
 
 async function readMeta(cache) {
-  const loaded = { keep: [], hosts: {}, fit: null };
+  const loaded = { keep: [], hosts: {}, fit: null, saved: {} };
   try {
     const stored = await (await cache.match(META_KEY))?.json();
     if (stored && typeof stored === 'object') {
       loaded.keep = cleanCoverList(stored.keep);
       if (stored.hosts && typeof stored.hosts === 'object') loaded.hosts = stored.hosts;
       if (stored.fit && Number.isFinite(stored.fit.n)) loaded.fit = stored.fit;
+      if (stored.saved && typeof stored.saved === 'object') loaded.saved = stored.saved;
     }
   } catch {
     // Anotação ilegível: começa do zero (só custa algumas consultas a mais).
@@ -356,8 +360,46 @@ async function putCover(cache, url, response, { trim = true } = {}) {
     await trimCovers(Math.floor(coverLimit() / 2));
     return false;
   }
+  await noteSaved(cache, url);
   if (trim) await trimCovers();
   return true;
+}
+
+/** Anota quando a capa foi guardada (para conferir de novo depois de COVER_REFRESH_MS). */
+async function noteSaved(cache, url) {
+  if (!meta) return;
+  meta.saved = meta.saved || {};
+  meta.saved[url] = Date.now();
+  // Só as capas que ainda estão guardadas entram na anotação (ela não cresce para sempre).
+  const urls = Object.keys(meta.saved);
+  if (urls.length > MAX_COVERS * 2) {
+    const present = new Set((await cache.keys()).map((r) => r.url));
+    for (const u of urls) if (!present.has(u)) delete meta.saved[u];
+  }
+  await saveMeta(cache);
+}
+
+/** A capa guardada já passou do prazo de conferência? Sem data (guardada antes disto): sim. */
+function needsRefresh(url, now = Date.now()) {
+  const at = meta?.saved?.[url];
+  return !Number.isFinite(at) || now - at > COVER_REFRESH_MS;
+}
+
+// Conferências em andamento (a mesma capa pedida várias vezes confere uma vez só).
+const refreshing = new Set();
+
+/** Baixa de novo em segundo plano; só troca a guardada se vier uma imagem que sirva. */
+async function refreshCover(cache, url) {
+  if (refreshing.has(url)) return;
+  refreshing.add(url);
+  try {
+    const response = await downloadCover(cache, url, null, typeof AbortSignal !== 'undefined' && AbortSignal.timeout ? AbortSignal.timeout(15000) : undefined);
+    if (isStorable(response)) await putCover(cache, url, response, { trim: false });
+  } catch {
+    // Sem rede ou site fora do ar: fica a capa guardada.
+  } finally {
+    refreshing.delete(url);
+  }
 }
 
 function plainRequest(url, mode, signal) {
@@ -410,7 +452,10 @@ async function coverResponse(request, url, event) {
     await loadMeta(cache);
     const cached = await cache.match(url.href, { ignoreVary: true });
     // Pedido com CORS (cor da capa) precisa ler os pixels: a opaca não serve para ele.
-    if (cached && (request.mode !== 'cors' || isReadable(cached))) return cached;
+    if (cached && (request.mode !== 'cors' || isReadable(cached))) {
+      if (needsRefresh(url.href)) event.waitUntil(refreshCover(cache, url.href));
+      return cached;
+    }
   } catch {
     // Cache indisponível: segue pela rede.
   }

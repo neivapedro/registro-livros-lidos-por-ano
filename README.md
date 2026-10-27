@@ -27,6 +27,9 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 
 - **Visual (1.4):** tema claro e escuro (segue o iPhone; Ajustes → Aparência), ficha própria de cada livro com a cor da capa, painel “Registrar leitura”, toque longo e gestos na Estante, lista ou capas, filtros em chips, barra de navegação de vidro, títulos que encolhem ao rolar, curva S da meta (previsto × realizado) e Resumo em três abas.
 
+- **Capas guardadas no aparelho (1.4.2):** cada capa fica no cache do app depois da primeira vez (funciona sem internet), as de todos os livros são baixadas em segundo plano, a que falhar é tentada de novo e a guardada há mais de 14 dias é conferida em segundo plano.
+- **Busca com IA (opcional):** botão "Buscar com IA" usa o Gemini com pesquisa no Google, com chave própria em *Ajustes → Busca com IA* (só no aparelho). O Google exige faturamento ativo (5.000 buscas/mês sem cobrança, o uso da IA tem custo pequeno); o app limita a 30 buscas por mês por aparelho. *Ajustes → Enviar chaves para outro celular* leva as chaves de busca (nunca os livros) para outra pessoa.
+
 ## Estrutura
 
 ```
