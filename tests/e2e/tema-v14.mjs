@@ -541,7 +541,9 @@ try {
   {
     const page = await newPage({ motion: 'no-preference' });
     await open(page, '#/inicio', 'inicio');
-    assert.match(await page.$eval('[data-cbar]', (b) => getComputedStyle(b).transitionProperty), /opacity/);
+    // Logo após abrir, a tela pode ser redesenhada (capas que chegam do cache, abertura animada):
+    // espera a barra estável em vez de ler o estilo no primeiro instante.
+    await page.waitForFunction(() => /opacity/.test(getComputedStyle(document.querySelector('[data-cbar]')).transitionProperty), null, { timeout: 5000 });
     await page.evaluate(() => scrollTo(0, 400));
     await page.waitForFunction(() => getComputedStyle(document.querySelector('[data-cbar]')).opacity === '1');
     await page.context().close();
