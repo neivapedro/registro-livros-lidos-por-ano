@@ -135,6 +135,7 @@ function readingBlock(book, ui, today) {
         ${timerButton(book, ui.session)}
         <a class="btn-outline" href="${editHref(book.id, 'concluir=1')}">Concluir</a>
       </div>
+      <button type="button" class="btn-text small ficha-pause" data-action="pause-reading" data-id="${esc(book.id)}">Voltar para Quero ler</button>
     </section>`;
 }
 

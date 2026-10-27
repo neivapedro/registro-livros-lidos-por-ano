@@ -2167,3 +2167,6 @@ body [data-theme] { color: var(--text); }
 /* Ajustes → Aparência. */
 .theme-card { padding: 6px; }
 .theme-seg { border: 0; padding: 0; background: transparent; }
+
+/* Ficha: "Voltar para Quero ler", discreto abaixo de Ler agora / Concluir. */
+.ficha-card .ficha-pause { display: flex; justify-content: center; width: 100%; margin-top: 4px; color: var(--muted); font-weight: 600; }

@@ -20,7 +20,7 @@ import { milestoneMessage, newMilestones } from './milestones.js';
 import { renderRetroImage } from './share-image.js';
 import {
   STATUS, FORMATS, createEmptyState, getGoal, jsonEqual, newId, openStoredState, parseBackup, readStoredState,
-  removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
+  pauseReading, removeBook, restoreBook, serializeBackup, setGoal, startReread, upsertBook, validateBook, writeStoredState,
 } from './store.js';
 import { applyRescue, buildRescue, clearRescue, readRescue, writeRescue } from './rescue.js';
 import { setPageGoal } from './store.js';
@@ -85,6 +85,7 @@ const ui = {
 };
 
 let lastDeleted = null;
+let lastPaused = null;
 
 let currentKey = null;
 let previousKey = null;
@@ -959,6 +960,22 @@ const actions = {
     // Vindo da ficha do livro excluído: volta para a lista de onde a ficha foi aberta.
     leaveForm(ui.backHref.startsWith(`#/livro/${encodeURIComponent(ui.draft.id)}`) ? ui.detailBack || '#/inicio' : ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
+  },
+  'pause-reading'(el) {
+    const { state: next, before } = pauseReading(state, el.dataset.id);
+    if (!before) return;
+    lastPaused = before;
+    persist(next);
+    render();
+    toast(`"${before.title}" voltou para Quero ler.`, { actionLabel: 'Desfazer', action: 'undo-pause', duration: 7000 });
+  },
+  'undo-pause'() {
+    const book = lastPaused && state.books.find((b) => b.id === lastPaused.id);
+    // Só desfaz se o livro ainda está como ficou (nem excluído, nem começado de novo).
+    if (!book || book.status !== STATUS.WANT) return;
+    persist(upsertBook(state, lastPaused).state, 'Leitura retomada.');
+    lastPaused = null;
+    render();
   },
   'start-reading'(el) {
     const book = state.books.find((b) => b.id === el.dataset.id);

@@ -107,9 +107,12 @@ export function closeOnFinish(book, today) {
  *   posição na unidade nova vira o ponto de partida.
  * - Conclusão: fecha no dia do término informado, se não for no futuro nem antes do diário.
  * - Lendo/Abandonado com posição nova: registra no dia.
+ * - De Lendo/Lido/Abandonado para "Quero ler": diário vazio (recomeça do zero).
  */
 export function journalOnSave(d, original, today) {
   const journal = d.journal || [];
+  // Voltou para "Quero ler": começa do zero na próxima vez (o diário antigo não conta mais).
+  if (original && original.status !== STATUS.WANT && d.status === STATUS.WANT) return [];
   if (!original || original.status === STATUS.WANT) return journal;
   if (unitOf(d) !== unitOf(original)) return journal;
   if (d.status === STATUS.READ) {

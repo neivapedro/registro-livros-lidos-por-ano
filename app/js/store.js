@@ -351,6 +351,20 @@ export function restoreBook(state, book, index, upNextIndex = -1) {
   return { ...state, books, upNext: cleanUpNext(books, upNext) };
 }
 
+/**
+ * Tira o livro de "Lendo" sem marcar como abandonado: volta para "Quero ler" do zero
+ * (sem data de início, posição, data alvo nem diário). Trechos, anotações e etiquetas ficam.
+ * Devolve o estado novo e o livro como estava, para o Desfazer.
+ */
+export function pauseReading(state, id, nowTs = new Date().toISOString()) {
+  const before = state.books.find((b) => b.id === id && b.status === STATUS.READING);
+  if (!before) return { state, before: null };
+  const { state: next } = upsertBook(state, {
+    ...before, status: STATUS.WANT, startDate: null, currentPage: null, currentPercent: null, targetDate: null, journal: [],
+  }, nowTs);
+  return { state: next, before };
+}
+
 /** Nova leitura de um livro já lido: um novo registro, começando hoje. */
 export function startReread(state, id, today, nowTs = new Date().toISOString()) {
   const original = state.books.find((b) => b.id === id);
