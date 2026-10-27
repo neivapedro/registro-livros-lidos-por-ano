@@ -1,10 +1,14 @@
-/* Leituras — tema escuro, cinza/marrom/branco com destaque caramelo. */
+/* Leituras — tema escuro (padrão), cinza/marrom/branco com destaque caramelo.
+   O tema claro (papel) redefine estes tokens no fim do arquivo ([data-theme="light"]).
+   Regras de componente usam só tokens; nada de cor literal fora dos blocos de tokens. */
 
 @font-face { font-family: 'Manrope'; font-weight: 400 800; font-style: normal; font-display: swap; src: url('../fonts/manrope.woff2') format('woff2'); }
 @font-face { font-family: 'Instrument Serif'; font-weight: 400; font-style: normal; font-display: swap; src: url('../fonts/instrument-serif.woff2') format('woff2'); }
 @font-face { font-family: 'Instrument Serif'; font-weight: 400; font-style: italic; font-display: swap; src: url('../fonts/instrument-serif-italic.woff2') format('woff2'); }
 
-:root {
+/* [data-theme="dark"] também numa parte da página: a retrospectiva e a capa ampliada
+   continuam escuras no tema claro ("cinema"). */
+:root, [data-theme="dark"] {
   --bg: #0E0C0B;
   --bg-retro: #140F0C;
   --surface: #1A1715;
@@ -20,6 +24,27 @@
   --accent-hover: #E3A876;
   --on-accent: #0E0C0B;
   --danger: #E07A6A;
+  --danger-text: #F2B3A8;
+  --danger-line: #4A2C27;
+  /* Tons que eram literais nas regras (o tema claro redefine cada um). */
+  --surface-deep: #241B16;
+  --surface-sel: #221D19;
+  --track-warm: #3A2E26;
+  --line-warm: #2A211A;
+  --star-off: #3A3633;
+  --switch-off: #3A3633;
+  --switch-knob: var(--text);
+  --chart-guide: #5A514A;
+  --bar-partial: #8C6A4F;
+  --bar-empty: #4A433E;
+  --bar-neutral: #8C7F75;
+  --bar-dim: #5E5650;
+  --cover-shadow: rgb(0 0 0 / 0.5);
+  /* Força da cor da capa (--tint) nos fundos: forte no escuro, um véu no claro. */
+  --tint-a: 0.58;
+  --tint-line: 0.4;
+  --hero-tint-a: 0.95;
+  --hero-tint-b: 0.4;
   --serif: 'Instrument Serif', Georgia, 'Times New Roman', serif;
   --sans: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --radius: 22px;
@@ -94,7 +119,7 @@ body.no-nav .app { padding-bottom: calc(32px + var(--safe-b)); }
   z-index: 10;
   height: calc(var(--nav-h) + var(--safe-b));
   padding: 0 8px var(--safe-b);
-  background: rgba(14, 12, 11, 0.94);
+  background: var(--bar-bg);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border-top: 1px solid var(--line);
@@ -113,7 +138,7 @@ body.no-nav .nav { display: none; }
   min-width: 0; width: 56px; height: 56px; border-radius: 20px;
   background: var(--accent); color: var(--on-accent);
   margin-top: -16px;
-  box-shadow: 0 10px 24px rgba(208, 140, 79, 0.32);
+  box-shadow: 0 10px 24px var(--accent-line);
 }
 
 .toast {
@@ -149,7 +174,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   display: inline-flex; align-items: center; justify-content: center;
 }
 .icon-btn-spacer { visibility: hidden; }
-.icon-btn.dark { background: #241B16; border-color: transparent; }
+.icon-btn.dark { background: var(--surface-deep); border-color: transparent; }
 .year-pill { position: relative; display: inline-flex; align-items: center; }
 .year-pill select {
   appearance: none; -webkit-appearance: none;
@@ -199,7 +224,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   background: var(--surface); border: 1px solid var(--line); border-radius: 20px;
   padding: 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0;
 }
-.tile.dark { background: #241B16; border-color: transparent; }
+.tile.dark { background: var(--surface-deep); border-color: transparent; }
 .tile-value { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; display: inline-flex; align-items: center; gap: 4px; line-height: 1.1; }
 .tile-value.big { font-size: 32px; letter-spacing: -1px; }
 .tile-of { font-size: 16px; color: var(--muted); font-weight: 600; letter-spacing: 0; }
@@ -220,7 +245,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   display: flex; flex-direction: column; justify-content: space-between;
   background: var(--cover-bg); color: var(--cover-fg);
   border-radius: 6px; padding: 8px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 8px 18px var(--cover-shadow);
 }
 .cover-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .cover-title { font-family: var(--serif); font-size: 13px; line-height: 1.05; overflow: hidden; display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; -webkit-hyphens: auto; hyphens: auto; }
@@ -232,18 +257,18 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .cover-md { width: 60px; height: 90px; }
 .cover-lg { width: 72px; height: 108px; }
 .cover-lg .cover-title { font-size: 16px; }
-.cover-xl { width: 170px; height: 255px; padding: 16px; border-radius: 10px; box-shadow: 0 24px 50px rgba(0, 0, 0, 0.6); }
+.cover-xl { width: 170px; height: 255px; padding: 16px; border-radius: 10px; box-shadow: 0 24px 50px var(--cover-shadow); }
 .cover-xl .cover-title { font-size: 34px; line-height: 0.98; -webkit-line-clamp: 5; }
 .cover-xl .cover-author { font-size: 10px; }
-.cover-fill { width: 100%; aspect-ratio: 2 / 3; border-radius: 8px; padding: 10px; box-shadow: 0 10px 22px rgba(0, 0, 0, 0.5); }
+.cover-fill { width: 100%; aspect-ratio: 2 / 3; border-radius: 8px; padding: 10px; box-shadow: 0 10px 22px var(--cover-shadow); }
 .cover-fill .cover-title { font-size: 17px; }
 .cover-fill .cover-author { font-size: 9px; }
 
 .stars { display: inline-flex; gap: 2px; }
 .star-on { color: var(--accent); }
-.star-off { color: #3A3633; }
+.star-off { color: var(--star-off); }
 .star-half { color: var(--accent); }
-.star-half-bg { fill: #3A3633; }
+.star-half-bg { fill: var(--star-off); }
 
 /* ---------- Início ---------- */
 
@@ -339,7 +364,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .seg-count { font-size: 12px; opacity: 0.75; }
 .tabs-4 .seg-btn { flex-direction: column; gap: 0; font-size: 13px; min-height: 52px; line-height: 1.2; padding: 4px 2px; }
 .drop-reason { margin: -6px 0 4px; padding: 10px 14px; border-radius: 0 0 16px 16px; background: var(--surface-2); font-size: 14px; color: var(--text-soft); display: flex; flex-direction: column; gap: 4px; }
-.chip.chip-muted { background: #3A2E26; color: var(--muted); }
+.chip.chip-muted { background: var(--track-warm); color: var(--muted); }
 
 .search-box {
   height: 52px; border-radius: 16px; background: var(--surface); border: 1px solid var(--line-strong);
@@ -372,7 +397,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
   position: sticky; top: 0; z-index: 5;
   margin: calc(-16px - var(--safe-t)) -18px 0;
   padding: calc(8px + var(--safe-t)) 8px 8px;
-  background: rgba(14, 12, 11, 0.96);
+  background: color-mix(in srgb, var(--bg) 94%, transparent);
   backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   border-bottom: 1px solid var(--line);
   display: flex; align-items: center; justify-content: space-between;
@@ -397,7 +422,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .field label { font-size: 12px; color: var(--muted); }
 .field input { border: 0; outline: none; background: transparent; font-size: 16px; font-weight: 700; padding: 2px 0; width: 100%; min-height: 26px; }
 .field input::placeholder { color: var(--faint); font-weight: 500; }
-.field input[type="date"] { color-scheme: dark; }
+.field input[type="date"] { color-scheme: inherit; }
 .two-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 
 .results { display: flex; flex-direction: column; gap: 8px; }
@@ -412,7 +437,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .lookup-tip { padding: 6px 2px 0; }
 .picked {
   display: flex; align-items: center; gap: 14px; padding: 12px;
-  border-radius: 18px; background: #221D19; border: 1px solid var(--accent);
+  border-radius: 18px; background: var(--surface-sel); border: 1px solid var(--accent);
 }
 .picked-text { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 0; }
 .cover-edit { display: flex; align-items: center; gap: 14px; }
@@ -422,12 +447,12 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 .cover-zoom-hint {
   position: absolute; right: -6px; bottom: -6px; width: 24px; height: 24px; border-radius: 999px;
   background: var(--accent); color: var(--on-accent); display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+  box-shadow: 0 4px 10px var(--cover-shadow);
 }
 body.viewer-open { overflow: hidden; }
 .cover-viewer {
   position: fixed; inset: 0; z-index: 30;
-  background: rgba(8, 7, 6, 0.96);
+  background: color-mix(in srgb, var(--bg) 96%, transparent);
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
   padding: calc(64px + var(--safe-t)) 20px calc(24px + var(--safe-b));
   animation: fade .2s ease;
@@ -435,13 +460,13 @@ body.viewer-open { overflow: hidden; }
 @keyframes fade { from { opacity: 0; } to { opacity: 1; } }
 .cover-viewer-img {
   max-width: 100%; max-height: calc(100dvh - 160px - var(--safe-t) - var(--safe-b));
-  object-fit: contain; border-radius: 8px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+  object-fit: contain; border-radius: 8px; box-shadow: 0 24px 60px var(--cover-shadow);
   touch-action: pinch-zoom;
 }
 .cover-viewer-close {
   position: absolute; top: calc(14px + var(--safe-t)); right: 16px;
   width: 44px; height: 44px; border-radius: 999px; border: 0;
-  background: #241B16; color: var(--text); display: flex; align-items: center; justify-content: center;
+  background: var(--surface-deep); color: var(--text); display: flex; align-items: center; justify-content: center;
 }
 .cover-viewer-hint { font-size: 12px; color: var(--muted); text-align: center; }
 
@@ -472,9 +497,9 @@ body.viewer-open { overflow: hidden; }
 
 .toggle-row { flex-direction: row; align-items: center; gap: 14px; padding: 14px 16px; text-align: left; border-radius: 18px; }
 .toggle-text { display: flex; flex-direction: column; gap: 2px; flex: 1; }
-.switch { width: 48px; height: 28px; border-radius: 999px; background: #3A3633; position: relative; flex-shrink: 0; transition: background .2s; }
+.switch { width: 48px; height: 28px; border-radius: 999px; background: var(--switch-off); position: relative; flex-shrink: 0; transition: background .2s; }
 .switch.is-on { background: var(--accent); }
-.switch-knob { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 999px; background: var(--text); transition: left .2s; }
+.switch-knob { position: absolute; top: 3px; left: 3px; width: 22px; height: 22px; border-radius: 999px; background: var(--switch-knob); box-shadow: 0 1px 3px var(--shadow-color); transition: left .2s; }
 .switch.is-on .switch-knob { left: 23px; }
 
 textarea {
@@ -484,7 +509,7 @@ textarea {
 textarea:focus { border-color: var(--accent); }
 textarea::placeholder { color: var(--faint); }
 
-.form-errors { border: 1px solid var(--danger); background: rgba(224, 122, 106, 0.1); color: #F2B3A8; border-radius: 16px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+.form-errors { border: 1px solid var(--danger); background: color-mix(in srgb, var(--danger) 10%, transparent); color: var(--danger-text); border-radius: 16px; padding: 12px 14px; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
 
 .btn-primary, .btn-ghost, .btn-danger {
   min-height: 56px; border-radius: 18px; padding: 0 18px;
@@ -495,7 +520,7 @@ textarea::placeholder { color: var(--faint); }
 .btn-primary:active { background: var(--accent-hover); }
 .btn-primary.sm { min-height: 52px; font-size: 14px; }
 .btn-ghost { border: 1px solid var(--line-strong); background: transparent; color: var(--text); font-size: 14px; font-weight: 700; min-height: 52px; }
-.btn-danger { border: 1px solid #4A2C27; background: transparent; color: var(--danger); font-size: 14px; font-weight: 700; min-height: 48px; }
+.btn-danger { border: 1px solid var(--danger-line); background: transparent; color: var(--danger); font-size: 14px; font-weight: 700; min-height: 48px; }
 .file-btn { cursor: pointer; }
 
 /* ---------- Resumo ---------- */
@@ -506,13 +531,13 @@ textarea::placeholder { color: var(--faint); }
 .legend-target { display: inline-flex; align-items: center; gap: 6px; }
 .legend-target .dash { width: 14px; border-top: 1px dashed var(--muted); }
 .bars { position: relative; display: flex; justify-content: space-between; align-items: flex-end; height: calc(var(--chart-h) + 44px); padding: 0 2px; }
-.target-line { position: absolute; left: 0; right: 0; border-top: 1px dashed #5A514A; pointer-events: none; }
+.target-line { position: absolute; left: 0; right: 0; border-top: 1px dashed var(--chart-guide); pointer-events: none; }
 .bar-col { width: 20px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; }
 .bar-value { font-size: 11px; font-weight: 700; color: var(--text-soft); min-height: 14px; }
 .bar { width: 18px; border-radius: 6px 6px 3px 3px; display: block; }
 .bar.met { background: var(--accent); }
-.bar.partial { background: #8C6A4F; }
-.bar.empty { background: #4A433E; }
+.bar.partial { background: var(--bar-partial); }
+.bar.empty { background: var(--bar-empty); }
 .bar.future { background: var(--surface-2); }
 .bar-label { font-size: 11px; font-weight: 600; color: var(--muted); height: 18px; line-height: 18px; }
 .bar-label.now { color: var(--text); font-weight: 800; }
@@ -533,7 +558,7 @@ textarea::placeholder { color: var(--faint); }
 .hbar { display: flex; flex-direction: column; gap: 6px; }
 .hbar-head { display: flex; justify-content: space-between; font-size: 13px; gap: 10px; }
 .hbar-track { height: 8px; border-radius: 999px; background: var(--surface-2); }
-.hbar-fill { height: 8px; border-radius: 999px; background: #8C7F75; }
+.hbar-fill { height: 8px; border-radius: 999px; background: var(--bar-neutral); }
 .hbar-fill.is-top { background: var(--accent); }
 
 .rank-row { display: flex; align-items: center; gap: 14px; padding: 4px 0; }
@@ -545,7 +570,7 @@ textarea::placeholder { color: var(--faint); }
 .cmp-year { width: 40px; font-size: 13px; font-weight: 700; color: var(--muted); }
 .cmp-row.is-sel .cmp-year { color: var(--text); }
 .cmp-track { flex: 1; height: 26px; border-radius: 8px; background: var(--surface-2); position: relative; }
-.cmp-fill { height: 26px; border-radius: 8px; background: #5E5650; min-width: 4px; }
+.cmp-fill { height: 26px; border-radius: 8px; background: var(--bar-dim); min-width: 4px; }
 .cmp-row.is-sel .cmp-fill { background: var(--accent); }
 .cmp-goal { position: absolute; top: -3px; bottom: -3px; border-left: 2px solid var(--text); opacity: 0.6; }
 .cmp-count { width: 26px; text-align: right; font-size: 14px; font-weight: 800; }
@@ -563,7 +588,7 @@ textarea::placeholder { color: var(--faint); }
   display: flex; flex-direction: column;
 }
 .segments { display: flex; gap: 4px; }
-.seg { flex: 1; height: 3px; border-radius: 999px; background: #3A2E26; }
+.seg { flex: 1; height: 3px; border-radius: 999px; background: var(--track-warm); }
 .seg.on { background: var(--accent); }
 .retro-top { display: flex; justify-content: space-between; align-items: center; margin-top: 14px; }
 .retro-brand { font-family: var(--serif); font-size: 22px; }
@@ -699,7 +724,7 @@ textarea::placeholder { color: var(--faint); }
 
 .timer-banner {
   display: flex; align-items: center; gap: 12px; min-height: 56px; padding: 10px 14px;
-  border-radius: 18px; background: var(--surface-warm); border: 1px solid rgba(208, 140, 79, 0.35); color: var(--text);
+  border-radius: 18px; background: var(--surface-warm); border: 1px solid var(--accent-line); color: var(--text);
 }
 .timer-dot { width: 10px; height: 10px; border-radius: 999px; background: var(--accent); flex-shrink: 0; animation: timer-pulse 1.6s ease-in-out infinite; }
 .timer-dot.is-paused { background: var(--muted); animation: none; }
@@ -757,7 +782,7 @@ textarea::placeholder { color: var(--faint); }
 .draw-open { gap: 10px; }
 .draw-panel { gap: 12px; }
 .filters.filters-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.draw-result { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 18px; background: #221D19; border: 1px solid var(--accent); }
+.draw-result { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 18px; background: var(--surface-sel); border: 1px solid var(--accent); }
 .draw-result .reading-text { flex: 1; }
 .draw-panel .two-cols .btn-ghost, .draw-panel .two-cols .btn-primary { min-height: 52px; padding: 0 10px; }
 
@@ -798,7 +823,7 @@ textarea::placeholder { color: var(--faint); }
 .gkey .two-cols .btn-ghost { min-height: 52px; }
 /* ---------- Estatísticas: calendário, gráficos tocáveis e meta de páginas (1.3) ---------- */
 
-:root {
+:root, [data-theme] {
   /* Tons do mapa de leitura: do cinza do cartão ao caramelo. */
   --heat-0: var(--surface-2);
   --heat-1: #4A3526;
@@ -846,11 +871,11 @@ textarea::placeholder { color: var(--faint); }
   display: flex; flex-direction: column; align-items: center; justify-content: flex-start; overflow: hidden;
 }
 .cal-cell.is-out { visibility: hidden; }
-.cal-cell.has-read { background: rgba(208, 140, 79, 0.16); }
+.cal-cell.has-read { background: var(--accent-soft); }
 .cal-cell.is-today .cal-num { color: var(--accent); font-weight: 800; }
 .cal-cell.is-sel { border-color: var(--text); }
 .cal-num { font-size: 11px; font-weight: 600; line-height: 1; padding-top: 4px; }
-.cal-cell.has-book .cal-num { position: absolute; top: 2px; left: 3px; z-index: 1; padding: 1px 3px; border-radius: 4px; background: rgba(14, 12, 11, 0.7); color: var(--text); font-size: 10px; }
+.cal-cell.has-book .cal-num { position: absolute; top: 2px; left: 3px; z-index: 1; padding: 1px 3px; border-radius: 4px; background: color-mix(in srgb, var(--bg) 72%, transparent); color: var(--text); font-size: 10px; }
 .cal-cover { position: absolute; inset: 2px; display: block; }
 .cal-cover .cover { width: 100%; height: 100%; border-radius: 5px; box-shadow: none; padding: 14px 3px 3px; }
 /* Capa desenhada (sem imagem): título bem pequeno, para não virar um bloco liso. */
@@ -914,7 +939,7 @@ button.bar-col:active { background: var(--surface-2); }
 .cmp2-cell { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cmp2-value { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; }
 .cmp2-track { height: 4px; border-radius: 999px; background: var(--surface-2); }
-.cmp2-fill { display: block; height: 4px; border-radius: 999px; background: #8C7F75; }
+.cmp2-fill { display: block; height: 4px; border-radius: 999px; background: var(--bar-neutral); }
 .cmp2-row .cmp2-cell:nth-child(2) .cmp2-fill { background: var(--accent); }
 .cmp2-label { overflow-wrap: anywhere; }
 
@@ -982,16 +1007,16 @@ button.bar-col:active { background: var(--surface-2); }
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
 }
 .retro-months { display: flex; align-items: flex-end; gap: 6px; height: 64px; margin-top: 22px; }
-.retro-mbar { flex: 1; border-radius: 4px; background: #3A2E26; }
+.retro-mbar { flex: 1; border-radius: 4px; background: var(--track-warm); }
 .retro-mbar.on { background: var(--accent); }
 .retro-miles { gap: 14px; }
-.retro-miles .mile { border-top-color: #2A211A; padding: 12px 0; }
+.retro-miles .mile { border-top-color: var(--line-warm); padding: 12px 0; }
 .retro-miles .mile:first-child { padding-top: 0; }
-.retro-miles .mile-icon { background: #241B16; }
+.retro-miles .mile-icon { background: var(--surface-deep); }
 .retro-miles .mile-title { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.1; }
 .retro-gate { gap: 14px; }
 .retro-gate .retro-line { max-width: 340px; }
-.retro-format-toggle { grid-column: 1 / -1; background: #241B16; border-color: transparent; }
+.retro-format-toggle { grid-column: 1 / -1; background: var(--surface-deep); border-color: transparent; }
 /* A retrospectiva ocupa a largura toda: com margin auto num flex em coluna ela encolhia
    até o conteúdo e cada slide ficava de uma largura. Sem a folga da tela sem menu, nada rola. */
 .app[data-page="retro"] > .retro { width: 100%; }
@@ -1157,7 +1182,7 @@ p, .muted.small, .more-summary { text-wrap: pretty; }
 /* Resumo do ano em 3 abas, indicadores com variação e mini-gráfico, curva S da meta,
    gráficos mais limpos e marcos como medalhas (Todos os anos). Só tokens; o tema claro herda. */
 
-:root {
+:root, [data-theme] {
   /* Variação favorável: verde calmo (o contrário fica em cinza, nunca vermelho). */
   --good: #8FB996;
   --medal-hi: color-mix(in srgb, var(--accent) 45%, #FFFFFF);
@@ -1334,7 +1359,7 @@ p, .muted.small, .more-summary { text-wrap: pretty; }
    (Registrar leitura e menu rápido), listas compactas e modo Capas, chips da Buscar e a
    barra de navegação de vidro. Cores derivadas dos tokens (o tema claro vem depois). */
 
-:root {
+:root, [data-theme] {
   --nav-cap: 64px;
   --nav-bottom: max(10px, calc(var(--safe-b) - 6px));
   --nav-space: calc(var(--nav-cap) + var(--nav-bottom));
@@ -1452,8 +1477,8 @@ body.sheet-open .toast.show { transform: translate(-50%, 0); }
   position: relative; overflow: hidden;
   display: flex; flex-direction: column; gap: 14px; padding: 14px;
   border-radius: 24px;
-  background: linear-gradient(135deg, rgb(var(--tint, var(--tint-default)) / .58), var(--surface) 72%);
-  border-color: rgb(var(--tint, var(--tint-default)) / .4);
+  background: linear-gradient(135deg, rgb(var(--tint, var(--tint-default)) / var(--tint-a)), var(--surface) 72%);
+  border-color: rgb(var(--tint, var(--tint-default)) / var(--tint-line));
   transition: background .4s ease, transform .18s var(--ease-out);
 }
 .rn-top { display: flex; align-items: flex-start; gap: 16px; }
@@ -1771,7 +1796,7 @@ body.sheet-open { overflow: hidden; }
   padding: calc(4px + var(--safe-t)) 18px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
   background:
-    radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, 42 33 26) / 0.95), rgb(var(--tint, 42 33 26) / 0.4) 50%, transparent 88%),
+    radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, var(--tint-default)) / var(--hero-tint-a)), rgb(var(--tint, var(--tint-default)) / var(--hero-tint-b)) 50%, transparent 88%),
     linear-gradient(to bottom, transparent 70%, var(--bg));
 }
 .ficha-top { align-self: stretch; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -8px; }
@@ -1783,7 +1808,7 @@ body.sheet-open { overflow: hidden; }
 .ficha-cover .cover { view-transition-name: book-cover; }
 .cover-hero {
   width: clamp(128px, 40vw, 164px); height: auto; aspect-ratio: 2 / 3; padding: 14px; border-radius: 10px;
-  box-shadow: 0 24px 48px rgb(0 0 0 / 0.5), 0 2px 8px rgb(0 0 0 / 0.35);
+  box-shadow: 0 24px 48px var(--cover-shadow), 0 2px 8px var(--cover-shadow);
 }
 .cover-hero .cover-title { font-size: 26px; line-height: 1; -webkit-line-clamp: 5; text-align: left; }
 .cover-hero .cover-author { font-size: 9px; text-align: left; }
@@ -1954,3 +1979,155 @@ p.ficha-progress-label { text-align: left; }
 @media (prefers-reduced-motion: reduce) {
   ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; }
 }
+
+/* ---------- v1.4 Tema claro (V14) ---------- */
+/* Papel quente com o mesmo caramelo (mais fundo, para o texto passar de 4,5:1). Segue o iPhone
+   por padrão; Ajustes → Aparência fixa Claro ou Escuro (localStorage 'leituras:tema').
+   O index.html põe data-theme no <html> antes do CSS. A retrospectiva e a capa ampliada
+   continuam escuras (data-theme="dark" no próprio bloco): são telas de "cinema". */
+
+[data-theme="light"] {
+  color-scheme: light;
+  --bg: #F6F1EB;
+  --surface: #FFFDFA;
+  --surface-2: #EFE7DE;
+  --surface-warm: #F7EADC;
+  --line: #E9E0D5;
+  --line-strong: #DDD2C5;
+  --text: #1E1915;
+  --text-soft: #463C34;
+  --muted: #675D54;
+  --faint: #8F847A;
+  --accent: #97531E;
+  --accent-hover: #7E4416;
+  --on-accent: #FFFFFF;
+  --danger: #AE3B29;
+  --danger-text: #8E2E1F;
+  --danger-line: #E8C2B9;
+  --good: #2E6B3B;
+  --surface-deep: #EFE4D8;
+  --surface-sel: #FBF2E8;
+  --track-warm: #EADDCF;
+  --line-warm: #EADFD3;
+  --star-off: #DED4C9;
+  --switch-off: #DDD3C7;
+  --switch-knob: #FFFFFF;
+  --chart-guide: #A2968A;
+  --bar-partial: #D6AA80;
+  --bar-empty: #DED4C9;
+  --bar-neutral: #B5A698;
+  --bar-dim: #D5C9BC;
+  --cover-shadow: rgb(70 45 22 / 0.24);
+  --heat-1: #F0DCC6;
+  --heat-2: #E0B68B;
+  --heat-3: #C2834B;
+  /* Medalhas: cobre com brilho suave (o número em branco precisa de fundo firme). */
+  --medal-hi: color-mix(in srgb, var(--accent) 70%, #F2C9A0);
+  --medal-lo: color-mix(in srgb, var(--accent) 72%, #3A2410);
+  /* Vidro: branco leitoso sobre o papel, com contorno e sombra quentes. */
+  --glass-bg: color-mix(in srgb, var(--surface) 74%, transparent);
+  --glass-solid: var(--surface);
+  --glass-line: color-mix(in srgb, var(--text) 9%, transparent);
+  --glass-hi: rgb(255 255 255 / 0.8);
+  --bar-bg: color-mix(in srgb, var(--bg) 84%, transparent);
+  --scrim: color-mix(in srgb, var(--bg) 70%, transparent);
+  --fill-soft: color-mix(in srgb, var(--text) 6%, transparent);
+  --fill-press: color-mix(in srgb, var(--text) 11%, transparent);
+  --shadow-color: rgb(80 52 28 / 0.14);
+  --accent-soft: color-mix(in srgb, var(--accent) 11%, transparent);
+  --accent-line: color-mix(in srgb, var(--accent) 34%, transparent);
+  /* Cor da capa: um véu sobre o papel (o --tint vem calibrado para o escuro). */
+  --tint-default: 196 150 108;
+  --tint-a: 0.24;
+  --tint-line: 0.3;
+  --hero-tint-a: 0.36;
+  --hero-tint-b: 0.15;
+}
+
+/* Trecho com tema próprio (retrospectiva, capa ampliada): o texto herdaria a cor do <body>. */
+body [data-theme] { color: var(--text); }
+/* Etiquetas da lista: no papel o tom "muted" já é o mais claro legível (sem transparência). */
+[data-theme="light"] .li-extra { opacity: 1; }
+
+/* Cartões ganham uma sombra de papel (no escuro a borda basta). */
+[data-theme="light"] :is(.card, .tile, .kpi, .group, .book-row:not(.li), .rchart, .ficha-card, .quote-card, .ficha-quote, .diary-row, .field-stack, .result) {
+  box-shadow: 0 1px 2px rgb(80 52 28 / 0.05), 0 4px 14px rgb(80 52 28 / 0.045);
+}
+[data-theme="light"] .card.soft { box-shadow: none; }
+/* Folhas: o fundo escurece de leve, como no iPhone. */
+[data-theme="light"] .sheet-backdrop { background: rgb(30 25 21 / 0.3); }
+[data-theme="light"] .sheet { background: color-mix(in srgb, var(--surface) 96%, transparent); }
+[data-theme="light"] :is(.qm-list, .qm-cancel) { background: var(--bg); }
+/* "Lendo agora": o véu da capa sobre papel quente (a cor pura acinzentava o canto). */
+[data-theme="light"] .card.reading {
+  background: linear-gradient(135deg, color-mix(in srgb, rgb(var(--tint, var(--tint-default))) 24%, var(--surface-warm)), var(--surface) 74%);
+}
+/* Régua da folha "Registrar leitura": botão branco com sombra, como no iPhone. */
+[data-theme="light"] .psheet-range::-webkit-slider-thumb { background: var(--switch-knob); box-shadow: 0 1px 2px rgb(30 25 21 / 0.2), 0 3px 10px rgb(30 25 21 / 0.18); }
+[data-theme="light"] .psheet-range::-moz-range-thumb { background: var(--switch-knob); box-shadow: 0 1px 2px rgb(30 25 21 / 0.2), 0 3px 10px rgb(30 25 21 / 0.18); }
+/* Capa sobre o papel: um filete para capas claras não sumirem. */
+[data-theme="light"] .cover { outline: 1px solid rgb(30 25 21 / 0.06); outline-offset: -1px; }
+/* Botão principal: o caramelo do claro é mais fundo; um brilho de cima evita o "chapado". */
+[data-theme="light"] :is(.btn-primary, .nav .nav-add) {
+  background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent);
+}
+[data-theme="light"] .shelf-tabs .seg-btn.is-on { background: var(--surface); }
+/* Medalha acesa: sombra interna quente em vez da do escuro. */
+[data-theme="light"] .medal:not(.is-off) { box-shadow: inset 0 -3px 6px rgb(60 30 10 / 0.25), inset 0 2px 2px rgb(255 255 255 / 0.35); }
+/* Ficha do livro: selos e números em papel translúcido sobre a cor da capa. */
+[data-theme="light"] .ficha-status { background: color-mix(in srgb, var(--surface) 60%, transparent); }
+[data-theme="light"] :is(.ficha-chip:not(.is-tag), .ficha-fav, .ficha-stats > div) { background: color-mix(in srgb, var(--surface) 55%, transparent); }
+[data-theme="light"] .ficha-top .btn-text.accent { background: color-mix(in srgb, var(--surface) 62%, transparent); }
+[data-theme="light"] .cover-hero { box-shadow: 0 22px 44px rgb(70 45 22 / 0.28), 0 2px 8px rgb(70 45 22 / 0.18); }
+/* Calendário: o número sobre a capa fica num selo de papel. */
+[data-theme="light"] .cal-cell.has-book .cal-num { background: color-mix(in srgb, var(--surface) 86%, transparent); }
+
+/* Barra de status do iPhone (app instalado): com o estilo "black-translucent" o relógio e a
+   bateria são sempre brancos, então no claro a faixa sob eles fica escura, como a moldura.
+   (No Safari, fora da Tela de Início, essa faixa tem altura zero.) */
+[data-theme="light"] body::before { background: rgb(30 25 21 / 0.92); }
+
+/* Texto que ainda usava o tom "faint" passa para "muted" (AA nos dois temas). */
+.kpi-note, .kpi-caption, .ppd-sub, .sc-readout, .ficha-isbn, .medal.is-off { color: var(--muted); }
+.sc-svg .sc-xlab { fill: var(--muted); }
+
+/* ---------- v1.4 Títulos grandes que se recolhem (V18) ---------- */
+/* Nas abas principais o título serifado grande rola junto com a página; quando ele passa por
+   baixo do topo, aparece uma barra compacta de vidro com o título pequeno no centro e as
+   mesmas ações (js/large-title.js). Com "Reduzir movimento" ela só aparece, sem esmaecer. */
+
+:root, [data-theme] { --cbar-h: 48px; }
+.cbar {
+  position: fixed; top: var(--safe-t); left: 0; right: 0; z-index: 8;
+  height: var(--cbar-h);
+  padding: 0 max(8px, calc(50% - 232px));
+  display: grid; grid-template-columns: minmax(44px, 1fr) minmax(0, auto) minmax(44px, 1fr); align-items: center; gap: 4px;
+  background: var(--bar-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(1.6); backdrop-filter: blur(20px) saturate(1.6);
+  border-bottom: 1px solid var(--glass-line);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .18s ease, visibility 0s linear .18s;
+}
+.cbar.is-on { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .18s ease, visibility 0s; }
+.cbar.is-flush { border-bottom-color: transparent; }
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .cbar { background: var(--bg); }
+}
+.cbar-title {
+  grid-column: 2; min-width: 0; text-align: center;
+  font-family: var(--serif); font-size: 21px; line-height: 1.1; letter-spacing: -0.1px;
+  overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.cbar-title em { color: var(--accent); }
+.cbar-start { grid-column: 1; display: flex; justify-content: flex-start; }
+.cbar-end { grid-column: 3; display: flex; justify-content: flex-end; }
+.cbar .icon-btn { border-color: transparent; background: transparent; }
+.cbar .icon-btn:active { background: var(--fill-soft); }
+/* Debaixo da barra compacta ficam as abas do Resumo e os anos da Estante, presos ao rolar. */
+.app:has(> .cbar) :is(.rs-tabs, .group-head) { top: calc(var(--safe-t) + var(--cbar-h)); }
+@media (prefers-reduced-motion: reduce) {
+  .cbar, .cbar.is-on { transition: none; }
+}
+/* Ajustes → Aparência. */
+.theme-card { padding: 6px; }
+.theme-seg { border: 0; padding: 0; background: transparent; }

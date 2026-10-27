@@ -7,6 +7,7 @@ import {
   GLYPHS, cover, emptyState, esc, finishHref, formatRating, icon, num, plural, progressOf, progressRing,
 } from '../ui.js';
 import { timerBanner } from './timer.js';
+import { compactBar } from '../large-title.js';
 import { firstUpNext } from '../upnext.js';
 
 const RING_R = 50;
@@ -193,14 +194,16 @@ export function homeView({ state, ui, year, today }) {
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
   const reading = state.books.filter((b) => b.status === STATUS.READING);
   const counts = countByStatus(state.books);
+  const settings = `<a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>`;
   return `
     <header class="top">
-      <div class="brand"><span class="muted small">Seu ano em</span><span class="brand-name">Leituras</span></div>
+      <div class="brand"><span class="muted small">Seu ano em</span><span class="brand-name" data-large-title>Leituras</span></div>
       <div class="top-actions">
         ${yearSelect(yearsWithData(state.books, currentYear), year, 'home-year')}
-        <a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>
+        ${settings}
       </div>
     </header>
+    ${compactBar({ title: year === currentYear ? 'Leituras' : `Leituras ${year}`, end: settings })}
     ${timerBanner(state.books, ui?.session)}
     ${bento(state, stats, streak, year === currentYear, today)}
     ${year === currentYear ? readingNow(reading, ui?.session, today) : ''}

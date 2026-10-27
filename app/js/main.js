@@ -50,6 +50,8 @@ import { closeSwipe, initSwipe } from './swipe.js';
 import { introMotion } from './motion.js';
 import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
 import { finishHref } from './ui.js';
+import { initTheme, setThemePref } from './theme.js';
+import { initLargeTitles, syncLargeTitle } from './large-title.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -273,6 +275,7 @@ function render() {
   }
   const summaryLink = nav.querySelector('[data-nav="resumo"]');
   if (summaryLink) summaryLink.href = `#/resumo/${ui.year}`;
+  syncLargeTitle();
 }
 
 // ---------- Persistência ----------
@@ -555,6 +558,8 @@ function openCoverViewer(src, title) {
   closeCoverViewer();
   const viewer = document.createElement('div');
   viewer.className = 'cover-viewer';
+  // Como no app Fotos: a capa ampliada fica sobre fundo escuro também no tema claro.
+  viewer.dataset.theme = 'dark';
   viewer.setAttribute('role', 'dialog');
   viewer.setAttribute('aria-modal', 'true');
   viewer.setAttribute('aria-label', `Capa de ${title}`);
@@ -1907,6 +1912,20 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     });
   }).catch(() => {});
 }
+
+// ---------- Aparência e títulos grandes (v1.4) ----------
+// O tema já veio aplicado pelo index.html (antes do CSS); aqui a troca em Ajustes e o
+// acompanhamento do iPhone. A escolha é do aparelho, fora dos dados e do backup.
+
+ui.themePref = initTheme();
+initLargeTitles();
+
+actions['set-theme'] = (el) => {
+  const pref = el.dataset.value;
+  if (!setThemePref(pref)) toast('Não foi possível guardar a aparência neste aparelho; vale até fechar o app.');
+  ui.themePref = pref;
+  render();
+};
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
 async function boot() {

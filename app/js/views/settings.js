@@ -56,6 +56,16 @@ function googleKeyCard(hasKey) {
         </div>`, 'A chave fica só neste aparelho e não vai para o backup.', 'gkey');
 }
 
+/** Aparência (V14): fica só neste aparelho, como a chave do Google (veja theme.js). */
+const THEME_OPTIONS = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
+function appearanceCard(pref) {
+  const current = THEME_OPTIONS.some(([v]) => v === pref) ? pref : 'auto';
+  const buttons = THEME_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-theme" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
+  return group('aparencia', 'Aparência', `
+        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>`,
+  'Automático acompanha o iPhone: claro de dia, escuro à noite. Vale só para este aparelho (não vai para o backup).', 'theme-card');
+}
+
 export function settingsView({ state, ui, today }) {
   const year = yearOf(today);
   const goal = getGoal(state, year);
@@ -72,6 +82,7 @@ ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
         ${pageGoalSettings(state, year)}`)}
+${appearanceCard(ui?.themePref)}
 ${group('backup', 'Backup dos dados', `
         <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
         <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>

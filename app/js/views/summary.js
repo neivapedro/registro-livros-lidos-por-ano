@@ -11,6 +11,7 @@ import { formatCard, lengthChart, monthChartToggle, pagesMonthChart, pagesMonthL
 import { yearSelect } from './home.js';
 import { deltaLine, kpiTile, sparkline } from './kpi.js';
 import { sCurveCard } from './scurve.js';
+import { compactBar } from '../large-title.js';
 
 export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
 const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
@@ -226,14 +227,16 @@ export function summaryView({ state, ui, year, today }) {
   const tab = SUMMARY_TABS.includes(ui?.summaryTab) ? ui.summaryTab : 'geral';
   const ctx = { state, ui: ui || {}, year, today, s };
   const panel = tab === 'ritmo' ? rhythm(ctx) : tab === 'gostos' ? tastes(ctx) : overview(ctx);
+  const back = `<a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>`;
   return `
     <header class="top">
-      <a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>
+      ${back}
       ${yearSelect(yearsWithData(state.books, currentYear), year, 'summary-year', { withAll: true })}
     </header>
+    ${compactBar({ title: `Resumo de ${year}`, start: back, flush: true })}
     <div class="page-title">
       <span class="eyebrow">Resumo do ano</span>
-      <h1 class="display">Seu ${year} ${year === currentYear ? '<em>até agora</em>' : '<em>em livros</em>'}</h1>
+      <h1 class="display" data-large-title>Seu ${year} ${year === currentYear ? '<em>até agora</em>' : '<em>em livros</em>'}</h1>
     </div>
     ${tabs(tab, year)}
     <div class="rs-panel" id="rs-panel" role="tabpanel" aria-labelledby="rs-tab-${tab}" data-tab="${tab}">

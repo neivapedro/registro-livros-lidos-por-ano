@@ -4,6 +4,7 @@ import { filterBooks, yearsWithData } from '../stats.js';
 import { bookItem, emptyState, esc, icon, itemGroup, plural } from '../ui.js';
 import { applyChartFilters } from '../charts.js';
 import { chartFilterChip } from './charts.js';
+import { compactBar } from '../large-title.js';
 
 const RATINGS = [['5', '★ 5'], ['4.5', '★ 4,5+'], ['4', '★ 4+'], ['3.5', '★ 3,5+'], ['3', '★ 3+']];
 
@@ -43,7 +44,8 @@ export function searchView({ state, ui, today }) {
   const hasFilters = f.status || f.year || f.genre || f.format || f.minRating || f.tag;
   const tags = allTags(state);
   return `
-    <header class="top"><h1 class="display sm">Buscar</h1></header>
+    <header class="top"><h1 class="display sm" data-large-title>Buscar</h1></header>
+    ${compactBar({ title: 'Buscar' })}
     <div class="search-box">
       ${icon('search', { size: 20, stroke: 2, cls: 'muted' })}
       <label class="sr-only" for="q">Buscar nos seus livros</label>
