@@ -3,8 +3,9 @@ import { getGoal } from '../store.js';
 import { monthlyTarget } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
+import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 
-export const APP_VERSION = '1.4.1';
+export const APP_VERSION = '1.4.2';
 
 function stepper(label, value, action, hint) {
   return `
@@ -56,6 +57,73 @@ function googleKeyCard(hasKey) {
         </div>`, 'A chave fica só neste aparelho e não vai para o backup.', 'gkey');
 }
 
+/** Chave da busca com IA (Gemini). Também só neste aparelho e fora do backup (prefs.js). */
+function geminiKeyCard(hasKey, used = 0) {
+  const usage = hasKey
+    ? `
+        <p class="faint small ai-usage">${used >= AI_MONTHLY_LIMIT
+    ? `Limite de segurança do mês atingido (${AI_MONTHLY_LIMIT} buscas). Volta no dia 1º.`
+    : `Buscas com IA este mês: ${used} de ${AI_MONTHLY_LIMIT}`}</p>`
+    : '';
+  return group('aikey', 'Busca com IA (Gemini)', `
+        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” pesquisa na Busca Google. Só roda quando você toca nele. O Google exige o faturamento ativo (veja “Como criar a chave”).</p>
+        <div class="field">
+          <label for="ai-key">Chave do Gemini</label>
+          <input id="ai-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AQ… ou AIza…)" data-aikey>
+        </div>
+        <p class="small gkey-status${hasKey ? ' is-on' : ''}" role="status">${hasKey ? `${icon('check', { size: 14, stroke: 2.4 })}Chave configurada` : 'Sem chave — busca com IA desligada'}</p>${usage}
+        <div class="two-cols">
+          <button type="button" class="btn-primary sm" data-action="save-aikey">Salvar</button>
+          <button type="button" class="btn-ghost" data-action="remove-aikey"${hasKey ? '' : ' disabled'}>Remover</button>
+        </div>
+        <details class="key-help">
+          <summary>Como criar a chave</summary>
+          <ol>
+            <li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a> e entre com sua conta Google.</li>
+            <li>Toque em <em>Create API key</em> (pode ser no mesmo projeto do Google Cloud da chave do Google Books) e copie a chave.</li>
+            <li>O Google exige o faturamento ativo no projeto para a busca com Google (<em>Set up billing</em>, no Google Cloud); sem ele a busca com IA não funciona. As primeiras 5.000 buscas do mês não são cobradas; depois, o Google cobra (hoje US$ 14 por 1.000 buscas), e o uso da IA em si também tem um custo pequeno. Veja os <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener noreferrer">preços</a>.</li>
+            <li>Recomendado: no Google Cloud › Faturamento › <em>Orçamentos e alertas</em>, crie um alerta de orçamento baixo (por exemplo, R$ 1) para ser avisado de qualquer cobrança. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular.</li>
+            <li>No <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud › Credenciais</a>, toque na chave e confira as restrições: em <em>Restrições de aplicativos</em>, “Sites” com <code>https://neivapedro.github.io/*</code>; em <em>Restrições de API</em>, só a “Generative Language API”.</li>
+            <li>Volte aqui, cole a chave e toque em Salvar.</li>
+          </ol>
+        </details>`, 'A chave fica só neste aparelho e não vai para o backup. Use uma chave separada da do Google Books, liberada só para a IA.', 'gkey');
+}
+
+/** Levar as chaves de busca para outro celular por um link (prefs.js: keysLink). */
+function keysTransferCard(hasAny) {
+  return group('chaves', 'Outro celular', `
+        <p class="muted small">Manda um link que leva as chaves de busca (Google Books e IA) para outro celular, sem precisar digitar. Só as chaves vão no link, nunca os seus livros.</p>
+        <button type="button" class="btn-ghost" data-action="share-keys"${hasAny ? '' : ' disabled'}>${icon('phone', { size: 18, stroke: 2 })}Enviar chaves para outro celular</button>
+        <div class="field">
+          <label for="keys-link">Recebeu o link? Cole aqui</label>
+          <input id="keys-link" type="url" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="https://…#/ajustes?chaves=…" data-keylink>
+        </div>
+        <button type="button" class="btn-ghost" data-action="paste-keys">Usar o link colado</button>`,
+  'Quem tiver o link usa as suas chaves: envie só para quem vai usar o app. No iPhone com o app na Tela de Início, cole o link aqui dentro do app.', 'gkey');
+}
+
+/** Pedido de confirmação ao abrir um link com chaves: nunca salva sem o toque. */
+export function keyImportCard(keys, current = {}) {
+  if (!keys) return '';
+  const tail = (k) => `…${k.slice(-4)}`;
+  const line = (label, key, now) => (key
+    ? `<li><strong>${label}</strong> (${esc(tail(key))})${now && now !== key ? ' — substitui a chave atual' : ''}${now === key ? ' — já é a deste celular' : ''}</li>`
+    : '');
+  return `
+    <section class="card key-import" aria-labelledby="key-import-title" aria-describedby="key-import-list">
+      <h2 id="key-import-title">Salvar as chaves de busca neste celular?</h2>
+      <ul id="key-import-list" class="small">
+        ${line('Google Books', keys.googleBooksKey, current.googleBooksKey)}
+        ${line('Busca com IA (Gemini)', keys.geminiKey, current.geminiKey)}
+      </ul>
+      <p class="muted small">Elas ficam só neste aparelho e não vão para o backup.</p>
+      <div class="two-cols">
+        <button type="button" class="btn-primary sm" data-action="import-keys">Salvar</button>
+        <button type="button" class="btn-ghost" data-action="cancel-import-keys">Cancelar</button>
+      </div>
+    </section>`;
+}
+
 /** Aparência (V14): fica só neste aparelho, como a chave do Google (veja theme.js). */
 const THEME_OPTIONS = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
 function appearanceCard(pref) {
@@ -78,6 +146,7 @@ export function settingsView({ state, ui, today }) {
       <h1 class="top-title">Ajustes</h1>
       <span class="icon-btn-spacer"></span>
     </header>
+${keyImportCard(ui?.keyImport, { googleBooksKey: ui?.googleKey, geminiKey: ui?.geminiKey })}
 ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
@@ -93,12 +162,14 @@ ${group('backup', 'Backup dos dados', `
           <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
         </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.')}
 ${googleKeyCard(Boolean(ui?.googleKey))}
+${geminiKeyCard(Boolean(ui?.geminiKey), aiSearchesThisMonth(ui?.aiUsage, today))}
+${keysTransferCard(Boolean(ui?.googleKey || ui?.geminiKey))}
 ${group('instalar', 'Instalar no celular', `
         <div class="howto">
           <p><strong>Android (Chrome):</strong> menu ⋮ → <em>Adicionar à tela inicial</em> ou <em>Instalar app</em>.</p>
           <p><strong>iPhone (Safari):</strong> botão Compartilhar → <em>Adicionar à Tela de Início</em>.</p>
         </div>`, 'Instalado, o Leituras abre como um app e funciona sem internet (só a busca de livros precisa de conexão).')}
 ${group('sobre', 'Sobre', `
-        <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books, com a chave).</p>
+        <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books e Gemini, com as chaves).</p>
         <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>`)}`;
 }

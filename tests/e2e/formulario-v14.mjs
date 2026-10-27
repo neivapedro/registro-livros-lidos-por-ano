@@ -365,7 +365,7 @@ try {
   await page.goto(`${BASE}#/ajustes`);
   await page.waitForSelector('.set-group');
   assert.deepEqual(await page.$$eval('.set-head', (els) => els.map((e) => e.textContent)),
-    ['Meta de leitura', 'Aparência', 'Backup dos dados', 'Busca de livros', 'Instalar no celular', 'Sobre']);
+    ['Meta de leitura', 'Aparência', 'Backup dos dados', 'Busca de livros', 'Busca com IA (Gemini)', 'Outro celular', 'Instalar no celular', 'Sobre']);
   await shots('ajustes');
 
   assert.deepEqual(errors, [], 'sem erros no console');

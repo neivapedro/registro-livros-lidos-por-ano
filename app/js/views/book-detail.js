@@ -9,6 +9,7 @@ import { quotePosition, quotesNewestFirst } from '../quotes.js';
 import { formatMinutes } from '../reading-days.js';
 import { seriesInfo, seriesLabel, formatSeriesNumber } from '../series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from '../store.js';
+import { normalizeCoverUrl } from '../cover-url.js';
 import { cover, decimal, esc, formatRating, icon, largeCoverUrl, num, plural, progressOf, starIcon } from '../ui.js';
 import { rhythmChart } from './rhythm.js';
 import { timerButton } from './timer.js';
@@ -37,7 +38,7 @@ function period(start, end) {
 function heroCover(book) {
   let html = cover(book, { size: 'hero' });
   const hd = largeCoverUrl(book.cover);
-  if (hd && hd !== book.cover) {
+  if (hd && hd !== normalizeCoverUrl(book.cover)) {
     const ready = loadedHdCovers.has(hd) ? ' is-loaded' : '';
     html = html.replace(/<\/span>$/, `<img class="cover-img cover-hd${ready}" src="${esc(hd)}" alt="" referrerpolicy="no-referrer"></span>`);
   }

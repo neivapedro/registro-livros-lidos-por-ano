@@ -6,6 +6,7 @@
 // depois de desenhar a tela, applyTints(raiz) põe a variável CSS --tint ("r g b") nele.
 // No CSS: background: linear-gradient(rgb(var(--tint) / .5), ...).
 
+import { normalizeCoverUrl } from './cover-url.js';
 import { coverFallbackColor } from './ui.js';
 
 /**
@@ -72,8 +73,14 @@ export function hexToRgb(hex) {
 
 const cache = new Map();
 
-/** Lê a cor da imagem da capa (fica na memória da sessão). null se não der para ler. */
-export function loadCoverColor(src) {
+/**
+ * Lê a cor da imagem da capa (fica na memória da sessão). null se não der para ler.
+ * O pedido passa pelo service worker: capa de site com CORS (Open Library) que já está
+ * guardada sai do cache, e a cor aparece também offline. A do Google fica opaca no cache e
+ * não serve para ler a cor (sem CORS): ela vai à rede e, sem rede, fica a cor da capa desenhada.
+ */
+export function loadCoverColor(raw) {
+  const src = normalizeCoverUrl(raw);
   if (!src) return Promise.resolve(null);
   if (cache.has(src)) return cache.get(src);
   const job = new Promise((resolve) => {

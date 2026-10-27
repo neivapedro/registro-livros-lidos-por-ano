@@ -3,6 +3,7 @@
 import { formatShort } from './dates.js';
 import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
+import { isGoogleCoverHost, normalizeCoverUrl } from './cover-url.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -40,6 +41,7 @@ const PATHS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 1 2-2h13v2z"/>',
+  sparkle: '<path d="M11 3l1.9 5.6L18.5 10.5l-5.6 1.9L11 18l-1.9-5.6L3.5 10.5l5.6-1.9z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
 };
 const FILLED = {
   star: '<path d="M12 3l2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 17l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/>',
@@ -83,8 +85,9 @@ export function cover(book, { size = 'md', showText = true } = {}) {
   const text = showText
     ? `<span class="cover-title">${esc(book.title)}</span><span class="cover-author">${esc(author)}</span>`
     : '';
-  const img = book.cover
-    ? `<img class="cover-img" src="${esc(book.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+  const src = normalizeCoverUrl(book.cover);
+  const img = src
+    ? `<img class="cover-img" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : '';
   return `<span class="cover cover-${size}" style="--cover-bg:${bg};--cover-fg:${fg}">${text}${img}</span>`;
 }
@@ -94,13 +97,14 @@ export function cover(book, { size = 'md', showText = true } = {}) {
  * Google Books: pede largura de 800px; Open Library: versão L (mantendo ?default=false
  * da capa pelo ISBN). Foto do celular: a própria.
  */
-export function largeCoverUrl(url) {
-  if (typeof url !== 'string' || !url) return null;
+export function largeCoverUrl(raw) {
+  const url = normalizeCoverUrl(raw);
+  if (!url) return null;
   if (url.startsWith('data:')) return url;
   try {
     const u = new URL(url);
     if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg(?=$|\?)/, '-L.jpg');
-    if (u.hostname.endsWith('books.google.com') || u.hostname.endsWith('googleusercontent.com')) {
+    if (isGoogleCoverHost(u.hostname)) {
       u.searchParams.delete('zoom');
       u.searchParams.set('fife', 'w800');
       return u.href;
