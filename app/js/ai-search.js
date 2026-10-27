@@ -62,9 +62,14 @@ export function searchPageUrl(text, { lite = false } = {}) {
     : `https://html.duckduckgo.com/html/?q=${plusQuery(text)}`;
 }
 
-/** Texto da busca limpo: espaços simples, sem aspas nem controles, até 200 letras. */
+/**
+ * Texto da busca limpo: espaços simples, sem aspas nem controles, até 200 letras.
+ * Sem metade de emoji (surrogate solto, também o que o corte em 200 deixaria): no
+ * endereço da busca, encodeURIComponent lançaria URIError.
+ */
 export function cleanQuery(query) {
-  return String(query ?? '').replace(/[\u0000-\u001f"“”]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200);
+  return String(query ?? '').replace(/[\u0000-\u001f"“”]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 200)
+    .replace(/([\uD800-\uDBFF][\uDC00-\uDFFF])|[\uD800-\uDFFF]/g, '$1').trim();
 }
 
 const NAME_PARTICLES = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'van', 'von', 'der', 'del', 'di', 'du', 'la', 'le']);
@@ -280,7 +285,8 @@ export function isbnFromLinks(list) {
     const amazon = link.match(/\/(?:dp|gp\/product)\/(\d{9}[\dXx])(?=[/?#]|$)/);
     const fromAmazon = amazon ? parseIsbn(amazon[1]) : null;
     if (fromAmazon) return fromAmazon;
-    for (const m of link.matchAll(/(?<!\d)(97[89]\d{10})(?!\d)/g)) {
+    // Sem lookbehind na expressão: o Safari antes do 16.4 não entende e o app inteiro não abriria.
+    for (const m of link.matchAll(/(?:^|\D)(97[89]\d{10})(?!\d)/g)) {
       const isbn = parseIsbn(m[1]);
       if (isbn) return isbn;
     }

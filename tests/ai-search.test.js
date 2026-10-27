@@ -715,3 +715,36 @@ test('limite do mês: botão desligado com o aviso; Ajustes mostra o uso', () =>
   assert.match(card, /no máximo 30 buscas/);
   assert.ok(!/exige o faturamento|Set up billing<\/em>, no Google|cobrad|cobra |orçamento|US\$/i.test(card), 'nada de faturamento ou preço');
 });
+
+// ---------- QA: Safari mais antigo e emoji cortado ----------
+
+test('QA: nenhum lookbehind nas expressões do app (Safari antes do 16.4 não abriria o app)', async () => {
+  const { readdir, readFile } = await import('node:fs/promises');
+  const dir = new URL('../app/js/', import.meta.url);
+  const files = (await readdir(dir, { recursive: true })).filter((f) => f.endsWith('.js'));
+  assert.ok(files.length > 5);
+  for (const f of files) {
+    const src = await readFile(new URL(f, dir), 'utf8');
+    assert.ok(!/\(\?<[!=]/.test(src), `${f} usa lookbehind`);
+  }
+  // E o ISBN-13 no meio do endereço continua achado, só quando não está colado em outro número.
+  assert.equal(isbnFromLinks(['9788501927590']), '9788501927590');
+  assert.equal(isbnFromLinks(['https://loja.com.br/x-9788501927590-y']), '9788501927590');
+  assert.equal(isbnFromLinks(['https://loja.com.br/p/19788501927590']), '');
+  assert.equal(isbnFromLinks(['https://loja.com.br/97885019275901/9788501927590']), '9788501927590');
+});
+
+test('QA: busca longa com emoji cortado no meio não quebra o endereço (URIError)', async () => {
+  const q = `${'a'.repeat(199)}😀 livro`;
+  assert.doesNotThrow(() => findUrls(q));
+  assert.ok(!/[\uD800-\uDFFF]/.test(buildPrompt(q, { today: TODAY })));
+  assert.match(findUrls('Livro 😀 bom')[0], /%F0%9F%98%80/, 'emoji inteiro fica');
+  assert.doesNotThrow(() => findUrls('meio \uD83D emoji'));
+  let calls = 0;
+  const res = await aiSearch(q, {
+    key: KEY, today: TODAY, online: () => true,
+    fetchImpl: async () => { calls += 1; return new Response(JSON.stringify(geminiResponse('{"encontrado": false}')), { status: 200 }); },
+  });
+  assert.equal(res.notFound, true);
+  assert.ok(calls >= 1, 'o pedido saiu');
+});
