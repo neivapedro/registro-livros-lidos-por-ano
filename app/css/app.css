@@ -1522,6 +1522,9 @@ body.sheet-open .toast.show { transform: translate(-50%, 0); }
 .cov-ring-track { fill: none; stroke: var(--line-strong); stroke-width: 3.2; }
 .cov-ring-fill { fill: none; stroke: var(--accent); stroke-width: 3.2; stroke-linecap: round; }
 .cov-ring-pct { position: relative; font-size: 10.5px; font-weight: 800; letter-spacing: -.3px; font-variant-numeric: tabular-nums; }
+/* "%" menor, colado ao número, para caber no anel (inclusive "100%"). */
+.cov-ring-unit { font-size: 7px; font-weight: 800; margin-left: .5px; }
+.cov-ring-pct.is-full { font-size: 9px; letter-spacing: -.5px; }
 
 /* Tocar e segurar: só aqui sem seleção de texto e sem o menu do iOS. */
 [data-longpress] {
