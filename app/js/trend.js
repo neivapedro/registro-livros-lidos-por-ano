@@ -6,7 +6,7 @@
 // a 12 (31 de dezembro); o ponto k é o fim do mês k.
 
 import { daysElapsedInYear, daysInclusive, isLeapYear, monthOf, yearOf } from './dates.js';
-import { pagesByMonth, pageGoalProgress } from './charts.js';
+import { MIN_PROJECTION_DAYS, pagesByMonth, pageGoalProgress } from './charts.js';
 import { countedEntries, pagesReadPerDay } from './journal.js';
 import { booksReadInYear } from './stats.js';
 import { STATUS } from './store.js';
@@ -81,9 +81,9 @@ export function pagesReadUntil(books, year, untilIso) {
   return total;
 }
 
-// Projeção só depois das primeiras semanas: em 1º de janeiro, 1 livro "projetaria" 365
-// (e esticaria o eixo da curva). Antes disso, a curva mostra só o realizado e o previsto.
-export const MIN_PROJECTION_DAYS = 21;
+// Projeção só depois das primeiras semanas (MIN_PROJECTION_DAYS, em charts.js): em 1º de janeiro,
+// 1 livro "projetaria" 365 (e esticaria o eixo da curva). Antes disso, só o realizado e o previsto.
+export { MIN_PROJECTION_DAYS };
 
 function roundTo(n, digits) {
   const f = 10 ** digits;
