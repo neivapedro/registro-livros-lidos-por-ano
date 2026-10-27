@@ -6,6 +6,7 @@ import { MAX_UP_NEXT } from './store.js';
 import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
+import { applyTints } from './cover-color.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
@@ -25,21 +26,32 @@ import { esc, icon, largeCoverUrl } from './ui.js';
 import { allQuotesResults, allQuotesView } from './views/all-quotes.js';
 import { allTimeView } from './views/alltime.js';
 import { BOOK_TABS } from './views/book-tabs.js';
+import { bookDetailView, loadedHdCovers } from './views/book-detail.js';
 import { calendarUi, heatmapDayAt } from './views/calendar.js';
 import { compareYearsOf } from './views/charts.js';
-import { formView, lookupResults, readingSummary } from './views/form.js';
+import { detailsHaveErrors, detailsSummary, formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
 import { APP_VERSION, settingsView, storageLine } from './views/settings.js';
 import { shelfView } from './views/shelf.js';
-import { summaryView } from './views/summary.js';
+import { SUMMARY_TABS, summaryView } from './views/summary.js';
+import { playIntro } from './views/kpi.js';
+import { curveMonthAt } from './views/scurve.js';
 import { addMinutes } from './journal.js';
 import {
   elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
   sessionMinutes, sessionSummary, startSession, wholeMinutes,
 } from './timer.js';
 import { timerView } from './views/timer.js';
+import { closeSheet, openSheet } from './sheet.js';
+import { initLongPress } from './longpress.js';
+import { closeSwipe, initSwipe } from './swipe.js';
+import { introMotion } from './motion.js';
+import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
+import { finishHref } from './ui.js';
+import { initTheme, setThemePref } from './theme.js';
+import { initLargeTitles, syncLargeTitle } from './large-title.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -89,9 +101,80 @@ function parseRoute() {
   return { name: parts[0] || 'inicio', params: parts.slice(1), query: new URLSearchParams(qs || ''), key: hash || 'inicio' };
 }
 
+/** #/livro/:id é a ficha; #/livro/:id/editar (ou os endereços antigos com ?concluir e ?aba) é a edição. */
+function isBookEdit(route) {
+  return route.name === 'livro' && (route.params[1] === 'editar' || route.query.has('concluir') || route.query.has('aba'));
+}
+
+/** O endereço anterior (sem '#/') é a ficha ou a edição de um livro? */
+function isBookKey(key) {
+  return Boolean(key) && key.split(/[/?]/)[0] === 'livro';
+}
+
 function go(href) {
   if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
-  else location.hash = href;
+  else {
+    tagHistoryEntry();
+    location.hash = href;
+  }
+}
+
+// Cada entrada do histórico tem um número e guardamos qual tela ela mostra. Assim, sair da
+// edição (Salvar, Cancelar, Voltar, Excluir) volta PELO histórico, como o gesto de voltar do
+// iPhone, em vez de empilhar a tela de antes de novo: o voltar seguinte leva para onde a pessoa
+// estava antes da ficha, e não de volta ao formulário.
+// O número só é gravado na entrada (history.state.n) quando o próprio app sai dela (link, botão),
+// nunca no meio de um redesenho: é a única forma de voltar a ela pelo histórico.
+let historyIndex = 0;
+let replacingEntry = false;
+const historyKeys = new Map();
+
+function trackHistory(key) {
+  const tagged = history.state?.n;
+  if (Number.isInteger(tagged)) historyIndex = tagged;
+  else if (!replacingEntry) historyIndex += 1;
+  replacingEntry = false;
+  historyKeys.set(historyIndex, key);
+}
+
+/** Antes de o app trocar de tela: a entrada atual guarda o seu número. */
+function tagHistoryEntry() {
+  if (!historyIndex || history.state?.n === historyIndex) return;
+  try {
+    history.replaceState({ ...(history.state || {}), n: historyIndex }, '');
+  } catch { /* sem acesso ao histórico: sair da edição só troca a entrada atual */ }
+}
+
+// Links do app (telas, barra de baixo, capas): a entrada atual é marcada antes de sair dela.
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('a[href^="#/"]')) tagHistoryEntry();
+}, true);
+
+// Volta pelo histórico já pedida (ela chega depois, no hashchange): um segundo toque rápido em
+// Salvar ou Cancelar não volta mais uma tela (o que poderia até sair do app).
+let leavingAt = 0;
+addEventListener('hashchange', () => { leavingAt = 0; });
+
+/** Sai da edição (ou do livro novo) para href: volta pelo histórico se href é a tela de onde se veio. */
+function leaveForm(href) {
+  if (leavingAt && Date.now() - leavingAt < 1500) return;
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  // Só atravessa telas do próprio livro (ficha, edição, livro novo) no caminho de volta.
+  for (let n = historyIndex - 1; historyKeys.has(n); n -= 1) {
+    const k = historyKeys.get(n);
+    if (k === key) {
+      leavingAt = Date.now();
+      history.go(n - historyIndex);
+      return;
+    }
+    if (!isBookKey(k) && !k.startsWith('novo')) break;
+  }
+  // Aberta por um link direto (ou depois de recarregar): troca a entrada da edição pela tela.
+  if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
+  else {
+    replacingEntry = true;
+    location.replace(href);
+  }
 }
 
 function blankDraft(status) {
@@ -107,11 +190,26 @@ function blankDraft(status) {
   };
 }
 
+/** Ficha do livro: o Voltar leva para onde a pessoa estava antes de abrir o livro. */
+function enterBookDetail(route, prev) {
+  const id = route.params[0];
+  // Vindo da edição (ou de outro livro, pela série), o Voltar continua apontando para a lista de origem.
+  if (prev && !isBookKey(prev) && !prev.startsWith('novo')) ui.detailBack = `#/${prev}`;
+  else if (!prev || !ui.detailBack) ui.detailBack = '#/inicio';
+  ui.detailId = id;
+  ui.draft = null;
+  ui.original = null;
+}
+
 function enterRoute(route) {
   const prev = previousKey;
   const prevName = prev ? prev.split(/[/?]/)[0] : null;
-  if (route.name === 'novo' || route.name === 'livro') {
-    ui.backHref = prev && !['novo', 'livro'].includes(prevName) ? `#/${prev}` : '#/inicio';
+  if (route.name === 'livro' && !isBookEdit(route)) enterBookDetail(route, prev);
+  if (route.name === 'novo' || isBookEdit(route)) {
+    // Edição: volta para a ficha do livro, a não ser que tenha vindo de outra tela
+    // (o Concluir do Início volta para o Início; um trecho da lista de Trechos, para a lista).
+    const detail = route.name === 'livro' ? `#/livro/${encodeURIComponent(route.params[0])}` : '#/inicio';
+    ui.backHref = prev && !['novo', 'livro'].includes(prevName) ? `#/${prev}` : detail;
     ui.formErrors = [];
     ui.newGenreOpen = false;
     if (route.name === 'novo') {
@@ -136,20 +234,33 @@ function enterRoute(route) {
       }
     }
   }
-  if (route.name === 'novo' || route.name === 'livro') enterBookNotes(route);
+  if (route.name === 'novo' || isBookEdit(route)) enterBookNotes(route);
   if (route.name === 'retro') ui.retroSlide = 0;
   if (route.name === 'ajustes') refreshStorageInfo();
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
+  if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
+
+// Rolagem de cada lista (Início, Estante, Buscar...) ao abrir um livro: voltar da ficha ou da
+// edição (botão Voltar, gesto do iPhone) devolve a pessoa ao mesmo ponto da lista.
+const listScroll = new Map();
 
 function render() {
   if (!ready) return;
   const route = parseRoute();
+  let scrollY = null;
+  const sameScreen = route.key === currentKey;
+  // Filtros da Buscar: a fileira de chips rola na horizontal e não deve pular ao redesenhar.
+  const chipsScroll = sameScreen ? root.querySelector('.fchips')?.scrollLeft : null;
   if (route.key !== currentKey) {
     ui.editingProgress = null;
+    closeSheet({ immediate: true, keepFocus: true });
     closeCoverViewer();
+    if (currentKey && !isBookKey(currentKey)) listScroll.set(currentKey, window.scrollY);
+    scrollY = isBookKey(currentKey) && !isBookKey(route.key) ? listScroll.get(route.key) || 0 : 0;
     previousKey = currentKey;
     currentKey = route.key;
+    trackHistory(route.key);
     enterRoute(route);
     window.scrollTo(0, 0);
   }
@@ -162,15 +273,17 @@ function render() {
       html = formView({ ...ctx, isEdit: false });
       showNav = false;
       break;
-    case 'livro':
-      if (!ui.draft) {
+    case 'livro': {
+      const book = isBookEdit(route) ? ui.draft : state.books.find((b) => b.id === route.params[0]);
+      if (!book) {
         toast('Livro não encontrado.');
         go('#/inicio');
         return;
       }
-      html = formView({ ...ctx, isEdit: true });
+      html = isBookEdit(route) ? formView({ ...ctx, isEdit: true }) : bookDetailView({ ...ctx, book });
       showNav = false;
       break;
+    }
     case 'estante':
       html = shelfView({ ...ctx, tab: ui.shelfTab });
       break;
@@ -208,6 +321,16 @@ function render() {
   }
   root.innerHTML = html;
   root.dataset.page = route.name;
+  if (scrollY) window.scrollTo(0, scrollY);
+  if (route.name === 'buscar') syncFilterChips(chipsScroll);
+  applyTints(root);
+  revealFinishFields();
+  if (route.name === 'resumo') summaryIntro(route);
+  // Primeira vez no Início nesta sessão: o anel enche e os números contam.
+  if (route.name === 'inicio' && !introShown) {
+    introShown = true;
+    introMotion(root);
+  }
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;
@@ -218,6 +341,26 @@ function render() {
   }
   const summaryLink = nav.querySelector('[data-nav="resumo"]');
   if (summaryLink) summaryLink.href = `#/resumo/${ui.year}`;
+  syncLargeTitle();
+}
+
+/**
+ * Fileira de filtros da Buscar: redesenhada na mesma tela, fica onde estava; ao chegar na
+ * tela, o primeiro filtro ativo aparece (não fica escondido à direita, fora da vista).
+ */
+function syncFilterChips(previousScroll) {
+  const row = root.querySelector('.fchips');
+  if (!row) return;
+  if (previousScroll != null) {
+    row.scrollLeft = previousScroll;
+    return;
+  }
+  const chip = row.querySelector('.fchip.is-on');
+  if (!chip) return;
+  const pad = parseFloat(getComputedStyle(row).paddingLeft) || 0;
+  const box = chip.getBoundingClientRect();
+  const left = box.left - row.getBoundingClientRect().left + row.scrollLeft;
+  if (left + box.width > row.clientWidth - pad) row.scrollLeft = left - pad;
 }
 
 // ---------- Persistência ----------
@@ -500,6 +643,8 @@ function openCoverViewer(src, title) {
   closeCoverViewer();
   const viewer = document.createElement('div');
   viewer.className = 'cover-viewer';
+  // Como no app Fotos: a capa ampliada fica sobre fundo escuro também no tema claro.
+  viewer.dataset.theme = 'dark';
   viewer.setAttribute('role', 'dialog');
   viewer.setAttribute('aria-modal', 'true');
   viewer.setAttribute('aria-label', `Capa de ${title}`);
@@ -548,11 +693,12 @@ function saveProgress(bookId, raw) {
     }
     ui.editingProgress = null;
     if (Math.round(value) === 100) {
-      go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+      go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
       return 100;
     }
     persist(upsertBook(state, withProgress(book, Math.round(value))).state, 'Progresso atualizado.');
     render();
+    closeSheet();
     return Math.round(value);
   }
   if (!Number.isInteger(value) || value < 0 || (book.pages && value > book.pages)) {
@@ -561,11 +707,12 @@ function saveProgress(bookId, raw) {
   }
   ui.editingProgress = null;
   if (book.pages && value === book.pages) {
-    go(`#/livro/${encodeURIComponent(book.id)}?concluir=1`);
+    go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
     return value;
   }
   persist(upsertBook(state, withProgress(book, value)).state, 'Página atualizada.');
   render();
+  closeSheet();
   return value;
 }
 
@@ -580,6 +727,7 @@ function enterBookNotes(route) {
   ui.bookTab = route.name === 'livro' && BOOK_TABS.includes(tab) ? tab : 'dados';
   ui.diaryEdit = null;
   ui.quoteForm = null;
+  ui.diaryWeeks = {};
 }
 
 function currentBook() {
@@ -684,6 +832,8 @@ function saveBook() {
   const errors = validateBook(d, todayIso());
   if (errors.length) {
     ui.formErrors = errors;
+    // Erro em gênero/série/etiquetas/data alvo: "Mais detalhes" abre para mostrá-lo.
+    if (detailsHaveErrors(d, todayIso())) ui.moreDetails = { draft: d, open: true };
     render();
     document.querySelector('.form-errors')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
     return;
@@ -699,7 +849,7 @@ function saveBook() {
   persist(next, message);
   if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
-  go(ui.backHref);
+  leaveForm(ui.backHref);
 }
 
 function changeGoal(el, isDefault) {
@@ -748,18 +898,13 @@ const actions = {
     ui.original = null;
     persist(next, 'Releitura iniciada. Boa leitura!');
     ui.year = yearOf(todayIso());
-    go('#/inicio');
+    leaveForm('#/inicio');
   },
   'update-page'(el) {
-    ui.editingProgress = el.dataset.id;
-    render();
-    const input = document.getElementById('progress-input');
-    input?.focus();
-    input?.select();
+    openProgressSheet(el.dataset.id, el);
   },
   'cancel-progress'() {
-    ui.editingProgress = null;
-    render();
+    closeSheet();
   },
   'undo-delete'() {
     if (!lastDeleted) return;
@@ -801,7 +946,8 @@ const actions = {
     if (index < 0) return;
     lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
-    go(ui.backHref);
+    // Vindo da ficha do livro excluído: volta para a lista de onde a ficha foi aberta.
+    leaveForm(ui.backHref.startsWith(`#/livro/${encodeURIComponent(ui.draft.id)}`) ? ui.detailBack || '#/inicio' : ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
   },
   'start-reading'(el) {
@@ -944,6 +1090,87 @@ Object.assign(actions, {
   },
 });
 
+// ---------- Resumo v1.4: abas, curva S, medalhas e movimento de entrada ----------
+// Estado só da tela: aba do resumo (lembrada na sessão), curva em livros ou páginas e mês tocado.
+Object.assign(ui, { summaryTab: 'geral', curve: 'livros', curveMonth: null });
+
+// Os números contam e a curva se desenha só na primeira vez que cada resumo aparece na sessão.
+const introSeen = new Set();
+function summaryIntro(route) {
+  const key = route.params[0] || String(ui.year);
+  if (introSeen.has(key) || !root.querySelector('.kpi-num, .sc-svg')) return;
+  introSeen.add(key);
+  playIntro(root);
+}
+
+function showSummaryTab(tab, year) {
+  if (!SUMMARY_TABS.includes(tab)) return;
+  ui.summaryTab = tab;
+  // Link direto (#/resumo/2026?aba=ritmo) sem virar uma nova página: não rola para o topo.
+  history.replaceState(history.state, '', `#/resumo/${year}${tab === 'geral' ? '' : `?aba=${tab}`}`);
+  currentKey = parseRoute().key;
+  historyKeys.set(historyIndex, currentKey);
+  render();
+  // Trocar de aba lá embaixo: volta para o começo do painel, logo abaixo das abas fixas.
+  const panel = document.getElementById('rs-panel');
+  const tabs = document.querySelector('.rs-tabs');
+  if (panel && tabs) {
+    const target = panel.getBoundingClientRect().top + window.scrollY - tabs.offsetHeight - 12;
+    if (window.scrollY > target) window.scrollTo(0, target);
+  }
+}
+
+Object.assign(actions, {
+  'summary-tab'(el) { showSummaryTab(el.dataset.tab, el.dataset.year); },
+  'curve-mode'(el) {
+    ui.curve = el.dataset.mode;
+    ui.curveMonth = null;
+    render();
+  },
+  // Medalha: o detalhe aparece embaixo da fileira, sem redesenhar (a rolagem lateral fica onde está).
+  medal(el) {
+    const section = el.closest('.milestones');
+    const panel = section?.querySelector('[data-medal-detail]');
+    if (!panel) return;
+    const on = el.getAttribute('aria-pressed') === 'true';
+    panel.dataset.hint = panel.dataset.hint || panel.textContent;
+    for (const b of section.querySelectorAll('.medal-item')) b.setAttribute('aria-pressed', 'false');
+    if (on) {
+      panel.textContent = panel.dataset.hint;
+      panel.classList.remove('is-on');
+      return;
+    }
+    el.setAttribute('aria-pressed', 'true');
+    const { title, detail, book } = el.dataset;
+    panel.innerHTML = `<span class="strong-ish">${esc(title)}</span> <span>${esc(detail)}</span>${book ? ` <a href="#/livro/${encodeURIComponent(book)}">Ver livro</a>` : ''}`;
+    panel.classList.add('is-on');
+  },
+});
+
+// Curva S: o toque vale para o mês sob o dedo (o gráfico inteiro é a área de toque).
+document.addEventListener('click', (e) => {
+  const svg = e.target.closest?.('[data-curve]');
+  if (!svg) return;
+  const month = curveMonthAt(svg, e.clientX);
+  if (month === null) return;
+  const year = Number(svg.dataset.year);
+  const same = ui.curveMonth?.year === year && ui.curveMonth.month === month;
+  ui.curveMonth = same ? null : { year, month };
+  render();
+});
+
+// Abas com as setas do teclado (padrão de abas acessíveis).
+document.addEventListener('keydown', (e) => {
+  const tab = e.target.closest?.('.rs-tab');
+  if (!tab || !['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+  e.preventDefault();
+  const i = SUMMARY_TABS.indexOf(tab.dataset.tab);
+  const next = e.key === 'Home' ? 0 : e.key === 'End' ? SUMMARY_TABS.length - 1
+    : (i + (e.key === 'ArrowRight' ? 1 : -1) + SUMMARY_TABS.length) % SUMMARY_TABS.length;
+  showSummaryTab(SUMMARY_TABS[next], tab.dataset.year);
+  document.getElementById(`rs-tab-${SUMMARY_TABS[next]}`)?.focus();
+});
+
 // Mapa do ano: o toque vale para o quadradinho mais próximo (são pequenos no celular).
 document.addEventListener('click', (e) => {
   const svg = e.target.closest?.('[data-heatmap]');
@@ -1031,7 +1258,9 @@ document.addEventListener('change', (e) => {
     render();
   } else if (t.dataset.change === 'summary-year') {
     if (t.value !== 'todos') ui.year = Number(t.value);
-    go(`#/resumo/${t.value}`);
+    // A aba continua a mesma no outro ano, e o endereço diz qual é (voltar/avançar e link direto).
+    const aba = t.value !== 'todos' && ui.summaryTab !== 'geral' ? `?aba=${ui.summaryTab}` : '';
+    go(`#/resumo/${t.value}${aba}`);
   } else if (t.dataset.filter && t.dataset.filter !== 'q') {
     ui.filters[t.dataset.filter] = t.value;
     render();
@@ -1053,6 +1282,15 @@ document.addEventListener('keydown', (e) => {
   } else if ('newGenre' in e.target.dataset) {
     e.preventDefault();
     actions['add-genre']();
+  } else if (e.target.matches?.('input:not([data-tag-input])') && e.target.closest('[data-submit="save-book"]') && parseRoute().name === 'novo') {
+    // Livro novo: o Return do teclado não salva (sairia "Lido" com a data de hoje sem querer).
+    // Título → Autor → Páginas; nos outros campos só fecha o teclado. Salvar é só pelo botão.
+    e.preventDefault();
+    const order = ['f-title', 'f-authors', 'f-pages'];
+    const at = order.indexOf(e.target.id);
+    const next = at >= 0 ? document.getElementById(order[at + 1]) : null;
+    if (next) next.focus();
+    else e.target.blur();
   }
 });
 
@@ -1247,7 +1485,85 @@ document.addEventListener('error', (e) => {
   if (e.target.classList?.contains('cover-img')) e.target.remove();
 }, true);
 
-window.addEventListener('hashchange', render);
+// Cancelar/Voltar da edição: volta pelo histórico (veja leaveForm).
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const link = e.target.closest?.('a[data-leave]');
+  if (!link) return;
+  e.preventDefault();
+  leaveForm(link.getAttribute('href'));
+});
+
+// Endereço já desenhado pela transição da capa (abaixo): o hashchange que chega depois não redesenha.
+let renderedByTransition = null;
+window.addEventListener('hashchange', () => {
+  const skip = renderedByTransition && renderedByTransition === location.hash;
+  renderedByTransition = null;
+  if (!skip) render();
+});
+
+// ---------- Formulário enxuto (v1.4): "Mais detalhes", gênero e "Concluir" ----------
+
+const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+Object.assign(actions, {
+  // Abre/fecha sem redesenhar a tela: a altura anima (CSS) e o foco fica no botão.
+  'toggle-more'(el) {
+    if (!ui.draft) return;
+    const open = el.getAttribute('aria-expanded') !== 'true';
+    ui.moreDetails = { draft: ui.draft, open };
+    el.setAttribute('aria-expanded', String(open));
+    const box = el.closest('.more');
+    box?.classList.toggle('is-open', open);
+    // Fechando: o resumo passa a mostrar o que foi preenchido lá dentro.
+    const summary = box?.querySelector('.more-summary');
+    if (!open && summary) summary.innerHTML = detailsSummary(ui.draft);
+    // Botão na metade de baixo da tela: sobe um pouco para mostrar o que abriu.
+    if (open && el.getBoundingClientRect().top > window.innerHeight * 0.55) {
+      el.scrollIntoView({ block: 'start', behavior: reducedMotion() ? 'auto' : 'smooth' });
+    }
+  },
+  'close-genre'() {
+    ui.newGenreOpen = false;
+    render();
+    document.getElementById('f-genre')?.focus({ preventScroll: true });
+  },
+});
+
+// Seletor de gênero: "Sem gênero" apaga; "+ Novo gênero…" abre o campo de texto.
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if (!('genreSelect' in t.dataset) || !ui.draft) return;
+  if (t.selectedOptions[0] && 'newGenreOption' in t.selectedOptions[0].dataset) {
+    t.value = ui.draft.genre || '';
+    actions['open-genre']();
+    return;
+  }
+  ui.draft.genre = t.value || null;
+  if (ui.newGenreOpen) {
+    ui.newGenreOpen = false;
+    render();
+  }
+});
+
+// Antes do salvar (fase de captura): gênero novo digitado sem tocar em OK também vale.
+document.addEventListener('submit', (e) => {
+  if (!e.target.closest('[data-submit="save-book"]') || !ui.draft) return;
+  const value = document.getElementById('new-genre')?.value.trim();
+  if (value) ui.draft.genre = value.slice(0, 60);
+  ui.newGenreOpen = false;
+}, true);
+
+// "Concluir" (?concluir=1): a tela abre já no status, datas e nota, uma vez por rascunho.
+let revealedDraft = null;
+function revealFinishFields() {
+  if (!ui.finishing || !ui.draft || revealedDraft === ui.draft) return;
+  const status = document.getElementById('f-status');
+  if (!status) return;
+  revealedDraft = ui.draft;
+  const last = document.querySelector('.star-row') || document.getElementById('f-period') || status;
+  if (last.getBoundingClientRect().bottom > window.innerHeight - 96) status.scrollIntoView({ block: 'start' });
+}
 
 // ---------- Cronômetro de leitura ----------
 // A sessão fica no localStorage (fora do estado e do backup: é passageira) e o tempo
@@ -1425,13 +1741,238 @@ document.addEventListener('visibilitychange', () => {
 window.addEventListener('pagehide', saveRescue);
 syncTicker();
 
+// ---------- v1.4: folhas (Registrar leitura e menu rápido), gestos e modo da Estante ----------
+// "Registrar leitura" abre uma folha que sobe de baixo; o Salvar passa pelo mesmo saveProgress
+// de antes (diário, Kindle em %, fim do livro → Concluir, mensagens de validação).
+
+let introShown = false;
+const SHELF_MODE_KEY = 'leituras:estante-modo';
+
+function readShelfMode() {
+  try {
+    return sessionStorage.getItem(SHELF_MODE_KEY) === 'capas' ? 'capas' : 'lista';
+  } catch {
+    return 'lista';
+  }
+}
+ui.shelfMode = readShelfMode();
+
+function openProgressSheet(id, opener) {
+  const book = state.books.find((b) => b.id === id && b.status === STATUS.READING);
+  if (!book) return;
+  // Só a folha marca a edição em andamento: ui.editingProgress faria a ficha desenhar, por
+  // trás dela, o formulário antigo (com outro #progress-input) no próximo redesenho.
+  ui.progressSheet = id;
+  openSheet({
+    id: 'progress',
+    cls: 'sheet-progress',
+    label: esc(`Registrar leitura: ${book.title}`),
+    html: progressSheet(book, todayIso()),
+    focus: '#progress-input',
+    opener,
+    onClose: () => {
+      if (ui.progressSheet === id) ui.progressSheet = null;
+    },
+  });
+}
+
+function openQuickMenu(id, opener) {
+  const book = state.books.find((b) => b.id === id);
+  if (!book) return;
+  openSheet({ id: 'menu', cls: 'sheet-menu', label: esc(`Ações: ${book.title}`), html: quickMenu(book, state), opener });
+}
+
+/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. */
+function syncProgressRange(form, fromRange) {
+  const range = form.querySelector('#progress-range');
+  const input = form.querySelector('#progress-input');
+  if (!range || !input) return;
+  if (fromRange) {
+    input.value = range.value;
+  } else {
+    const v = Number(String(input.value).replace(',', '.'));
+    if (input.value !== '' && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
+  }
+  range.style.setProperty('--fill', `${((Number(range.value) / Number(range.max)) * 100).toFixed(1)}%`);
+}
+
+Object.assign(actions, {
+  'quick-menu'(el) { openQuickMenu(el.dataset.id, el); },
+  'progress-add'(el) {
+    const form = el.closest('[data-progress-form]');
+    const book = state.books.find((b) => b.id === form?.dataset.id);
+    const input = form?.querySelector('#progress-input');
+    if (!book || !input) return;
+    const total = progressTotal(book);
+    const typed = Number(String(input.value).trim().replace(',', '.'));
+    const saved = Number(book.format === FORMATS.KINDLE ? book.currentPercent : book.currentPage) || 0;
+    let next = (input.value.trim() !== '' && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
+    if (total) next = Math.min(total, next);
+    input.value = String(Math.max(0, Math.round(next)));
+    syncProgressRange(form, false);
+  },
+  'progress-finish'(el) {
+    closeSheet({ immediate: true, keepFocus: true });
+    go(finishHref(el.dataset.id));
+  },
+  'shelf-mode'(el) {
+    ui.shelfMode = el.dataset.value === 'capas' ? 'capas' : 'lista';
+    try {
+      sessionStorage.setItem(SHELF_MODE_KEY, ui.shelfMode);
+    } catch {
+      // Sem sessionStorage (modo privado): vale só até sair da tela.
+    }
+    render();
+  },
+  'clear-filter'(el) {
+    ui.filters = { ...ui.filters, [el.dataset.key]: '' };
+    render();
+    document.querySelector('.fchips select')?.focus({ preventScroll: true });
+  },
+});
+
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('[data-progress-form]');
+  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input')) syncProgressRange(form, e.target.id === 'progress-range');
+});
+
+initLongPress((el) => {
+  closeSwipe();
+  openQuickMenu(el.dataset.id, el);
+});
+initSwipe();
+
+// ---------- Ficha do livro (v1.4) ----------
+// #/livro/:id mostra a ficha (views/book-detail.js); editar fica em #/livro/:id/editar.
+
+Object.assign(actions, {
+  'zoom-book-cover'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (book?.cover) openCoverViewer(book.cover, book.title || 'livro');
+  },
+  'detail-fav'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (!book || book.status !== STATUS.READ) return;
+    // Um favorito por ano (upsertBook tira o anterior): o aviso diz qual saiu.
+    const year = book.endDate ? yearOf(book.endDate) : null;
+    const replaced = !book.favorite && year
+      ? state.books.find((b) => b.id !== book.id && b.favorite && b.endDate && yearOf(b.endDate) === year)
+      : null;
+    let message = 'Marcado como favorito do ano.';
+    if (book.favorite) message = 'Tirado dos favoritos.';
+    else if (replaced) message = `Favorito de ${year}: "${book.title}" no lugar de "${replaced.title}".`;
+    persist(upsertBook(state, { ...book, favorite: !book.favorite }).state, message);
+    render();
+  },
+  // Aba Diário: abre ou recolhe uma semana.
+  'diary-week'(el) {
+    const key = el.dataset.week;
+    ui.diaryWeeks = { ...ui.diaryWeeks, [key]: el.getAttribute('aria-expanded') !== 'true' };
+    render();
+  },
+});
+
+// Capa em alta resolução da ficha: aparece ao terminar de carregar (e não esmaece de novo).
+document.addEventListener('load', (e) => {
+  const img = e.target;
+  if (!img.classList?.contains('cover-hd')) return;
+  loadedHdCovers.add(img.getAttribute('src'));
+  img.classList.add('is-loaded');
+}, true);
+
+// Gráfico do ritmo: o toque mostra o dia (ou a semana) mais próximo, sem redesenhar a tela.
+document.addEventListener('click', (e) => {
+  const plot = e.target.closest?.('.rchart-plot');
+  if (!plot) return;
+  const bars = [...plot.querySelectorAll('.rchart-bar')];
+  if (!bars.length) return;
+  let best = null;
+  let dist = Infinity;
+  for (const bar of bars) {
+    const r = bar.getBoundingClientRect();
+    const d = Math.abs(r.left + r.width / 2 - e.clientX);
+    if (d < dist) {
+      dist = d;
+      best = bar;
+    }
+  }
+  const readout = plot.closest('[data-rchart]')?.querySelector('.rchart-readout');
+  const again = best.classList.contains('is-picked');
+  for (const bar of bars) bar.classList.remove('is-picked');
+  if (!again) best.classList.add('is-picked');
+  plot.classList.toggle('has-pick', !again);
+  if (readout) readout.textContent = again ? readout.dataset.default : best.dataset.tip;
+});
+
+/** Transição da capa ("voa" da lista para a ficha) só com suporte e sem "Reduzir movimento". */
+function canAnimateCover() {
+  return typeof document.startViewTransition === 'function'
+    && !window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+}
+
+/**
+ * Troca de tela com a capa como elemento compartilhado: a capa tocada (from) e a capa
+ * correspondente na tela nova (pickTarget) recebem o mesmo view-transition-name.
+ * O resto da tela só se funde, rápido. Sem suporte, é uma navegação normal.
+ */
+function navigateWithCover(href, from, pickTarget) {
+  from.style.viewTransitionName = 'book-cover';
+  const startHash = location.hash;
+  let target = null;
+  const transition = document.startViewTransition(() => {
+    from.style.viewTransitionName = '';
+    // Outra navegação chegou antes da troca (toque rápido em outra coisa): ela vale.
+    if (location.hash !== startHash) return;
+    renderedByTransition = href;
+    tagHistoryEntry();
+    location.hash = href;
+    render();
+    target = pickTarget?.() || null;
+    if (target) target.style.viewTransitionName = 'book-cover';
+  });
+  transition.finished.finally(() => {
+    if (target) target.style.viewTransitionName = '';
+  });
+}
+
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const link = e.target.closest?.('a[href^="#/"]');
+  if (!link || !canAnimateCover()) return;
+  const href = link.getAttribute('href');
+  // Abrir a ficha a partir de uma capa (Início, Estante, Buscar, Resumo...).
+  if (/^#\/livro\/[^/?]+$/.test(href)) {
+    // No cartão "Lendo agora" a capa fica fora do link (que cobre o cartão inteiro).
+    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover');
+    if (!from || href === location.hash) return;
+    e.preventDefault();
+    navigateWithCover(href, from);
+    return;
+  }
+  // Voltar da ficha: a capa volta para o lugar dela na lista, se estiver à vista.
+  if (link.classList.contains('ficha-back')) {
+    const from = root.querySelector('.ficha-cover .cover');
+    const id = ui.detailId;
+    if (!from || !id || href === location.hash) return;
+    e.preventDefault();
+    navigateWithCover(href, from, () => {
+      const cover = root.querySelector(`a[href="#/livro/${CSS.escape(encodeURIComponent(id))}"] .cover`)
+        || root.querySelector(`.reading[data-id="${CSS.escape(id)}"] .rn-cover .cover`);
+      if (!cover) return null;
+      const r = cover.getBoundingClientRect();
+      return r.bottom > 0 && r.top < window.innerHeight ? cover : null;
+    });
+  }
+});
+
 // ---------- Offline e atualizações ----------
 
 if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
   let hadController = Boolean(navigator.serviceWorker.controller);
   // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
   const applyUpdate = () => {
-    const busy = ['novo', 'livro'].includes(parseRoute().name) || ui.editingProgress;
+    const route = parseRoute();
+    const busy = route.name === 'novo' || isBookEdit(route) || ui.editingProgress || ui.progressSheet;
     if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
     else window.location.reload();
   };
@@ -1467,6 +2008,20 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     });
   }).catch(() => {});
 }
+
+// ---------- Aparência e títulos grandes (v1.4) ----------
+// O tema já veio aplicado pelo index.html (antes do CSS); aqui a troca em Ajustes e o
+// acompanhamento do iPhone. A escolha é do aparelho, fora dos dados e do backup.
+
+ui.themePref = initTheme();
+initLargeTitles();
+
+actions['set-theme'] = (el) => {
+  const pref = el.dataset.value;
+  if (!setThemePref(pref)) toast('Não foi possível guardar a aparência neste aparelho; vale até fechar o app.');
+  ui.themePref = pref;
+  render();
+};
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
 async function boot() {

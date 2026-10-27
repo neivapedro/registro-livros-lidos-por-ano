@@ -95,10 +95,19 @@ test('pageGoalProgress: projeção no ritmo atual, só no ano corrente', () => {
   assert.equal(pageGoalProgress(0, 6000, 2026, '2026-10-16').projection, null);
   assert.equal(pageGoalLine(pageGoalProgress(6100, 6000, 2026, '2026-10-16')), '6.100 de 6.000 págs. · meta de páginas batida');
   assert.equal(pageGoalProgress(3000, 6000, 2026, '2026-10-16').progress, 0.5);
-  // Ano bissexto: 366 dias. 30 págs. no 1º dia → 10.980 → ~11.000.
-  assert.equal(pageGoalProgress(30, 6000, 2028, '2028-01-01').projection, 11000);
-  // 50 págs. em 2 dias → 9.125 → ~9.100.
-  assert.equal(pageGoalProgress(50, 6000, 2026, '2026-01-02').projection, 9100);
+  // Ano bissexto: 366 dias. 630 págs. em 21 dias → 10.980 → ~11.000.
+  assert.equal(pageGoalProgress(630, 6000, 2028, '2028-01-21').projection, 11000);
+  // 50 págs. em 21 dias → 869 → ~870.
+  assert.equal(pageGoalProgress(50, 6000, 2026, '2026-01-21').projection, 870);
+});
+
+test('pageGoalProgress: sem projeção nas primeiras semanas (igual à curva do Resumo)', () => {
+  // 1º de janeiro: 30 págs. "projetariam" ~11.000. Antes do dia 21, nada de "no ritmo de".
+  assert.equal(pageGoalProgress(30, 6000, 2028, '2028-01-01').projection, null);
+  assert.equal(pageGoalProgress(50, 6000, 2026, '2026-01-02').projection, null);
+  assert.equal(pageGoalProgress(400, 6000, 2026, '2026-01-20').projection, null);
+  assert.equal(pageGoalLine(pageGoalProgress(30, 6000, 2026, '2026-01-01')), '30 de 6.000 págs.');
+  assert.equal(pageGoalProgress(400, 6000, 2026, '2026-01-21').projection, 7000);
 });
 
 test('pagesByMonth bate com pagesReadInYear depois de uma correção para trás', () => {

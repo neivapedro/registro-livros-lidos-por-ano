@@ -223,7 +223,7 @@ export function retroView({ state, year, today, ui }) {
   if (d.s.count < RETRO_MIN_BOOKS) {
     const left = RETRO_MIN_BOOKS - d.s.count;
     return `
-      <div class="retro">
+      <div class="retro" data-theme="dark">
         ${closeTop(year)}
         <div class="retro-stage"><div class="slide retro-gate">
           <span class="retro-line">Termine ${RETRO_MIN_BOOKS} livros para ver sua retrospectiva de ${year}</span>
@@ -235,7 +235,7 @@ export function retroView({ state, year, today, ui }) {
   const index = Math.min(ui.retroSlide, all.length - 1);
   const segments = all.map((_, i) => `<span class="seg${i <= index ? ' on' : ''}"></span>`).join('');
   return `
-    <div class="retro">
+    <div class="retro" data-theme="dark">
       <div class="segments">${segments}</div>
       ${closeTop(year)}
       <div class="retro-stage" aria-live="polite">

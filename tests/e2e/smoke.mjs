@@ -87,6 +87,8 @@ const browser = await playwright.chromium.launch();
 const contextOptions = {
   viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR',
   acceptDownloads: true,
+  // Sem a animação de abertura do Início (os números contariam a partir de 0).
+  reducedMotion: 'reduce',
 };
 const context = await browser.newContext(contextOptions);
 const page = await context.newPage();
@@ -123,6 +125,12 @@ const shot = (name) => page.screenshot({ path: join(SHOTS, `${name}.png`), fullP
 const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore(p = page) {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
+
 try {
   step('migração dos dados do localStorage (versão 1.2) para o IndexedDB');
   {
@@ -134,21 +142,21 @@ try {
     await p.evaluate((data) => localStorage.setItem('leituras:v1', JSON.stringify(data)), seed);
     await p.goto(BASE);
     await p.waitForSelector('.hero');
-    assert.match(await p.textContent('.ring-center'), /9\s*de 12 livros/);
+    assert.match(await p.textContent('.ring-center'), /9\s*de 12/);
     assert.equal(await p.locator('.grid-book').count(), 6);
     assert.equal(await p.evaluate(() => localStorage.getItem('leituras:v1')), null, 'chave antiga removida');
     const migrated = await readState(p);
     assert.deepEqual(migrated, seed, 'cópia idêntica no IndexedDB');
     await p.reload();
     await p.waitForSelector('.hero');
-    assert.match(await p.textContent('.ring-center'), /9\s*de 12 livros/);
+    assert.match(await p.textContent('.ring-center'), /9\s*de 12/);
     await ctx.close();
   }
 
   step('app vazio');
   await page.goto(BASE);
   await page.waitForSelector('.hero');
-  assert.match(await page.textContent('.ring-center'), /0\s*de 12 livros/);
+  assert.match(await page.textContent('.ring-center'), /0\s*de 12/);
   await shot('01-inicio-vazio');
 
   step('cadastro pela busca');
@@ -165,8 +173,9 @@ try {
   await page.locator('#f-start').dispatchEvent('change');
   await page.fill('#f-end', '2026-09-21');
   await page.locator('#f-end').dispatchEvent('change');
-  await page.click('[data-action="set-genre"][data-value="Gestão"]');
   await page.click('[data-action="set-rating"][data-value="5"]');
+  await openMore();
+  await page.selectOption('#f-genre', 'Gestão');
   await page.click('[data-action="toggle-fav"]');
   await page.fill('#f-notes', 'A restrição dita o ritmo do sistema inteiro.');
   assert.match(await page.textContent('.form'), /Lido em 19 dias/);
@@ -229,7 +238,9 @@ try {
   assert.deepEqual(smallFields, [], 'campos com letra < 16px fazem o iPhone dar zoom');
 
   step('concluir leitura em andamento');
-  await page.click('.reading .btn-outline');
+  // Concluir fica no menu rápido do cartão (botão "Mais ações" ou tocar e segurar).
+  await page.click('.reading [data-action="quick-menu"]');
+  await page.click('.sheet a:has-text("Concluir")');
   await onPage('livro');
   assert.equal(await page.locator('.seg-btn.is-on').first().textContent(), 'Lido');
   // Meia estrela: metade esquerda da 5ª estrela = 4,5.
@@ -256,7 +267,9 @@ try {
   await page.click('[data-nav="estante"]');
   await onPage('estante');
   assert.equal(await page.locator('.book-row').count(), 2);
-  await page.click('[data-action="start-reading"] >> nth=0');
+  // Na fila, "Começar" fica atrás da linha (deslizar) e no menu rápido.
+  await page.click('[data-action="quick-menu"] >> nth=0');
+  await page.click('.sheet [data-action="start-reading"]');
   await page.waitForFunction(() => document.querySelectorAll('.book-row').length === 1);
   assert.equal(await page.locator('.book-row').count(), 1);
   await shot('05-estante');
@@ -278,13 +291,17 @@ try {
   step('resumo');
   await page.click('[data-nav="resumo"]');
   await onPage('resumo');
-  await page.waitForSelector('.bars');
+  await page.waitForSelector('.sc-svg');
   assert.match(await page.textContent('.favorite'), /A Meta/);
-  assert.match(await page.textContent('body'), /George Orwell/);
   await shot('07-resumo');
+  await page.click('.rs-tab[data-tab="gostos"]');
+  await page.waitForSelector('.rs-panel[data-tab="gostos"]');
+  assert.match(await page.textContent('body'), /George Orwell/);
+  await page.click('.rs-tab[data-tab="geral"]');
+  await page.waitForSelector('.rs-panel[data-tab="geral"]');
   await page.selectOption('[data-change="summary-year"]', '2025');
   await page.waitForURL(/resumo\/2025/);
-  assert.match(await page.textContent('.tiles'), /1\s*\/ 12/);
+  assert.match(await page.textContent('.kpis'), /1\s*\/ 12/);
   await page.selectOption('[data-change="summary-year"]', '2026');
   await page.waitForURL(/resumo\/2026/);
 
@@ -336,8 +353,10 @@ try {
   assert.match(await page.textContent('.ring-center'), /11\s*de 13/);
 
   step('excluir e desfazer');
+  // Capa → ficha do livro → Editar (v1.4).
   await page.click('.grid-book >> nth=0');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
   await page.click('[data-action="delete-book"]');
   await page.waitForSelector('.hero');
   assert.match(await page.textContent('.ring-center'), /10\s*de 13/);
@@ -351,8 +370,8 @@ try {
   await page.fill('#progress-input', '120');
   await shot('11-inicio-informar-pagina');
   await page.click('.progress-edit button[type="submit"]');
-  await page.waitForSelector('.reading .progress');
-  assert.match(await page.textContent('.reading .progress'), /Na pág\. 120 · informe o total/);
+  await page.waitForSelector('.progress-edit', { state: 'detached' });
+  assert.match(await page.textContent('.reading .rn-progress'), /pág\. 120 · informe o total/);
   await shot('11-inicio-progresso');
   // Diário de leitura: registrado sozinho, sem nada na tela.
   const withJournal = await waitState((s) => s.books.some((b) => b.id === 'w1' && b.journal?.length));
@@ -364,7 +383,9 @@ try {
 
   step('capa pela foto');
   await page.click('.reading-link >> nth=0');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
+  await page.waitForSelector('#f-pages');
   await page.fill('#f-pages', '336');
   await page.setInputFiles('[data-cover-photo]', new URL('../../app/icons/icon-512.png', import.meta.url).pathname);
   await page.waitForFunction(() => document.querySelector('.cover-edit .cover-img')?.src.startsWith('data:image/jpeg'));
@@ -379,9 +400,18 @@ try {
   await page.click('.cover-viewer-close');
   assert.equal(await page.locator('.cover-viewer').count(), 0);
   await page.click('.btn-primary');
+  // Salvar volta para a ficha, já com a capa nova (tocar nela amplia).
+  await page.waitForSelector('.ficha-hero');
+  assert.match(await page.getAttribute('.ficha-cover .cover-img', 'src'), /^data:image\/jpeg/);
+  assert.match(await page.textContent('.ficha-progress'), /36%/);
+  await page.click('[data-action="zoom-book-cover"]');
+  await page.waitForSelector('.cover-viewer .cover-viewer-img');
+  await page.click('.cover-viewer-close');
+  await page.click('.ficha-back');
   await onPage('inicio');
   assert.match(await page.getAttribute('.reading .cover-img', 'src'), /^data:image\/jpeg/);
-  assert.match(await page.textContent('.reading .progress'), /36% · pág\. 120 de 336/);
+  assert.match(await page.textContent('.reading .rn-progress'), /pág\. 120 de 336/);
+  assert.match(await page.textContent('.reading .cov-ring'), /36/);
 
   step('progresso em % no Kindle');
   await page.click('.nav-add');
@@ -395,7 +425,7 @@ try {
   await page.click('.btn-primary');
   await onPage('inicio');
   const kindleCard = page.locator('.reading:has-text("Livro no Kindle")');
-  assert.match(await kindleCard.locator('.progress').textContent(), /2% · no Kindle/);
+  assert.match(await kindleCard.locator('.rn-progress').textContent(), /2% no Kindle/);
   await kindleCard.locator('[data-action="update-page"]').click();
   assert.match(await page.textContent('.progress-edit-label'), /Quantos % o Kindle mostra/);
   await page.fill('#progress-input', '150');
@@ -404,8 +434,8 @@ try {
   await page.fill('#progress-input', '45');
   await shot('16-inicio-kindle-editando');
   await page.press('#progress-input', 'Enter');
-  await page.waitForFunction(() => /45% · no Kindle/.test(document.body.textContent));
-  assert.equal(await page.locator('.progress-edit').count(), 0);
+  await page.waitForFunction(() => /45% no Kindle/.test(document.getElementById('app').textContent));
+  await page.waitForSelector('.progress-edit', { state: 'detached' });
   const kindleBook = (await waitState((s) => s.books.some((b) => b.title === 'Livro no Kindle' && b.currentPercent === 45)))
     .books.find((b) => b.title === 'Livro no Kindle');
   assert.deepEqual(kindleBook.journal, [{ date: '2026-10-16', from: 2, to: 45, unit: 'percent', note: '' }]);
@@ -430,13 +460,15 @@ try {
   await shot('14-estante-abandonei');
   await page.click('[data-nav="resumo"]');
   await onPage('resumo');
+  await page.click('.rs-tab[data-tab="gostos"]');
+  await page.waitForSelector('.rs-panel[data-tab="gostos"]');
   assert.match(await page.textContent('body'), /Abandonados/);
 
   step('todos os anos');
   await page.selectOption('[data-change="summary-year"]', 'todos');
   await page.waitForURL(/resumo\/todos/);
   await page.waitForSelector('.best-year');
-  assert.match(await page.textContent('.tiles'), /12\s*livros lidos/);
+  assert.match(await page.textContent('.kpis'), /Livros lidos\s*12/);
   assert.match(await page.textContent('.best-year'), /2026/);
   await shot('15-todos-os-anos');
 
@@ -444,7 +476,8 @@ try {
   await page.goto(`${BASE}#/estante?aba=lido`);
   await page.waitForSelector('.book-row');
   await page.click('.book-row-link:has-text("Sapiens")');
-  await onPage('livro');
+  await page.waitForSelector('.ficha-hero');
+  await page.click('.ficha-top a:has-text("Editar")');
   await page.click('[data-action="reread"]');
   await onPage('inicio');
   assert.equal(await page.locator('.reading:has-text("Sapiens")').count(), 1);

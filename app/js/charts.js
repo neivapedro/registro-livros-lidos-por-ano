@@ -134,15 +134,19 @@ function roundNice(n) {
   return Math.round(n);
 }
 
+// Projeção só depois das primeiras semanas: em 1º de janeiro, 30 páginas "projetariam" 11.000.
+// Vale para o Início (meta de páginas) e para a curva do Resumo (trend.js), que precisam bater.
+export const MIN_PROJECTION_DAYS = 21;
+
 /**
- * Meta de páginas do ano: quanto já foi lido e, no ano corrente, a projeção
- * no ritmo atual (páginas até hoje ÷ dias passados × dias do ano), arredondada.
+ * Meta de páginas do ano: quanto já foi lido e, no ano corrente (a partir do dia 21), a
+ * projeção no ritmo atual (páginas até hoje ÷ dias passados × dias do ano), arredondada.
  */
 export function pageGoalProgress(pages, goal, year, today) {
   const elapsed = daysElapsedInYear(year, today);
   const total = isLeapYear(year) ? 366 : 365;
   const isCurrent = year === yearOf(today);
-  const projection = isCurrent && pages > 0 && elapsed > 0 ? roundNice((pages / elapsed) * total) : null;
+  const projection = isCurrent && pages > 0 && elapsed >= MIN_PROJECTION_DAYS ? roundNice((pages / elapsed) * total) : null;
   return {
     pages,
     goal,

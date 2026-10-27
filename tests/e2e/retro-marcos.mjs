@@ -130,6 +130,7 @@ const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 // Texto visível, com as quebras de linha viradas em espaço.
 const text = (sel) => page.innerText(sel).then((t) => t.replace(/\s+/g, ' ').trim());
+const medalData = () => page.$$eval('.medal-item', (els) => els.map((e) => `${e.dataset.title} ${e.dataset.detail}`).join(' | '));
 // O slide entra com animação de 0,35 s: espera antes da captura.
 const settle = () => page.waitForTimeout(450);
 
@@ -169,17 +170,21 @@ try {
   step('Marcos em Todos os anos');
   await page.goto(`${BASE}#/resumo/todos`);
   await page.waitForSelector('.milestones');
-  const marcos = await text('.milestones');
+  // Marcos como medalhas: o título e o detalhe de cada uma aparecem ao tocar (ficam em data-*).
+  const marcos = await medalData();
   for (const m of ['10º livro', '1º livro', '1.000 páginas', 'Primeiro livro de 500+ páginas', 'Livro lido em um só dia', 'Novo gênero: Ciência']) {
     assert.ok(marcos.includes(m), `marco "${m}" na seção`);
   }
   assert.match(marcos, /O Alienista · 12 mar 2025/);
-  assert.match(marcos, /Próximos/i);
+  assert.match(await text('.milestones'), /Próximos/i);
   assert.match(marcos, /Falta 1 livro para o 25º/);
   assert.match(marcos, /Faltam [\d.]+ páginas para 10\.000/);
-  assert.match(marcos, /E mais 4 gêneros descobertos/, 'só os 3 gêneros mais recentes aparecem');
-  assert.equal(await page.locator('.mile.is-next').count(), 2);
-  assert.equal(await page.locator('.mile-icon svg').count(), await page.locator('.mile').count(), 'cada marco com ícone');
+  assert.match(await text('.medal-item.is-next >> nth=0'), /25º livro falta 1/);
+  assert.equal((marcos.match(/Novo gênero:/g) || []).length, 7, 'todos os gêneros na fileira que desliza');
+  assert.equal(await page.locator('.medal-item.is-next').count(), 2);
+  assert.equal(await page.locator('.medal .medal-num, .medal svg').count(), await page.locator('.medal-item').count(), 'cada medalha com numeral ou ícone');
+  await page.click('.medal-item:has-text("1º livro") >> nth=0');
+  assert.match(await text('.medal-detail'), /^1º livro .+ · \d+ \w+ 2024 Ver livro$/);
   await page.locator('.milestones').scrollIntoViewIfNeeded();
   await page.locator('.milestones').screenshot({ path: join(SHOTS, 'retro-marcos-01-marcos.png') });
   for (const width of [320, 430]) {
@@ -190,8 +195,8 @@ try {
 
   step('números do Resumo de 2025');
   await page.goto(`${BASE}#/resumo/2025`);
-  await page.waitForSelector('.bars');
-  const tiles = await page.locator('.tiles .tile .tile-value').allTextContents();
+  await page.waitForSelector('.kpis');
+  const tiles = await page.locator('.kpi .kpi-num').allTextContents();
   const resumoCount = tiles[0].replace(/\s+/g, ' ').match(/^(\d+)/)[1];
   const resumoPages = tiles[1].trim();
   assert.equal(resumoCount, '16');
@@ -277,7 +282,9 @@ try {
   step('concluir pelo cartão: aviso de marco');
   await page.goto(`${BASE}#/inicio`);
   await page.waitForSelector('.reading');
-  await page.click('.reading .btn-outline');
+  // Concluir fica no menu rápido do cartão ("Mais ações" ou tocar e segurar).
+  await page.click('.reading [data-action="quick-menu"]');
+  await page.click('.sheet-layer.is-open a:has-text("Concluir")');
   await onPage('livro');
   await page.click('.btn-primary');
   await onPage('inicio');
@@ -288,7 +295,7 @@ try {
 
   step('editar um livro já lido não repete o aviso');
   await page.waitForFunction(() => !document.getElementById('toast').classList.contains('show'), null, { timeout: 8000 });
-  await page.goto(`${BASE}#/livro/r1`);
+  await page.goto(`${BASE}#/livro/r1/editar`);
   await onPage('livro');
   await page.click('.btn-primary');
   await onPage('inicio');
@@ -297,8 +304,8 @@ try {
   step('marco alcançado aparece em Todos os anos; 2026 liberado');
   await page.goto(`${BASE}#/resumo/todos`);
   await page.waitForSelector('.milestones');
-  assert.match(await text('.milestones'), /25º livro Antifrágil · 16 out 2026/);
-  assert.match(await text('.milestones'), /Faltam 25 livros para o 50º/);
+  assert.match(await medalData(), /25º livro Antifrágil · 16 out 2026/);
+  assert.match(await medalData(), /Faltam 25 livros para o 50º/);
   await page.goto(`${BASE}#/retro/2026`);
   await page.waitForSelector('.retro-mosaic');
   assert.equal(await page.locator('.retro-mosaic .cover').count(), 3);

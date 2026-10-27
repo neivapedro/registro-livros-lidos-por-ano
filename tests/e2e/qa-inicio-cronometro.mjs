@@ -57,6 +57,7 @@ const seed = {
       pages: 600, currentPage: 120, startDate: '2026-10-01', targetDate: '2026-11-15', series: 'Gelo e Fogo', seriesNumber: 1,
       tags: ['Fantasia'], createdAt: TS, updatedAt: TS,
       journal: [
+        { date: '2026-10-13', from: 36, to: 64, unit: 'page', note: '' },
         { date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' },
         { date: '2026-10-15', from: 92, to: 120, unit: 'page', note: '', minutes: 40 },
       ],
@@ -76,6 +77,7 @@ const seed = {
 const browser = await playwright.chromium.launch();
 const context = await browser.newContext({
   viewport: { width: 375, height: 812 }, deviceScaleFactor: 3, isMobile: true, hasTouch: true, locale: 'pt-BR', acceptDownloads: true,
+  reducedMotion: 'reduce',
 });
 const page = await context.newPage();
 await page.clock.install({ time: new Date(`${TODAY}T09:00:00`) });
@@ -116,9 +118,15 @@ try {
   const card = page.locator('.reading:has-text("Guerra dos Tronos")');
   assert.equal(await card.locator('.btn-timer').count(), 1);
   assert.equal(await card.locator('.pace-line').count(), 1);
-  assert.match(await card.locator('.pace-line').textContent(), /Ritmo: 28 págs\.\/dia · termina por volta de 3 nov/);
+  assert.match(await card.locator('.rn-progress').textContent(), /termina ~3 nov$/);
   assert.match(await card.locator('.pace-line').textContent(), /Para terminar até 15 nov: 16 págs\.\/dia/);
-  assert.equal(await page.locator('.reading:has-text("Começado hoje") .pace-line').count(), 0, 'livro começado hoje não tem ritmo');
+  assert.doesNotMatch(await page.locator('.reading:has-text("Começado hoje") .rn-progress').textContent(), /termina/, 'livro começado hoje não tem previsão');
+  // O ritmo por dia fica na folha "Registrar leitura".
+  await card.locator('[data-action="update-page"]').click();
+  await page.waitForSelector('.sheet-layer.is-open .psheet');
+  assert.match(await page.textContent('.psheet-head'), /Ritmo: 28 págs\.\/dia/);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.psheet', { state: 'detached' });
   for (const width of [320, 375, 430]) {
     await page.setViewportSize({ width, height: 812 });
     assert.ok(await overflow() <= 0, `${width}px: rolagem horizontal`);
@@ -126,7 +134,7 @@ try {
     assert.ok(title.width >= 110, `${width}px: título espremido (${Math.round(title.width)}px)`);
     const timerBtn = await card.locator('.btn-timer').boundingBox();
     const pace = await card.locator('.pace-line').boundingBox();
-    assert.ok(timerBtn.y + timerBtn.height <= pace.y, `${width}px: botão sobre a linha de ritmo`);
+    assert.ok(pace.y + pace.height <= timerBtn.y, `${width}px: botão sobre a linha da data-alvo`);
     // A barra de navegação fica fixa embaixo: some só para a captura do cartão.
     await card.screenshot({ path: join(SHOTS, `qa-cartao-${width}.png`), mask: [], style: '#nav { display: none !important; }' });
   }
@@ -144,11 +152,11 @@ try {
   assert.deepEqual(await smallInputs(), []);
   await page.click('[data-action="clear-filters"]');
   await page.waitForFunction(() => /Todos os 6 livros/.test(document.getElementById('search-results').textContent));
-  await page.goto(`${BASE}#/resumo/2026`);
+  await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await page.waitForSelector('.tag-count');
   const tagCounts = await page.$$eval('.tag-count', (els) => els.map((e) => e.textContent.trim()));
   assert.equal(tagCounts.filter((t) => /fantasia/i.test(t)).length, 1, `resumo: ${tagCounts}`);
-  await page.goto(`${BASE}#/livro/w3`);
+  await page.goto(`${BASE}#/livro/w3/editar`);
   await page.waitForSelector('#f-tag');
   const used = await page.$$eval('[data-action="add-tag"]', (els) => els.map((e) => e.dataset.value));
   assert.equal(used.filter((t) => t.toLowerCase() === 'fantasia').length, 1, `usadas antes: ${used}`);
@@ -160,10 +168,10 @@ try {
   await onPage('resumo');
   let st = await waitState((s) => book(s, 'w3').seriesNumber === 2.5);
   assert.equal(book(st, 'w3').series, 'gelo e fogo');
-  await page.goto(`${BASE}#/livro/l1`);
+  await page.goto(`${BASE}#/livro/l1/editar`);
   await page.waitForSelector('.series-info');
   assert.match(await page.textContent('.series-info'), /Próximo da série: nº 1 — A Guerra dos Tronos/);
-  await page.goto(`${BASE}#/livro/r1`);
+  await page.goto(`${BASE}#/livro/r1/editar`);
   await page.waitForSelector('.series-info');
   assert.match(await page.textContent('.series-info'), /Próximo da série: nº 2,5 — Terceiro/);
   assert.match(await page.textContent('.series-info'), /Você leu 1 de 3/);
@@ -171,7 +179,7 @@ try {
   step('excluir um livro das próximas e desfazer: volta ao mesmo lugar da fila');
   await page.goto(`${BASE}#/estante?aba=quero`);
   await page.waitForSelector('.next-pos');
-  await page.goto(`${BASE}#/livro/w1`);
+  await page.goto(`${BASE}#/livro/w1/editar`);
   await page.waitForSelector('[data-action="delete-book"]');
   await page.click('[data-action="delete-book"]');
   await waitState((s) => !book(s, 'w1') && s.upNext.join() === 'w2');
@@ -206,7 +214,10 @@ try {
   await onPage('inicio');
   st = await waitState((s) => book(s, 'r1').journal.some((e) => e.date === TODAY && e.minutes === 25));
   assert.deepEqual(book(st, 'r1').journal.at(-1), { date: TODAY, from: 120, to: 150, unit: 'page', note: '', minutes: 25 });
-  assert.match(await page.textContent('.reading:has-text("Guerra dos Tronos") .pace-line'), /Ritmo: 29 págs\.\/dia/);
+  await page.click('.reading:has-text("Guerra dos Tronos") [data-action="update-page"]');
+  assert.match(await page.textContent('.sheet-layer.is-open .psheet-head'), /Ritmo: 29 págs\.\/dia/);
+  await page.keyboard.press('Escape');
+  await page.waitForSelector('.psheet', { state: 'detached' });
 
   step('backup → apagar → importar: nada se perde');
   // Sessão aberta antes de apagar: não pode voltar depois de importar.

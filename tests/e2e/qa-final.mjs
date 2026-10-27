@@ -61,6 +61,12 @@ const noErrors = (where) => assert.deepEqual(errors, [], `erros no console em ${
 const onPage = (name) => p.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const readState = () => p.evaluate(async () => (await import('/js/db.js')).getItem('state'));
 const text = (sel) => p.innerText(sel).then((t) => t.replace(/\s+/g, ' ').trim());
+
+// v1.4: gênero, série, etiquetas, data alvo, favorito e anotações ficam em "Mais detalhes".
+async function openMore() {
+  const toggle = p.locator('[data-action="toggle-more"]');
+  if (await toggle.getAttribute('aria-expanded') === 'false') await toggle.click();
+}
 const toast = () => p.waitForSelector('#toast.show').then((el) => el.textContent());
 const waitToast = (re) => p.waitForFunction((src) => document.querySelector('#toast.show') && new RegExp(src).test(document.getElementById('toast').textContent), re.source);
 async function day(iso, hh = '21:30') {
@@ -80,14 +86,20 @@ async function updateCard(title, value, re) {
 }
 /** Seletores cujo texto escolhido não cabe (o iPhone corta com "…"). */
 function cutSelects() {
-  return p.evaluate(() => [...document.querySelectorAll('#app select')].filter((el) => el.offsetParent).flatMap((el) => {
+  // Seletor invisível por cima de um chip (Buscar): quem aparece é o texto do chip, conferido à parte.
+  return p.evaluate(() => [...document.querySelectorAll('#app select')].filter((el) => el.offsetParent && getComputedStyle(el).opacity !== '0').flatMap((el) => {
     const cs = getComputedStyle(el);
     const ctx = document.createElement('canvas').getContext('2d');
     ctx.font = `${cs.fontWeight} ${cs.fontSize} ${cs.fontFamily}`;
     const label = el.selectedOptions[0]?.text || '';
     const avail = el.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     return ctx.measureText(label).width > avail + 0.5 ? [`${el.dataset.change || el.dataset.filter}: "${label}"`] : [];
-  }));
+  }).concat([...document.querySelectorAll('#app .fchip-text')].filter((el) => el.scrollWidth > el.clientWidth + 0.5).map((el) => `chip: "${el.textContent}"`)));
+}
+/** Ação do menu rápido de um livro (botão "Mais ações" da linha ou do cartão). */
+async function fromMenu(scope, action) {
+  await p.click(`${scope} [data-action="quick-menu"]`);
+  await p.click(`.sheet-layer.is-open [data-action="${action}"], .sheet-layer.is-open a:has-text("${action}")`);
 }
 /** Palavras que não cabem na linha (quebram no meio) dentro dos elementos indicados. */
 function brokenWords(selector) {
@@ -158,7 +170,7 @@ try {
     if (pg) await updateCard('1984', pg, /Página atualizada/);
     if (pct) await updateCard('Poder do Hábito', pct, /Progresso atualizado/);
   }
-  assert.match(await text('.reading:has-text("1984") .pace-line'), /^Ritmo: \d+ págs\.\/dia · termina por volta de \d+ out$/);
+  assert.match(await text('.reading:has-text("1984") .rn-progress'), /^pág\. 340 de \d+ · termina ~\d+ out$/);
   noErrors('cartão');
 
   step('cronômetro: 25 minutos no 1984');
@@ -174,11 +186,12 @@ try {
 
   step('Concluir: título da tela, meia estrela, gênero novo e o aviso do marco');
   await day('2026-10-07', '22:40');
-  await p.click('.reading:has-text("1984") a.btn-outline');
+  await fromMenu('.reading:has-text("1984")', 'Concluir');
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Concluir leitura');
   await p.click('.star-slot:nth-child(5) .star-hit.left');
-  await p.click('[data-action="open-genre"]');
+  await openMore(p);
+  await p.selectOption('#f-genre', { label: '+ Novo gênero…' });
   await p.fill('#new-genre', 'Distopia');
   await p.press('#new-genre', 'Enter');
   await p.click('.form-top button[type="submit"]');
@@ -193,9 +206,10 @@ try {
   noErrors('concluir');
 
   step('etiquetas, série, trechos, próximas e meta de páginas');
-  await go('#/livro/duna');
+  await go('#/livro/duna/editar');
   await onPage('livro');
   assert.equal(await text('.form-title'), 'Editar livro');
+  await openMore(p);
   await p.fill('#f-series', 'Duna');
   await p.fill('#f-series-n', '1');
   await p.fill('#f-tag', 'ficção científica, clássico,');
@@ -209,7 +223,7 @@ try {
   await p.click('.quote-form button[type="submit"]');
   await waitToast(/Trecho salvo/);
   await go('#/estante?aba=quero');
-  for (const t of ['Cem Anos', 'Mindset', 'Karamázov']) await p.click(`.book-row:has-text("${t}") [data-action="toggle-next"]`);
+  for (const t of ['Cem Anos', 'Mindset', 'Karamázov']) await fromMenu(`.book-row:has-text("${t}")`, 'toggle-next');
   await p.click('.book-row:has-text("Karamázov") [data-action="move-next"][data-delta="-1"]');
   await p.click('.book-row:has-text("Karamázov") [data-action="move-next"][data-delta="-1"]');
   assert.deepEqual((await readState()).upNext, ['karamazov', 'cem-anos', 'mindset']);
@@ -224,11 +238,11 @@ try {
   await go('#/inicio');
   await onPage('inicio');
   const count = await text('.ring-count');
-  const homeTiles = await p.$$eval('.tiles-3 .tile-value', (els) => els.map((e) => e.textContent.trim()));
+  const homeTiles = await p.$$eval('.bento .tile:not(.hero) .tile-value', (els) => els.map((e) => e.textContent.trim()));
   await p.click('#nav [data-nav="resumo"]');
   await onPage('resumo');
-  const kpis = await p.$$eval('.tiles-2 .tile-value', (els) => els.map((e) => e.textContent.trim()));
-  assert.deepEqual([kpis[0].split(' ')[0], ...kpis.slice(1)], [count, ...homeTiles]);
+  const kpis = await p.$$eval('.kpi-num', (els) => els.map((e) => e.textContent.trim()));
+  assert.deepEqual(kpis, [count, ...homeTiles]);
   await go('#/estante?aba=lido');
   assert.match(await text('.year-head:has-text("2026")'), new RegExp(`^2026 ${count} livros$`));
   await go('#/resumo/todos');
@@ -242,7 +256,7 @@ try {
   noErrors('números');
 
   step('toque num gráfico abre a Buscar filtrada');
-  await go('#/resumo/2026');
+  await go('#/resumo/2026?aba=gostos');
   await p.click('.bars-rating [data-action="chart-filter"]');
   await onPage('buscar');
   assert.equal(await text('.filter-chip-text'), 'Filtro: nota 2 em 2026');
@@ -250,9 +264,10 @@ try {
   await p.click('[data-action="clear-chart-filter"]');
 
   step('livro do ano com título longo e anotação (slide mais alto da retrospectiva)');
-  await go('#/livro/duna');
+  await go('#/livro/duna/editar');
   await onPage('livro');
   await p.fill('#f-title', 'Duna: edição especial de colecionador com ilustrações e notas do tradutor');
+  await openMore(p);
   await p.fill('#f-notes', 'Uma saga sobre poder, religião e ecologia que continua atual depois de sessenta anos; cada releitura mostra uma camada nova da história.');
   await p.click('.form-top button[type="submit"]');
   await waitToast(/Alterações salvas/);

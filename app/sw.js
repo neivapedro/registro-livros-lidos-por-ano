@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.3.2';
+const VERSION = 'v1.4.0';
 const CACHE = `leituras-${VERSION}`;
 
 const SHELL = [
@@ -17,6 +17,11 @@ const SHELL = [
   './js/tags.js',
   './js/upnext.js',
   './js/books-api.js',
+  './js/cover-color.js',
+  './js/sheet.js',
+  './js/longpress.js',
+  './js/swipe.js',
+  './js/motion.js',
   './js/calendar.js',
   './js/charts.js',
   './js/cover-photo.js',
@@ -26,6 +31,7 @@ const SHELL = [
   './js/journal.js',
   './js/quote-image.js',
   './js/quotes.js',
+  './js/reading-days.js',
   './js/rescue.js',
   './js/timer.js',
   './js/timer-stats.js',
@@ -33,10 +39,16 @@ const SHELL = [
   './js/retro-stats.js',
   './js/share-image.js',
   './js/stats.js',
+  './js/trend.js',
   './js/store.js',
   './js/ui.js',
+  './js/theme.js',
+  './js/large-title.js',
   './js/views/all-quotes.js',
   './js/views/alltime.js',
+  './js/views/kpi.js',
+  './js/views/scurve.js',
+  './js/views/book-detail.js',
   './js/views/book-tabs.js',
   './js/views/calendar.js',
   './js/views/charts.js',
@@ -44,8 +56,10 @@ const SHELL = [
   './js/views/home.js',
   './js/views/marcos.js',
   './js/views/retro.js',
+  './js/views/rhythm.js',
   './js/views/search.js',
   './js/views/settings.js',
+  './js/views/sheets.js',
   './js/views/shelf.js',
   './js/views/summary.js',
   './js/views/timer.js',
@@ -57,6 +71,28 @@ const SHELL = [
   './icons/icon-192.png',
   './icons/icon-512.png',
   './icons/icon-maskable-512.png',
+  './icons/splash-claro-1125x2436.png',
+  './icons/splash-claro-1170x2532.png',
+  './icons/splash-claro-1179x2556.png',
+  './icons/splash-claro-1206x2622.png',
+  './icons/splash-claro-1242x2688.png',
+  './icons/splash-claro-1260x2736.png',
+  './icons/splash-claro-1284x2778.png',
+  './icons/splash-claro-1290x2796.png',
+  './icons/splash-claro-1320x2868.png',
+  './icons/splash-claro-750x1334.png',
+  './icons/splash-claro-828x1792.png',
+  './icons/splash-escuro-1125x2436.png',
+  './icons/splash-escuro-1170x2532.png',
+  './icons/splash-escuro-1179x2556.png',
+  './icons/splash-escuro-1206x2622.png',
+  './icons/splash-escuro-1242x2688.png',
+  './icons/splash-escuro-1260x2736.png',
+  './icons/splash-escuro-1284x2778.png',
+  './icons/splash-escuro-1290x2796.png',
+  './icons/splash-escuro-1320x2868.png',
+  './icons/splash-escuro-750x1334.png',
+  './icons/splash-escuro-828x1792.png',
 ];
 
 self.addEventListener('install', (event) => {

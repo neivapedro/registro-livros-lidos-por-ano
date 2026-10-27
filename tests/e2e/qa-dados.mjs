@@ -47,6 +47,8 @@ const browser = await playwright.chromium.launch();
 const contextOptions = {
   viewport: { width: 375, height: 812 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true, locale: 'pt-BR',
   acceptDownloads: true,
+  // Sem a animação de abertura do Início (os números contariam a partir de 0).
+  reducedMotion: 'reduce',
 };
 
 // ---------- Ajudantes ----------
@@ -228,7 +230,7 @@ await scenario('1.2.4 → 1.3: migra tudo, apaga a chave antiga só depois de co
   assert.equal(await p.evaluate(() => localStorage.getItem('leituras:v1')), null);
   assert.equal(await p.evaluate(() => localStorage.getItem('leituras:indexeddb')), '1');
   assert.deepEqual(await readState(p), V1, 'cópia idêntica no IndexedDB');
-  assert.match(await p.textContent('.ring-center'), /1\s*de 18 livros/);
+  assert.match(await p.textContent('.ring-center'), /1\s*de 18/);
   assert.equal(await p.locator('.reading').count(), 3);
   for (let i = 0; i < 2; i += 1) {
     await p.reload();
@@ -387,7 +389,7 @@ await scenario('duas abas: aviso perdido (aba parada) — ao voltar, relê antes
   const st = await waitState(b, (s) => s.books.find((x) => x.id === 'k1').currentPercent === 40);
   assert.equal(st.books.find((x) => x.id === 'w1').title, 'O Gerente Minuto (editado em A)');
   // E A recebe o aviso de B.
-  await a.waitForFunction(() => /40% · no Kindle/.test(document.body.textContent));
+  await a.waitForFunction(() => /40% no Kindle/.test(document.getElementById('app').textContent));
 });
 
 await scenario('duas abas: falha ao reler (IndexedDB fechou) não esvazia a tela nem bloqueia gravações', async (ctx) => {
@@ -433,7 +435,7 @@ await scenario('toque duplo em Salvar não cria o livro duas vezes (nem duas rel
   assert.equal(st.books.filter((b) => b.title === 'Livro do toque duplo').length, 1);
   assert.equal(st.books.length, V2.books.length + 1);
 
-  await p.goto(`${BASE}#/livro/l2`);
+  await p.goto(`${BASE}#/livro/l2/editar`);
   await onPage(p, 'livro');
   await p.evaluate(() => {
     const btn = document.querySelector('[data-action="reread"]');
@@ -465,7 +467,7 @@ await scenario('gravação que falha: cópia de resgate é aplicada na próxima 
   const q = await newPage(ctx);
   await q.goto(BASE);
   await q.waitForSelector('.hero');
-  await q.waitForFunction(() => /55% · no Kindle/.test(document.body.textContent));
+  await q.waitForFunction(() => /55% no Kindle/.test(document.getElementById('app').textContent));
   const st = await waitState(q, (s) => s.books.find((b) => b.id === 'k1').currentPercent === 55);
   assert.equal(st.books.length, V2.books.length);
   assert.deepEqual(withoutStamp(st.books.filter((b) => b.id !== 'k1')), withoutStamp(V2.books.filter((b) => b.id !== 'k1')));
@@ -533,8 +535,12 @@ await scenario('todas as telas em 375 e 320 px: sem erro, sem sobra à direita, 
     for (const aba of ['dados', 'diario', 'trechos']) await visit(`livro/r1?aba=${aba}`, 'livro', `livro-${aba}`);
     await p.click('[data-action="quote-new"]');
     await check('livro-trechos-novo');
-    await visit('livro/k1', 'livro', 'livro-kindle');
-    await visit('livro/d1', 'livro', 'livro-abandonado');
+    // Ficha do livro (v1.4) e edição, por status.
+    await visit('livro/r1', 'livro', 'ficha-lido');
+    await visit('livro/k1', 'livro', 'ficha-kindle');
+    await visit('livro/d1', 'livro', 'ficha-abandonado');
+    await visit('livro/k1/editar', 'livro', 'livro-kindle');
+    await visit('livro/d1/editar', 'livro', 'livro-abandonado');
     await visit('trechos', 'trechos');
     await visit('retro/2026', 'retro', 'retro-1');
     for (let i = 0; i < 4; i += 1) await p.click('.tap-next');
