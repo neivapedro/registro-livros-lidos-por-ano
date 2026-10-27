@@ -231,7 +231,7 @@ export function progressRing(pct) {
   const c = 2 * Math.PI * r;
   const p = Math.max(0, Math.min(100, pct));
   const dash = ((p / 100) * c).toFixed(1);
-  return `<span class="cov-ring" role="img" aria-label="${p}% lido"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="cov-ring-track"/>${p > 0 ? `<circle cx="16" cy="16" r="${r}" class="cov-ring-fill" stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg><span class="cov-ring-pct" aria-hidden="true">${p}</span></span>`;
+  return `<span class="cov-ring" role="img" aria-label="${p}% lido"><svg viewBox="0 0 32 32" aria-hidden="true"><circle cx="16" cy="16" r="${r}" class="cov-ring-track"/>${p > 0 ? `<circle cx="16" cy="16" r="${r}" class="cov-ring-fill" stroke-dasharray="${dash} ${c.toFixed(1)}" transform="rotate(-90 16 16)"/>` : ''}</svg><span class="cov-ring-pct${p >= 100 ? ' is-full' : ''}" aria-hidden="true">${p}<span class="cov-ring-unit">%</span></span></span>`;
 }
 
 /** "★ 4,5" à direita da linha (com rótulo para leitor de tela). */
