@@ -74,6 +74,7 @@ class FakeCache {
   async put(key, response) {
     const url = typeof key === 'string' ? key : key.url;
     if (this.full) throw new DOMException('cheio', 'QuotaExceededError');
+    if (this.putError) throw this.putError(url);
     this.entries.delete(url); // como no Cache API: a regravada vai para o fim
     this.entries.set(url, response);
   }
@@ -317,4 +318,66 @@ test('sw: espaço do aparelho apertado (opacas do Chrome/Android) — as capas c
   log.length = 0;
   await message(sw, { type: 'capas', urls: books });
   assert.deepEqual(log, []);
+});
+
+test('sw: rede caindo no meio da imagem não apaga capas (só falta de espaço libera metade)', async () => {
+  const sw = loadSw({ fetchImpl: fakeNetwork() });
+  const store = await sw.caches.open('leituras-capas');
+  for (let i = 0; i < 300; i += 1) await store.put(`https://outro.site/capa-${i}.jpg`, fakeResponse('opaque'));
+  // O corpo da imagem falha enquanto é gravado (conexão caiu, pré-carga desistiu por tempo).
+  store.putError = (url) => (url.includes('corta') ? new TypeError('network error') : null);
+  const cut = 'https://capas.editora.com.br/corta.jpg';
+  const res = await respond(sw, imgRequest(cut));
+  assert.equal(res.type, 'cors', 'a tela recebe a resposta mesmo assim');
+  assert.equal(coverKeys(store).length, 300, 'nenhuma capa apagada');
+  // Na pré-carga, o corte conta como falha de rede (a tela manda a lista de novo depois).
+  const [reply] = await message(sw, { type: 'capas', urls: ['https://capas.editora.com.br/corta-2.jpg'] });
+  assert.equal(reply.failed, 1);
+  assert.equal(reply.fetched, 0);
+  assert.equal(coverKeys(store).length, 300);
+  // Falta de espaço de verdade continua liberando metade.
+  store.putError = (url) => (url.includes('cheia') ? new DOMException('cheio', 'QuotaExceededError') : null);
+  await respond(sw, imgRequest('https://capas.editora.com.br/cheia.jpg'));
+  assert.equal(coverKeys(store).length, Math.floor(sw.get('MAX_COVERS') / 2));
+});
+
+test('sw: capas pedidas juntas ao acordar usam as anotações guardadas (sem perguntar CORS de novo)', async () => {
+  const log = [];
+  const sw = loadSw({ fetchImpl: fakeNetwork({ log, delay: 5 }) });
+  const store = await sw.caches.open('leituras-capas');
+  await store.put(META, new Response(JSON.stringify({ keep: [], hosts: { 'books.google.com': { mode: 'no-cors', at: Date.now() } }, fit: null })));
+  const urls = [1, 2, 3, 4].map((i) => `https://books.google.com/books/content?id=w${i}&zoom=1`);
+  await Promise.all(urls.map((u) => respond(sw, imgRequest(u))));
+  assert.deepEqual(log.sort(), urls.map((u) => `no-cors:${u}`).sort());
+});
+
+test('sw: sem Cache Storage (modo privado do Safari) as capas vêm da rede e a pré-carga responde', async () => {
+  const sw = loadSw({ fetchImpl: fakeNetwork() });
+  sw.caches.open = async () => { throw new DOMException('negado', 'SecurityError'); };
+  const res = await respond(sw, imgRequest(G));
+  assert.equal(res.type, 'opaque');
+  const [reply] = await message(sw, { type: 'capas', urls: [G] });
+  assert.equal(reply.type, 'capas-prontas');
+  assert.equal(reply.fetched, 0);
+  assert.ok(reply.failed > 0, 'a tela tenta de novo depois');
+  await message(sw, { type: 'capa-falhou', url: G });
+});
+
+test('normalizeCoverUrl é estável (normalizar de novo não muda) e não mexe em fotos', () => {
+  const samples = [
+    G, `${G}&edge=curl`, G.replace('zoom=1', 'zoom=5').replace('https:', 'http:'),
+    'http://books.google.com.br/books/content?id=a%20b+c&printsec=frontcover&img=1&edge=curl&source=gbs_api',
+    'https://books.google.com/books/publisher/content/images/frontcover/X1?fife=w400-h600&source=gbs_api',
+    'https://covers.openlibrary.org/b/isbn/9788535914849-M.jpg?default=false',
+    'http://covers.openlibrary.org/b/id/123-M.jpg',
+    'https://exemplo.com.br/capas/livro%201.jpg?v=2#frente',
+    'data:image/jpeg;base64,/9j/AAAA',
+  ];
+  for (const raw of samples) {
+    const once = normalizeCoverUrl(raw);
+    assert.equal(normalizeCoverUrl(once), once, raw);
+  }
+  assert.equal(normalizeCoverUrl('data:image/jpeg;base64,/9j/AAAA'), 'data:image/jpeg;base64,/9j/AAAA');
+  assert.equal(largeCoverUrl('https://covers.openlibrary.org/b/isbn/9788535914849-M.jpg?default=false'),
+    'https://covers.openlibrary.org/b/isbn/9788535914849-L.jpg?default=false');
 });
