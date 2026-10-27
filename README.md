@@ -25,6 +25,8 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 - **Trechos salvos:** todos os trechos de todos os livros, com busca.
 - **Ajustes:** meta do ano e dos próximos anos, meta de páginas, backup, planilha CSV, chave do Google Books, instruções de instalação.
 
+- **Visual (1.4):** tema claro e escuro (segue o iPhone; Ajustes → Aparência), ficha própria de cada livro com a cor da capa, painel “Registrar leitura”, toque longo e gestos na Estante, lista ou capas, filtros em chips, barra de navegação de vidro, títulos que encolhem ao rolar, curva S da meta (previsto × realizado) e Resumo em três abas.
+
 ## Estrutura
 
 ```
