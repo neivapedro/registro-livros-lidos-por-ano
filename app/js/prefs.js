@@ -81,9 +81,10 @@ export function removeGeminiKey(storage) {
 }
 
 // ---------- Limite de segurança da busca com IA ----------
-// Para nunca chegar perto da cota sem custo do Google (5.000 buscas por mês com o
-// faturamento ativo), cada aparelho faz no máximo AI_MONTHLY_LIMIT buscas com IA por mês.
-// Só conta a busca que de fato foi enviada ao Google. Fica no localStorage, fora do backup.
+// Para não gastar à toa a cota gratuita do Google (a busca com IA não usa cartão nem
+// faturamento), cada aparelho faz no máximo AI_MONTHLY_LIMIT buscas com IA por mês.
+// Só conta a busca que de fato foi enviada ao Google, uma vez por busca (mesmo quando ela
+// faz os dois pedidos: procurar e conferir o ISBN). Fica no localStorage, fora do backup.
 
 export const AI_USAGE_STORAGE = 'leituras:iaUso';
 export const AI_MONTHLY_LIMIT = 30;

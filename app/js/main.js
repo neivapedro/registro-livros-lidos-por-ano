@@ -54,7 +54,7 @@ import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
 import { finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
-import { AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
+import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
 
 const root = document.getElementById('app');
@@ -2047,12 +2047,21 @@ async function runAiSearch() {
   cancelAiSearch();
   const ctrl = new AbortController();
   aiAbort = ctrl;
-  lookup.ai = { status: 'loading', timeoutMs: AI_TIMEOUT_MS, results: [] };
+  const started = Date.now();
+  lookup.ai = { status: 'loading', stage: 'find', timeoutMs: AI_TIMEOUT_MS, results: [] };
   renderLookup();
   const stale = () => ctrl.signal.aborted || ui.lookup !== lookup || lookup.query !== query;
+  // Segunda etapa ("Conferindo o ISBN…"): a barra continua de onde estava, no prazo maior.
+  const showStage = (stage, timeoutMs = AI_CONFIRM_TIMEOUT_MS) => {
+    if (stale() || lookup.ai?.status !== 'loading' || lookup.ai.stage === stage) return;
+    lookup.ai = { status: 'loading', stage, timeoutMs, elapsedMs: Date.now() - started, results: [] };
+    renderLookup();
+  };
   try {
+    // Uma busca conta uma vez no limite do aparelho, mesmo com os dois pedidos.
     const onSend = () => { ui.aiUsage = countAiSearch(localStorage, todayIso(), ui.aiUsage); };
-    const found = await aiSearch(query, { key: ui.geminiKey, signal: ctrl.signal, onSend });
+    const found = await aiSearch(query, { key: ui.geminiKey, signal: ctrl.signal, onSend, onStage: (stage, o) => showStage(stage, o?.timeoutMs) });
+    if (found.results.some((r) => r.isbn)) showStage('confirm');
     // Com ISBN, os dados oficiais (BrasilAPI, Open Library, Google Books) valem mais que os da IA.
     const lookupIsbn = (isbn) => searchBooks(isbn, { signal: ctrl.signal, googleKey: googleBooksKey() }).then((o) => o.results[0] || null);
     const results = await enrichAiResults(found.results, lookupIsbn, { queryIsbn: lookup.isbn });
