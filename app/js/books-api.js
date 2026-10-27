@@ -10,6 +10,8 @@
 // Cada fonte tem um tempo máximo; uma fonte lenta não segura a resposta das outras.
 // Buscas repetidas na mesma sessão saem da memória, sem consultar a rede de novo.
 
+import { normalizeCoverUrl } from './cover-url.js';
+
 const GOOGLE_URL = 'https://www.googleapis.com/books/v1/volumes';
 const OPEN_LIBRARY_URL = 'https://openlibrary.org/search.json';
 const BRASIL_API_URL = 'https://brasilapi.com.br/api/isbn/v1/';
@@ -86,8 +88,10 @@ function pickIsbn(list) {
   return list.find((i) => /^97[89]\d{10}$/.test(i)) || list.find((i) => /^\d{9}[\dX]$/.test(i)) || '';
 }
 
+// https e a forma única do endereço (a mesma que a tela pede e o service worker guarda).
 function toHttps(url) {
-  return typeof url === 'string' && url ? url.replace(/^http:/, 'https:').replace(/&edge=curl/, '') : null;
+  const clean = normalizeCoverUrl(url);
+  return clean && !clean.startsWith('data:') ? clean : null;
 }
 
 function joinTitle(title, subtitle) {

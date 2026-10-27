@@ -36,8 +36,9 @@ app/            o app publicado (HTML, CSS e JavaScript puros, sem etapa de buil
   js/journal.js     diário de leitura (páginas lidas por dia)
   js/stats.js       cálculos dos indicadores
   js/books-api.js   busca de livros
+  js/cover-cache.js capas guardadas no aparelho (pré-carga e nova tentativa)
   js/views/         telas
-  sw.js             funcionamento offline
+  sw.js             funcionamento offline (arquivos do app e cache das capas)
 tests/          testes automáticos (node --test) e teste de ponta a ponta
 tools/          gerador dos ícones
 ```

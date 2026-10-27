@@ -7,6 +7,8 @@ import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
 import { applyTints } from './cover-color.js';
+import { initCoverRetry, warmCovers } from './cover-cache.js';
+import { normalizeCoverUrl } from './cover-url.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
@@ -437,6 +439,8 @@ function persist(next, message) {
     persistRequested = true;
     navigator.storage.persist().catch(() => {});
   }
+  // Capa nova (livro salvo, backup restaurado...): já fica guardada para uso offline.
+  warmCovers(state.books, { delay: 3000 });
 }
 
 function applyOpened(opened) {
@@ -653,11 +657,12 @@ function openCoverViewer(src, title) {
     <img class="cover-viewer-img" alt="Capa de ${esc(title)}">
     <p class="cover-viewer-hint">Toque fora da capa para fechar · use dois dedos para aproximar</p>`;
   const img = viewer.querySelector('img');
-  const large = largeCoverUrl(src);
+  const base = normalizeCoverUrl(src) || src;
+  const large = largeCoverUrl(base);
   img.addEventListener('error', () => {
-    if (img.src !== src) img.src = src;
+    if (img.src !== base) img.src = base;
   });
-  img.src = large || src;
+  img.src = large || base;
   img.referrerPolicy = 'no-referrer';
   viewer.addEventListener('click', (e) => {
     if (e.target !== img) closeCoverViewer();
@@ -1480,10 +1485,9 @@ window.addEventListener('hashchange', () => {
   ui.draw = null;
 });
 
-// Capa que não carrega (offline, link quebrado): fica a capa desenhada.
-document.addEventListener('error', (e) => {
-  if (e.target.classList?.contains('cover-img')) e.target.remove();
-}, true);
+// Capa que não carrega (offline, rede lenta, site fora do ar): fica a capa desenhada e a
+// imagem é pedida de novo mais tarde (cover-cache.js), sem precisar sair da tela.
+initCoverRetry(() => state?.books || []);
 
 // Cancelar/Voltar da edição: volta pelo histórico (veja leaveForm).
 document.addEventListener('click', (e) => {
@@ -2034,6 +2038,8 @@ async function boot() {
   }
   ready = true;
   render();
+  // Com a tela pronta: guarda as capas de todos os livros, inclusive as que ainda não apareceram.
+  warmCovers(state.books, { delay: 1500 });
 }
 
 boot();
