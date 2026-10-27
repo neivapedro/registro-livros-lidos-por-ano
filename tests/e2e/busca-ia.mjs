@@ -1,9 +1,13 @@
-// Busca com IA (Gemini + Busca Google) e chaves em outro celular.
-// A API do Gemini é simulada (context.route em generativelanguage.googleapis.com): sucesso com
-// ISBN (conferido na BrasilAPI), sem ISBN, não encontrado, 429, chave inválida (400/401/403),
-// modelo fora do ar (passa ao próximo), tempo esgotado, sem internet, HTML malicioso, cancelar
-// ao digitar. Ajustes: cartão da chave, link "Enviar chaves para outro celular" (iPhone → Android),
-// confirmação antes de salvar, link colado e link inválido.
+// Busca com IA (Gemini lendo resultados do DuckDuckGo pelo url_context, gratuita) e chaves em
+// outro celular. A API do Gemini é simulada (context.route em generativelanguage.googleapis.com):
+// o simulador lê a página de resultados pedida no prompt (html ou lite.duckduckgo, ?q=...) e
+// responde conforme ela. Casos: sucesso com ISBN (conferido na BrasilAPI), duas etapas (ISBN
+// tirado do link da Amazon e conferido pela busca do ISBN: "Conferindo o ISBN…"), sem ISBN, não
+// encontrado, página que não abre (ERROR → lite), nenhuma página abre, 429 (limite gratuito),
+// chave inválida (400/403), modelo fora do ar (404) ou sobrecarregado (503) → próximo modelo,
+// tempo esgotado, sem internet, HTML malicioso, cancelar ao digitar. Ajustes: cartão "Busca com
+// IA (gratuita)", link "Enviar chaves para outro celular" (iPhone → Android), confirmação antes de
+// salvar, link colado e link inválido.
 // Capturas em tests/e2e/screens/busca-ia-*.png (claro e escuro, 390px; sobras em 320 e 430).
 // Uso: node tests/e2e/busca-ia.mjs   (precisa do Playwright, como o smoke.mjs)
 
@@ -47,27 +51,50 @@ const GEMINI_KEY = 'AQ.Ab8RN6KtestetestetestetestetestetesteXYZ';
 const BOOKS_KEY = `AIza${'B'.repeat(35)}`;
 const ISBN = '9788555325007';
 const PNG = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+const ISBN_BRUXA = '9788501927590'; // tirado do link da Amazon (/dp/8501927597); a BrasilAPI ainda não conhece
 
 const step = (msg) => console.log(`• ${msg}`);
 
 // ---------- Respostas simuladas do Gemini ----------
 
-const chunks = (...domains) => domains.map((d, i) => ({ web: { uri: `https://vertexaisearch.cloud.google.com/grounding-api-redirect/${i}`, title: d } }));
-const reply = (obj, grounding = chunks('amazon.com.br', 'skoob.com.br')) => ({
+const OK = 'URL_RETRIEVAL_STATUS_SUCCESS';
+const reply = (obj, status = OK, url = 'https://html.duckduckgo.com/html/?q=x') => ({
   candidates: [{
     content: { role: 'model', parts: [{ text: `Encontrei:\n\`\`\`json\n${JSON.stringify(obj)}\n\`\`\`` }] },
     finishReason: 'STOP',
-    groundingMetadata: { webSearchQueries: ['livro'], groundingChunks: grounding },
+    urlContextMetadata: { urlMetadata: [{ retrievedUrl: url, urlRetrievalStatus: status }] },
   }],
 });
 const apiError = (code, status, message, reason) => ({ error: { code, status, message, details: reason ? [{ '@type': 'type.googleapis.com/google.rpc.ErrorInfo', reason }] : [] } });
 
-/** Comportamento do Gemini simulado conforme a palavra buscada (o prompt leva o texto digitado). */
-function geminiBehavior(prompt, model) {
-  if (prompt.includes('cara debbie')) {
-    return { json: reply({ encontrado: true, livros: [{ titulo: 'Cara Debbie (IA)', autores: ['Freida McFadden'], paginas: 350, ano: 2026, isbn13: ISBN, editora: 'Arqueiro', idioma: 'pt', capaUrl: null, fontes: [] }] }) };
+/** O que o pedido manda ler: a busca (em minúsculas), se é a versão lite e se é a conferência do ISBN. */
+function readPrompt(prompt) {
+  const m = prompt.match(/https:\/\/(html|lite)\.duckduckgo\.com\/(?:html|lite)\/\?q=(\S+)/);
+  return {
+    q: m ? decodeURIComponent(m[2].replace(/\+/g, ' ')).toLowerCase() : '',
+    lite: m?.[1] === 'lite',
+    confirm: /Copie, só do texto dos resultados/.test(prompt),
+  };
+}
+
+/** Comportamento do Gemini simulado conforme a busca que ele foi mandado ler. */
+function geminiBehavior({ q, lite, confirm }, model) {
+  if (confirm) {
+    if (q === ISBN_BRUXA) return { delay: 900, json: reply({ encontrado: true, titulo: 'A BRUXA', paginas: 364, ano: '2026', editora: 'Record', fontes: ['travessa.com.br', 'https://www.disal.com.br/x'] }) };
+    return { json: reply({ encontrado: false }) };
   }
-  if (prompt.includes('sem isbn')) {
+  if (q.includes('cara debbie')) {
+    return { json: reply({ encontrado: true, livros: [{ titulo: 'Cara Debbie (IA)', autores: ['Freida McFadden'], paginas: 350, ano: 2026, isbn13: ISBN, editora: 'Arqueiro', fontes: ['https://www.amazon.com.br/x', 'https://www.skoob.com.br/y'] }] }) };
+  }
+  if (q.includes('a bruxa')) {
+    return {
+      json: reply({
+        encontrado: true,
+        livros: [{ titulo: 'A bruxa', autores: ['Freida McFadden'], editora: null, ano: null, paginas: null, isbn13: null, fontes: ['https://www.amazon.com.br/bruxa-Freida-McFadden/dp/8501927597'] }],
+      }),
+    };
+  }
+  if (q.includes('sem isbn')) {
     return {
       json: reply({
         encontrado: true,
@@ -75,19 +102,30 @@ function geminiBehavior(prompt, model) {
           { titulo: 'O Lançamento', subtitulo: 'Uma história', autores: ['Ana Autora'], paginas: 280, ano: 2026, isbn13: null, editora: 'Editora Nova', capaUrl: 'https://capas.exemplo.com.br/lancamento.png', fontes: ['https://www.editoranova.com.br/lancamento'] },
           { titulo: 'O Lançamento (edição de bolso)', autores: ['Ana Autora'], paginas: 99999, ano: 3000, isbn13: '9788555325006', capaUrl: 'http://capas.exemplo.com.br/bolso.png', fontes: [] },
         ],
-      }, chunks('editoranova.com.br', 'amazon.com.br')),
+      }),
     };
   }
-  if (prompt.includes('inexistente')) return { json: reply({ encontrado: false, livros: [] }) };
-  if (prompt.includes('cota')) return { status: 429, json: apiError(429, 'RESOURCE_EXHAUSTED', 'You exceeded your current quota. limit: 500') };
-  if (prompt.includes('chave ruim')) return { status: 400, json: apiError(400, 'INVALID_ARGUMENT', 'API key not valid. Please pass a valid API key.', 'API_KEY_INVALID') };
-  if (prompt.includes('sem permissao')) return { status: 403, json: apiError(403, 'PERMISSION_DENIED', 'Requests from referer are blocked.', 'API_KEY_HTTP_REFERRER_BLOCKED') };
-  if (prompt.includes('modelo velho')) {
+  if (q.includes('pagina fora')) {
+    return lite
+      ? { json: reply({ encontrado: true, livros: [{ titulo: 'Achado na versão lite', autores: ['L'], fontes: ['//duckduckgo.com/l/?uddg=https%3A%2F%2Fwww.loja.com.br%2Flivro&rut=1'] }] }, OK, 'https://lite.duckduckgo.com/lite/?q=x') }
+      : { json: reply({ encontrado: true, livros: [{ titulo: 'Inventado sem ler a página', autores: ['X'] }] }, 'URL_RETRIEVAL_STATUS_ERROR') };
+  }
+  if (q.includes('nada abre')) return { json: reply({ encontrado: false }, 'URL_RETRIEVAL_STATUS_ERROR') };
+  if (q.includes('inexistente')) return { json: reply({ encontrado: false }) };
+  if (q.includes('cota')) return { status: 429, json: apiError(429, 'RESOURCE_EXHAUSTED', 'You exceeded your current quota. Quota exceeded for metric: generate_content_free_tier_requests, limit: 15') };
+  if (q.includes('chave ruim')) return { status: 400, json: apiError(400, 'INVALID_ARGUMENT', 'API key not valid. Please pass a valid API key.', 'API_KEY_INVALID') };
+  if (q.includes('sem permissao')) return { status: 403, json: apiError(403, 'PERMISSION_DENIED', 'Requests from referer are blocked.', 'API_KEY_HTTP_REFERRER_BLOCKED') };
+  if (q.includes('modelo velho')) {
     return model === 'gemini-3.5-flash-lite'
       ? { status: 404, json: apiError(404, 'NOT_FOUND', 'models/gemini-3.5-flash-lite is not found for API version v1beta') }
       : { json: reply({ livros: [{ titulo: 'Achado no segundo modelo', autores: ['X'] }] }) };
   }
-  if (prompt.includes('malicioso')) {
+  if (q.includes('muito procurado')) {
+    return model === 'gemini-3.5-flash-lite' || model === 'gemini-flash-lite-latest'
+      ? { status: 503, json: apiError(503, 'UNAVAILABLE', 'This model is currently experiencing high demand. Spikes in demand are usually temporary.') }
+      : { json: reply({ livros: [{ titulo: 'Achado no terceiro modelo', autores: ['Y'] }] }) };
+  }
+  if (q.includes('malicioso')) {
     return {
       json: reply({
         livros: [{
@@ -96,13 +134,13 @@ function geminiBehavior(prompt, model) {
           editora: '<iframe src="javascript:alert(1)"></iframe>',
           paginas: '<b>12</b>',
           capaUrl: 'javascript:window.__xss=3',
-          fontes: ['javascript:alert(1)', 'https://<b>x</b>'],
+          fontes: ['javascript:alert(1)', 'https://<b>x</b>', '<img src=x onerror="window.__xss=4">'],
         }],
-      }, [{ web: { uri: 'https://vertexaisearch.cloud.google.com/x', title: '<img src=x onerror="window.__xss=4">' } }]),
+      }),
     };
   }
-  if (prompt.includes('demora') || prompt.includes('cancela')) return { hang: true };
-  return { json: reply({ encontrado: false, livros: [] }) };
+  if (q.includes('demora') || q.includes('cancela')) return { hang: true };
+  return { json: reply({ encontrado: false }) };
 }
 
 const geminiCalls = [];
@@ -112,21 +150,27 @@ async function mockNetwork(context) {
   await context.route('https://generativelanguage.googleapis.com/**', async (route) => {
     const req = route.request();
     const body = JSON.parse(req.postData() || '{}');
-    const prompt = (body.contents?.[0]?.parts?.[0]?.text || '').toLowerCase();
+    const prompt = body.contents?.[0]?.parts?.[0]?.text || '';
     const model = req.url().match(/models\/([^:]+):generateContent/)?.[1];
-    geminiCalls.push({ url: req.url(), method: req.method(), headers: req.headers(), body, model });
-    const b = geminiBehavior(prompt, model);
+    const read = readPrompt(prompt);
+    geminiCalls.push({ url: req.url(), method: req.method(), headers: req.headers(), body, model, prompt, ...read });
+    const b = geminiBehavior(read, model);
     if (b.hang) return; // nunca responde: tempo esgotado ou cancelamento
-    await route.fulfill({ status: b.status || 200, contentType: 'application/json', body: JSON.stringify(b.json) });
+    if (b.delay) await new Promise((r) => setTimeout(r, b.delay));
+    await route.fulfill({ status: b.status || 200, contentType: 'application/json', body: JSON.stringify(b.json) }).catch(() => {});
   });
   await context.route('https://brasilapi.com.br/**', (r) => (r.request().url().endsWith(ISBN)
     ? r.fulfill({ json: { isbn: ISBN, title: 'Cara Debbie', subtitle: null, authors: ['Freida McFadden'], page_count: 368, year: 2026, provider: 'cbl', cover_url: null } })
     : r.fulfill({ status: 404, json: { message: 'ISBN não encontrado' } })));
   await context.route('https://openlibrary.org/**', (r) => r.fulfill({ json: { docs: [] } }));
   await context.route('https://www.googleapis.com/**', (r) => r.fulfill({ json: { items: [] } }));
-  await context.route('https://covers.openlibrary.org/**', (r) => r.fulfill({ status: 404, body: '' }));
+  // A Open Library tem a capa d'A Bruxa pelo ISBN; das outras, não.
+  await context.route('https://covers.openlibrary.org/**', (r) => (r.request().url().includes(ISBN_BRUXA)
+    ? r.fulfill({ contentType: 'image/png', body: PNG })
+    : r.fulfill({ status: 404, body: '' })));
   await context.route('https://capas.exemplo.com.br/**', (r) => r.fulfill({ contentType: 'image/png', body: PNG }));
 }
+
 
 const browser = await playwright.chromium.launch();
 const iphone = await browser.newContext({
@@ -233,13 +277,16 @@ try {
   await page.goto(`${BASE}#/ajustes`);
   await onPage(page, 'ajustes');
   const heads = await page.$$eval('.set-head', (els) => els.map((e) => e.textContent));
-  assert.deepEqual(heads.slice(3, 6), ['Busca de livros', 'Busca com IA (Gemini)', 'Outro celular']);
+  assert.deepEqual(heads.slice(3, 6), ['Busca de livros', 'Busca com IA (gratuita)', 'Outro celular']);
   assert.equal(await page.getAttribute('#ai-key', 'type'), 'password');
   assert.match(await page.textContent('#set-aikey + .set-card .gkey-status'), /Sem chave — busca com IA desligada/);
   assert.equal(await page.isDisabled('[data-action="remove-aikey"]'), true);
   assert.equal(await page.isDisabled('[data-action="share-keys"]'), true, 'sem chave, nada a enviar');
   await page.click('.key-help summary');
-  assert.match(await page.textContent('.key-help'), /aistudio\.google\.com\/apikey[\s\S]*neivapedro\.github\.io[\s\S]*Generative Language API/);
+  const help = await page.textContent('#set-aikey + .set-card');
+  assert.match(help, /Usa a cota gratuita do Google, sem cartão/);
+  assert.match(help, /aistudio\.google\.com\/apikey[\s\S]*se aparecer pedido de cartão ou faturamento \(Set up billing\), ignore[\s\S]*neivapedro\.github\.io[\s\S]*Generative Language API/);
+  assert.ok(!/exige o faturamento|cobrad|orçamento|US\$/i.test(help), 'nada de faturamento ou preço');
   await inputsAt16(page, 'Ajustes');
   await tapTargets(page, '#set-aikey ~ .set-card button, #set-chaves ~ .set-card button, .key-help summary', 'Ajustes');
   await page.fill('#ai-key', '  chave-estranha  ');
@@ -269,13 +316,13 @@ try {
   await searchFor(page, 'demora');
   await page.click('[data-action="ai-search"]');
   await page.waitForSelector('.ai-box[aria-busy="true"]');
-  assert.match(await page.textContent('.ai-box'), /Buscando com IA/);
+  assert.match(await page.textContent('.ai-box'), /Procurando na internet…/);
   await tapTargets(page, '.ai-cancel', 'Cancelar');
   await shots(page, 'carregando', '.search-box');
   await page.click('[data-action="ai-cancel"]');
   await page.waitForSelector('[data-action="ai-search"]');
 
-  step('sucesso com ISBN: dados conferidos na BrasilAPI, fontes da Busca Google, chave só no cabeçalho');
+  step('sucesso com ISBN: dados conferidos na BrasilAPI, fontes dos resultados, url_context, chave só no cabeçalho');
   await searchFor(page, 'cara debbie');
   const before = geminiCalls.length;
   await page.click('[data-action="ai-search"]');
@@ -291,8 +338,10 @@ try {
   assert.equal(call.model, 'gemini-3.5-flash-lite');
   assert.equal(call.headers['x-goog-api-key'], GEMINI_KEY);
   assert.ok(!call.url.includes(GEMINI_KEY), 'a chave não vai no endereço');
-  assert.deepEqual(call.body.tools, [{ google_search: {} }]);
-  assert.match(call.body.contents[0].parts[0].text, /"cara debbie"/);
+  assert.deepEqual(call.body.tools, [{ url_context: {} }], 'só a ferramenta gratuita (nada de Busca Google)');
+  assert.match(call.prompt, /"cara debbie"/);
+  assert.match(call.prompt, /https:\/\/html\.duckduckgo\.com\/html\/\?q=cara\+debbie\+livro/);
+  assert.equal(geminiCalls.length - before, 1, 'com páginas e ano, um pedido só');
   await noOverflow(page, 'resultado da IA');
   await shots(page, 'resultado', '.search-box');
   await page.click('[data-action="pick-ai-result"]');
@@ -309,7 +358,44 @@ try {
   assert.ok(saved, 'livro salvo');
   assert.equal(saved.isbn, ISBN, 'o ISBN vai junto, como nos outros resultados');
 
-  step('sucesso sem ISBN: dados da IA, capa https, capa http descartada, números absurdos fora');
+  step('duas etapas: ISBN do link da Amazon, "Conferindo o ISBN…", páginas e editora da busca pelo ISBN, capa da Open Library');
+  await newBook(page);
+  await searchFor(page, 'A Bruxa Freida McFadden');
+  const b0 = geminiCalls.length;
+  const used0 = await page.evaluate(() => JSON.parse(localStorage.getItem('leituras:iaUso') || 'null')?.n || 0);
+  await page.click('[data-action="ai-search"]');
+  await page.waitForFunction(() => /Conferindo o ISBN…/.test(document.querySelector('.ai-box[aria-busy="true"]')?.textContent || ''));
+  await tapTargets(page, '.ai-cancel', 'Cancelar (conferindo)');
+  await shots(page, 'conferindo', '.search-box');
+  text = await aiResult(page);
+  const twoStep = geminiCalls.slice(b0);
+  assert.equal(twoStep.length, 2, 'procurar + conferir');
+  assert.match(twoStep[0].prompt, /html\.duckduckgo\.com\/html\/\?q=A\+Bruxa\+Freida\+McFadden\+livro/);
+  assert.equal(twoStep[1].confirm, true);
+  assert.equal(twoStep[1].q, ISBN_BRUXA);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('leituras:iaUso')).n), used0 + 1, 'duas etapas = uma busca no limite do mês');
+  const bruxa = await page.$eval('.ai-result', (el) => ({ text: el.textContent.replace(/\s+/g, ' '), img: el.querySelector('img')?.getAttribute('src') || null }));
+  assert.match(bruxa.text, /A bruxa/);
+  assert.match(bruxa.text, /Freida McFadden · 364 págs\. · 2026/);
+  assert.match(bruxa.text, /Record/);
+  assert.match(bruxa.text, /fonte: amazon\.com\.br, travessa\.com\.br, disal\.com\.br/);
+  assert.equal(bruxa.img, `https://covers.openlibrary.org/b/isbn/${ISBN_BRUXA}-M.jpg?default=false`);
+  await noOverflow(page, 'resultado em duas etapas');
+  await page.click('[data-action="pick-ai-result"]');
+  await page.waitForSelector('.picked');
+  assert.equal(await page.inputValue('#f-pages'), '364');
+  saved = await (async () => {
+    await page.click('.form-actions .btn-primary');
+    for (let i = 0; i < 50; i += 1) {
+      const b = (await readState(page))?.books?.find((x) => x.title === 'A bruxa');
+      if (b) return b;
+      await page.waitForTimeout(100);
+    }
+    return null;
+  })();
+  assert.equal(saved?.isbn, ISBN_BRUXA);
+
+  step('sucesso sem ISBN: dados da IA, nenhuma capa vinda da IA, números absurdos fora');
   await newBook(page);
   await searchFor(page, 'livro sem isbn');
   await page.click('[data-action="ai-search"]');
@@ -320,19 +406,20 @@ try {
   assert.match(cards[0].text, /280 págs\. · 2026/);
   assert.match(cards[0].text, /Editora Nova/);
   assert.match(cards[0].text, /fonte: editoranova\.com\.br/);
-  assert.equal(cards[0].img, 'https://capas.exemplo.com.br/lancamento.png');
-  assert.equal(cards[1].img, null, 'capa http não entra');
+  assert.equal(cards[0].img, null, 'endereço de capa da IA não vira imagem');
+  assert.equal(cards[1].img, null);
   assert.ok(!/99999|3000/.test(cards[1].text), 'páginas e ano impossíveis ficam de fora');
-  assert.match(cards[1].text, /fonte: editoranova\.com\.br, amazon\.com\.br/);
+  assert.match(cards[1].text, /sem fonte informada/);
   await page.click('.ai-result >> nth=0');
   await page.waitForSelector('.picked');
   assert.equal(await page.inputValue('#f-title'), 'O Lançamento: Uma história');
   assert.equal(await page.inputValue('#f-pages'), '280');
 
-  step('não encontrado, limite (429), chave inválida (400), sem permissão (403)');
+  step('não encontrado, nenhuma página abre, limite gratuito (429), chave inválida (400), sem permissão (403)');
   const cases = [
     ['livro inexistente', /A IA não encontrou esse livro/, false],
-    ['cota', /limite de uso da IA/, false],
+    ['nada abre', /Não consegui abrir a busca na internet agora/, true],
+    ['cota', /^Limite gratuito do Google por agora — tente mais tarde\.$/, false],
     ['chave ruim', /Chave da IA inválida/, false],
     ['sem permissao', /não tem permissão[\s\S]*Generative Language API/, false],
   ];
@@ -340,17 +427,34 @@ try {
   for (const [query, re, retry] of cases) {
     await searchFor(page, query);
     await page.click('[data-action="ai-search"]');
-    assert.match(await aiResult(page), re, query);
+    const shown = await aiResult(page);
+    assert.match(query === 'cota' ? await page.textContent('.ai-error') : shown, re, query);
+    assert.ok(!/faturamento|billing|cobra/i.test(shown), `${query}: nada de faturamento`);
     assert.equal(Boolean(await page.$('[data-action="ai-search"]')), retry, `${query}: tentar de novo`);
   }
   await shots(page, 'erro', '.search-box');
 
-  step('modelo que saiu do ar (404): tenta o próximo da lista');
-  const n0 = geminiCalls.length;
+  step('modelo que saiu do ar (404) ou sobrecarregado (503): tenta o próximo da lista');
+  let n0 = geminiCalls.length;
   await searchFor(page, 'modelo velho');
   await page.click('[data-action="ai-search"]');
   assert.match(await aiResult(page), /Achado no segundo modelo/);
-  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-3.8-flash']);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest']);
+  n0 = geminiCalls.length;
+  await searchFor(page, 'muito procurado');
+  await page.click('[data-action="ai-search"]');
+  assert.match(await aiResult(page), /Achado no terceiro modelo/);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest', 'gemini-3.1-flash-lite']);
+
+  step('página de resultados que não abre (ERROR): resposta descartada, tenta o DuckDuckGo lite uma vez');
+  n0 = geminiCalls.length;
+  await searchFor(page, 'pagina fora');
+  await page.click('[data-action="ai-search"]');
+  text = await aiResult(page);
+  assert.match(text, /Achado na versão lite/);
+  assert.ok(!/Inventado/.test(text), 'o que veio sem ler a página não aparece');
+  assert.match(text, /fonte: loja\.com\.br/);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.lite), [false, true]);
 
   step('HTML malicioso nos campos: aparece como texto, nada é executado');
   await searchFor(page, 'livro malicioso');

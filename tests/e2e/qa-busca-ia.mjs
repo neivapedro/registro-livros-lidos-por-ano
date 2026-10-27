@@ -1,11 +1,12 @@
 // QA da busca com IA e das chaves em outro celular (depois da primeira versão).
-// Gemini simulado como em busca-ia.mjs. Confere: resposta com citação "[1]" antes do JSON,
-// ISBN digitado que fica no livro, ISBN da IA de outro livro, faturamento num modelo só,
+// Gemini simulado como em busca-ia.mjs (url_context lendo o DuckDuckGo). Confere: resposta com
+// citação "[1]" antes do JSON, ISBN digitado que fica no livro, ISBN da IA de outro livro,
+// limite gratuito (429) sem trocar de modelo e sem falar de faturamento, 503 num modelo,
 // resultado atrasado que não passa por cima de outro, título enorme sem estourar a tela,
 // link de chaves estranho (outros parâmetros, valores que não são texto, espaços, enorme),
 // confirmação obrigatória, endereço e histórico limpos, chave fora de console, avisos,
 // backup e planilha, Compartilhar indisponível (cai no prompt), só uma das chaves e o limite
-// de segurança de 30 buscas com IA por mês no aparelho.
+// de segurança de 30 buscas com IA por mês no aparelho (uma por busca, mesmo com as duas etapas).
 // Uso: node tests/e2e/qa-busca-ia.mjs
 
 import { execSync } from 'node:child_process';
@@ -48,19 +49,25 @@ const ISBN_TYPED = '9788535914849'; // ninguém conhece
 const step = (msg) => console.log(`• ${msg}`);
 const b64 = (obj) => Buffer.from(typeof obj === 'string' ? obj : JSON.stringify(obj)).toString('base64url');
 
+const ISBN_TWO_STEPS = '9788532511010';
 const reply = (text) => ({
   candidates: [{
     content: { role: 'model', parts: [{ text }] },
     finishReason: 'STOP',
-    groundingMetadata: { webSearchQueries: ['livro'], groundingChunks: [{ web: { uri: 'https://vertexaisearch.cloud.google.com/x', title: 'amazon.com.br' } }] },
+    urlContextMetadata: { urlMetadata: [{ retrievedUrl: 'https://html.duckduckgo.com/html/?q=x', urlRetrievalStatus: 'URL_RETRIEVAL_STATUS_SUCCESS' }] },
   }],
 });
 const json = (obj) => reply(JSON.stringify(obj));
-const billing = { status: 429, json: { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for metric: generate_content_free_tier_requests, limit: 0, model: x' } } };
+const freeLimit = { status: 429, json: { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'You exceeded your current quota. Quota exceeded for metric: generate_content_free_tier_requests, limit: 15, model: x' } } };
+const busy = { status: 503, json: { error: { code: 503, status: 'UNAVAILABLE', message: 'This model is currently experiencing high demand.' } } };
 
 const geminiCalls = [];
 let slowCount = 0;
 function behavior(prompt, model) {
+  if (prompt.includes('copie, só do texto dos resultados')) {
+    return prompt.includes(ISBN_TWO_STEPS) ? { json: json({ titulo: 'Duas Etapas', paginas: 222, ano: 2025, editora: 'Editora QA', fontes: ['livraria.com.br'] }) } : { json: json({ encontrado: false }) };
+  }
+  if (prompt.includes('duas etapas')) return { json: json({ livros: [{ titulo: 'Duas Etapas', autores: ['F'], isbn13: ISBN_TWO_STEPS, fontes: ['https://www.amazon.com.br/x'] }] }) };
   if (prompt.includes('citacao')) {
     return { json: reply('Encontrei o livro [1] na Amazon [2]: {"encontrado": true, "livros": [{"titulo": "Livro Citado", "autores": ["Ana"], "paginas": 210}]}') };
   }
@@ -68,10 +75,8 @@ function behavior(prompt, model) {
   if (prompt.includes('isbn trocado')) {
     return { json: json({ livros: [{ titulo: 'Jardins Secretos', autores: ['Outra Pessoa'], paginas: 120, isbn13: ISBN_KNOWN }] }) };
   }
-  if (prompt.includes('faturamento')) {
-    if (prompt.includes('nenhum')) return billing;
-    return model === 'gemini-3.5-flash-lite' ? billing : { json: json({ livros: [{ titulo: 'Achado sem faturamento', autores: ['C'] }] }) };
-  }
+  if (prompt.includes('limite gratis')) return freeLimit;
+  if (prompt.includes('instavel')) return model === 'gemini-3.5-flash-lite' ? busy : { json: json({ livros: [{ titulo: 'Achado no segundo modelo', autores: ['C'] }] }) };
   if (prompt.includes('lento')) {
     slowCount += 1;
     return { delay: slowCount === 1 ? 2500 : 100, json: json({ livros: [{ titulo: `Resposta ${slowCount}`, autores: ['D'] }] }) };
@@ -231,15 +236,18 @@ try {
   saved = await saveAndFind('Jardins Secretos');
   assert.equal(saved.isbn, '');
 
-  step('sem faturamento no primeiro modelo: o segundo responde; em nenhum: aviso de faturamento');
+  step('503 no primeiro modelo: o segundo responde; limite gratuito (429): aviso, sem trocar de modelo nem falar de faturamento');
   await newBook();
-  const n0 = geminiCalls.length;
-  text = await aiSearchFor('faturamento');
-  assert.match(text, /Achado sem faturamento/);
-  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-3.8-flash']);
-  text = await aiSearchFor('faturamento nenhum');
-  assert.match(text, /exige o faturamento ativo[\s\S]*Google Cloud[\s\S]*5\.000 buscas do mês não são cobradas[\s\S]*alerta de orçamento/);
-  assert.ok(!/gr[aá]tis|gratuit/i.test(text));
+  let n0 = geminiCalls.length;
+  text = await aiSearchFor('instavel');
+  assert.match(text, /Achado no segundo modelo/);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-flash-lite-latest']);
+  n0 = geminiCalls.length;
+  text = await aiSearchFor('limite gratis');
+  assert.match(text, /Limite gratuito do Google por agora — tente mais tarde\./);
+  assert.ok(!/faturamento|billing|cobra|cartão/i.test(text));
+  assert.equal(geminiCalls.length - n0, 1, 'o 429 não gasta outro modelo');
+  assert.equal(await page.$('[data-action="ai-search"]'), null, 'sem "tentar de novo" na hora');
 
   step('resultado atrasado não passa por cima: cancelar e buscar de novo');
   await newBook();
@@ -371,12 +379,17 @@ try {
   await page.waitForSelector('.ai-error');
   await context.setOffline(false);
   assert.deepEqual(await usage(), { mes: '2026-10', n: 28 }, 'sem internet não conta');
-  await aiSearchFor('faturamento'); // dois modelos tentados = uma busca
+  await newBook();
+  n0 = geminiCalls.length;
+  text = await aiSearchFor('duas etapas'); // procurar + conferir o ISBN = uma busca
+  assert.equal(geminiCalls.length - n0, 2);
+  assert.match(text, /222 págs\. · 2025/);
+  assert.match(text, /fonte: amazon\.com\.br, livraria\.com\.br/);
   assert.deepEqual(await usage(), { mes: '2026-10', n: 29 });
   await page.goto(`${BASE}#/ajustes`);
   await onPage('ajustes');
   assert.match(await page.textContent('#set-aikey + .set-card'), /Buscas com IA este mês: 29 de 30/);
-  assert.match(await page.textContent('#set-aikey + .set-card .key-help'), /exige o faturamento ativo[\s\S]*5\.000 buscas do mês não são cobradas[\s\S]*alerta de orçamento/);
+  assert.match(await page.textContent('#set-aikey + .set-card .key-help'), /sem cartão[\s\S]*se aparecer pedido de cartão ou faturamento[\s\S]*ignore[\s\S]*no máximo 30 buscas/);
   await newBook();
   text = await aiSearchFor('livro citacao');
   assert.match(text, /Livro Citado/, 'a 30ª busca roda e o resultado continua escolhível');

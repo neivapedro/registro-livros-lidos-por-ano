@@ -14,6 +14,7 @@ function segmented(options, current, action, label, cls = '') {
 
 // ---------- Busca com IA (Gemini), abaixo dos resultados comuns ----------
 // Só aparece depois de uma busca comum, e só roda quando a pessoa toca no botão.
+// Carregando em duas etapas: "Procurando na internet…" e, se precisar, "Conferindo o ISBN…".
 // Todo texto vindo da IA passa por esc(): é dado não confiável.
 
 function aiCard(r, i) {
@@ -44,8 +45,8 @@ export function aiLookupBlock(lookup, aiEnabled, { limitReached = false } = {}) 
   if (ai.status === 'loading') {
     return `
     <div class="ai-box" aria-busy="true">
-      <p class="small ai-status">${icon('sparkle', { size: 16, stroke: 1.8, cls: 'accent' })}Buscando com IA na Busca Google…</p>
-      <span class="ai-progress" style="--ai-ms:${Number(ai.timeoutMs) || 25000}ms" aria-hidden="true"><span></span></span>
+      <p class="small ai-status" role="status">${icon('sparkle', { size: 16, stroke: 1.8, cls: 'accent' })}${ai.stage === 'confirm' ? 'Conferindo o ISBN…' : 'Procurando na internet…'}</p>
+      <span class="ai-progress" style="--ai-ms:${Math.round(Number(ai.timeoutMs)) || 25000}ms;--ai-delay:${-Math.round(Math.max(0, Number(ai.elapsedMs) || 0))}ms" aria-hidden="true"><span></span></span>
       <button type="button" class="btn-text small ai-cancel" data-action="ai-cancel">Cancelar</button>
     </div>`;
   }

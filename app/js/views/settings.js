@@ -5,7 +5,7 @@ import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 
-export const APP_VERSION = '1.4.2';
+export const APP_VERSION = '1.4.3';
 
 function stepper(label, value, action, hint) {
   return `
@@ -65,8 +65,8 @@ function geminiKeyCard(hasKey, used = 0) {
     ? `Limite de segurança do mês atingido (${AI_MONTHLY_LIMIT} buscas). Volta no dia 1º.`
     : `Buscas com IA este mês: ${used} de ${AI_MONTHLY_LIMIT}`}</p>`
     : '';
-  return group('aikey', 'Busca com IA (Gemini)', `
-        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” pesquisa na Busca Google. Só roda quando você toca nele. O Google exige o faturamento ativo (veja “Como criar a chave”).</p>
+  return group('aikey', 'Busca com IA (gratuita)', `
+        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” procura na internet e a IA do Google (Gemini) lê os resultados. Usa a cota gratuita do Google, sem cartão. Só roda quando você toca nele.</p>
         <div class="field">
           <label for="ai-key">Chave do Gemini</label>
           <input id="ai-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AQ… ou AIza…)" data-aikey>
@@ -77,15 +77,15 @@ function geminiKeyCard(hasKey, used = 0) {
           <button type="button" class="btn-ghost" data-action="remove-aikey"${hasKey ? '' : ' disabled'}>Remover</button>
         </div>
         <details class="key-help">
-          <summary>Como criar a chave</summary>
+          <summary>Como criar a chave (grátis, sem cartão)</summary>
           <ol>
             <li>Abra <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">aistudio.google.com/apikey</a> e entre com sua conta Google.</li>
-            <li>Toque em <em>Create API key</em> (pode ser no mesmo projeto do Google Cloud da chave do Google Books) e copie a chave.</li>
-            <li>O Google exige o faturamento ativo no projeto para a busca com Google (<em>Set up billing</em>, no Google Cloud); sem ele a busca com IA não funciona. As primeiras 5.000 buscas do mês não são cobradas; depois, o Google cobra (hoje US$ 14 por 1.000 buscas), e o uso da IA em si também tem um custo pequeno. Veja os <a href="https://ai.google.dev/gemini-api/docs/pricing" target="_blank" rel="noopener noreferrer">preços</a>.</li>
-            <li>Recomendado: no Google Cloud › Faturamento › <em>Orçamentos e alertas</em>, crie um alerta de orçamento baixo (por exemplo, R$ 1) para ser avisado de qualquer cobrança. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular.</li>
-            <li>No <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud › Credenciais</a>, toque na chave e confira as restrições: em <em>Restrições de aplicativos</em>, “Sites” com <code>https://neivapedro.github.io/*</code>; em <em>Restrições de API</em>, só a “Generative Language API”.</li>
+            <li>Toque em <em>Create API key</em> e copie a chave.</li>
+            <li>Não precisa de cartão nem de faturamento: se aparecer pedido de cartão ou faturamento (<em>Set up billing</em>), ignore.</li>
+            <li>Opcional: no <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud › Credenciais</a>, toque na chave e restrinja: em <em>Restrições de aplicativos</em>, “Sites” com <code>https://neivapedro.github.io/*</code>; em <em>Restrições de API</em>, só a “Generative Language API”.</li>
             <li>Volte aqui, cole a chave e toque em Salvar.</li>
           </ol>
+          <p class="muted small">A cota gratuita tem limite por minuto e por dia; se acabar, a busca avisa e volta a funcionar mais tarde. Cada busca usa um ou dois pedidos dela. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular.</p>
         </details>`, 'A chave fica só neste aparelho e não vai para o backup. Use uma chave separada da do Google Books, liberada só para a IA.', 'gkey');
 }
 
