@@ -255,20 +255,28 @@ function cleanCoverList(list, limit = MAX_COVERS * 2) {
 // - hosts: se cada site deixa ler a imagem (CORS) ou não, descoberto na primeira capa dele;
 // - fit: quantas capas couberam da última vez que o espaço do aparelho apertou.
 let meta = null;
+// Leitura única: várias capas pedidas juntas logo que o service worker acorda esperam a
+// mesma leitura (sem ela, as outras seguiam sem as anotações e perguntavam CORS de novo).
+let metaLoading = null;
 
-async function loadMeta(cache) {
-  if (meta) return meta;
-  meta = { keep: [], hosts: {}, fit: null };
+function loadMeta(cache) {
+  if (!metaLoading) metaLoading = readMeta(cache);
+  return metaLoading;
+}
+
+async function readMeta(cache) {
+  const loaded = { keep: [], hosts: {}, fit: null };
   try {
     const stored = await (await cache.match(META_KEY))?.json();
     if (stored && typeof stored === 'object') {
-      meta.keep = cleanCoverList(stored.keep);
-      if (stored.hosts && typeof stored.hosts === 'object') meta.hosts = stored.hosts;
-      if (stored.fit && Number.isFinite(stored.fit.n)) meta.fit = stored.fit;
+      loaded.keep = cleanCoverList(stored.keep);
+      if (stored.hosts && typeof stored.hosts === 'object') loaded.hosts = stored.hosts;
+      if (stored.fit && Number.isFinite(stored.fit.n)) loaded.fit = stored.fit;
     }
   } catch {
     // Anotação ilegível: começa do zero (só custa algumas consultas a mais).
   }
+  meta = loaded;
   return meta;
 }
 
@@ -330,11 +338,21 @@ function trimCovers(max = MAX_COVERS) {
   return trimming;
 }
 
-/** Guarda a capa; sem espaço no aparelho, libera metade e segue sem ela. */
+/** Falta de espaço no aparelho (e não rede caída no meio da imagem, tempo esgotado...). */
+function isQuotaError(err) {
+  return err?.name === 'QuotaExceededError' || err?.code === 22 || /quota/i.test(err?.name || '');
+}
+
+/**
+ * Guarda a capa; sem espaço no aparelho, libera metade e segue sem ela. Outro erro (a rede
+ * caiu enquanto a imagem chegava, a pré-carga desistiu por tempo) não apaga capa nenhuma:
+ * ele segue para quem chamou, como falha de rede.
+ */
 async function putCover(cache, url, response, { trim = true } = {}) {
   try {
     await cache.put(url, response);
-  } catch {
+  } catch (err) {
+    if (!isQuotaError(err)) throw err;
     await trimCovers(Math.floor(coverLimit() / 2));
     return false;
   }
@@ -402,7 +420,7 @@ async function coverResponse(request, url, event) {
   } catch {
     return Response.error();
   }
-  if (cache && isStorable(response)) event.waitUntil(putCover(cache, url.href, response.clone()));
+  if (cache && isStorable(response)) event.waitUntil(putCover(cache, url.href, response.clone()).catch(() => {}));
   return response;
 }
 
