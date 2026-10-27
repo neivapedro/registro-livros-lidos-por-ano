@@ -17,6 +17,7 @@ const SHELL = [
   './js/tags.js',
   './js/upnext.js',
   './js/books-api.js',
+  './js/ai-search.js',
   './js/cover-color.js',
   './js/sheet.js',
   './js/longpress.js',

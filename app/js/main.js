@@ -52,6 +52,8 @@ import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
 import { finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
+import { AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
+import { decodeKeysParam, keysLink, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -236,7 +238,10 @@ function enterRoute(route) {
   }
   if (route.name === 'novo' || isBookEdit(route)) enterBookNotes(route);
   if (route.name === 'retro') ui.retroSlide = 0;
-  if (route.name === 'ajustes') refreshStorageInfo();
+  if (route.name === 'ajustes') {
+    refreshStorageInfo();
+    takeKeysFromRoute(route);
+  }
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
   if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
@@ -591,7 +596,7 @@ async function setCoverFromPhoto(input) {
 
 function renderLookup() {
   const el = document.getElementById('lookup-results');
-  if (el) el.innerHTML = lookupResults(ui.lookup);
+  if (el) el.innerHTML = lookupResults(ui.lookup, { aiEnabled: Boolean(ui.geminiKey) });
 }
 
 async function runLookup() {
@@ -2008,6 +2013,187 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
     });
   }).catch(() => {});
 }
+
+// ---------- Busca com IA (Gemini) e chaves em outro celular ----------
+// Bloco próprio. A busca com IA só roda no toque do botão, com a chave guardada neste
+// aparelho (prefs.js), e é cancelada quando a pessoa volta a digitar ou sai da tela.
+// O link de chaves (#/ajustes?chaves=...) só mostra um pedido de confirmação em Ajustes.
+
+ui.geminiKey = readGeminiKey(localStorage);
+ui.keyImport = null;
+let aiAbort = null;
+
+function cancelAiSearch() {
+  aiAbort?.abort();
+  aiAbort = null;
+}
+
+async function runAiSearch() {
+  const lookup = ui.lookup;
+  const query = lookup.query;
+  if (!ui.geminiKey || query.trim().length < 2) return;
+  cancelAiSearch();
+  const ctrl = new AbortController();
+  aiAbort = ctrl;
+  lookup.ai = { status: 'loading', timeoutMs: AI_TIMEOUT_MS, results: [] };
+  renderLookup();
+  const stale = () => ctrl.signal.aborted || ui.lookup !== lookup || lookup.query !== query;
+  try {
+    const found = await aiSearch(query, { key: ui.geminiKey, signal: ctrl.signal });
+    // Com ISBN, os dados oficiais (BrasilAPI, Open Library, Google Books) valem mais que os da IA.
+    const lookupIsbn = (isbn) => searchBooks(isbn, { signal: ctrl.signal, googleKey: googleBooksKey() }).then((o) => o.results[0] || null);
+    const results = await enrichAiResults(found.results, lookupIsbn);
+    if (stale()) return;
+    lookup.ai = { status: 'done', results };
+  } catch (err) {
+    if (stale() || err?.code === 'cancelled') return;
+    const code = err?.code || 'server';
+    lookup.ai = { status: 'error', code, message: aiErrorMessage(code), retry: isRetryable(code), results: [] };
+  } finally {
+    if (aiAbort === ctrl) aiAbort = null;
+  }
+  renderLookup();
+}
+
+/** Abriu Ajustes por um link com chaves: guarda para confirmar e tira as chaves do endereço. */
+function takeKeysFromRoute(route) {
+  if (!route.query.has('chaves')) return;
+  ui.keyImport = decodeKeysParam(route.query.get('chaves'));
+  if (!ui.keyImport) toast('Esse link não tem chaves válidas. Peça para enviarem de novo.');
+  try {
+    history.replaceState(history.state, '', '#/ajustes');
+  } catch { /* sem acesso ao histórico: o endereço fica, mas nada é salvo sem confirmar */ }
+  currentKey = parseRoute().key;
+  historyKeys.set(historyIndex, currentKey);
+}
+
+function saveGeminiKeyFromInput() {
+  const result = saveGeminiKey(localStorage, document.querySelector('[data-aikey]')?.value);
+  if (!result.key) {
+    toast('Cole a chave antes de salvar.');
+    return;
+  }
+  if (!result.ok) {
+    toast('Não foi possível salvar a chave neste aparelho.');
+    return;
+  }
+  ui.geminiKey = result.key;
+  render();
+  if (result.warning) {
+    toast('Chave salva, mas ela não parece uma chave do Gemini (começa com AQ. ou AIza). Confira se colou inteira.', { duration: 7000 });
+  } else {
+    toast('Chave salva. O botão “Buscar com IA” aparece na busca de livros.');
+  }
+}
+
+async function shareKeys() {
+  const link = keysLink(`${location.origin}${location.pathname}`, { googleBooksKey: ui.googleKey, geminiKey: ui.geminiKey });
+  if (!link) {
+    toast('Salve uma chave antes de enviar.');
+    return;
+  }
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: 'Chaves do Leituras', text: 'Abra este link no outro celular para salvar as chaves de busca do Leituras:', url: link });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link copiado. Cole no WhatsApp ou no e-mail e abra no outro celular.', { duration: 6000 });
+  } catch {
+    window.prompt('Copie o link e envie para o outro celular:', link);
+  }
+}
+
+function importKeys() {
+  const keys = ui.keyImport;
+  if (!keys) return;
+  const saved = [];
+  if (keys.googleBooksKey) {
+    const r = saveGoogleKey(localStorage, keys.googleBooksKey);
+    if (r.ok) {
+      ui.googleKey = r.key;
+      saved.push('Google Books');
+    }
+  }
+  if (keys.geminiKey) {
+    const r = saveGeminiKey(localStorage, keys.geminiKey);
+    if (r.ok) {
+      ui.geminiKey = r.key;
+      saved.push('IA');
+    }
+  }
+  ui.keyImport = null;
+  render();
+  toast(saved.length ? `Chaves salvas neste celular (${saved.join(' e ')}).` : 'Não foi possível salvar as chaves neste aparelho.');
+}
+
+Object.assign(actions, {
+  'ai-search'() { runAiSearch(); },
+  'ai-cancel'() {
+    cancelAiSearch();
+    delete ui.lookup.ai;
+    renderLookup();
+  },
+  'pick-ai-result'(el) {
+    const r = ui.lookup.ai?.results?.[Number(el.dataset.index)];
+    if (!r || !ui.draft) return;
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn });
+    ui.picked = true;
+    render();
+  },
+  'save-aikey'() { saveGeminiKeyFromInput(); },
+  'remove-aikey'() {
+    removeGeminiKey(localStorage);
+    ui.geminiKey = '';
+    render();
+    toast('Chave removida. A busca com IA fica desligada.');
+  },
+  'share-keys'() { shareKeys(); },
+  'paste-keys'() {
+    const keys = decodeKeysParam(document.querySelector('[data-keylink]')?.value);
+    if (!keys) {
+      toast('Cole o link inteiro recebido (ele tem “chaves=” no fim).');
+      return;
+    }
+    ui.keyImport = keys;
+    render();
+    window.scrollTo(0, 0);
+  },
+  'import-keys'() { importKeys(); },
+  'cancel-import-keys'() {
+    ui.keyImport = null;
+    render();
+    toast('Nada foi salvo.');
+  },
+});
+
+// Voltou a digitar: a busca com IA anterior (e o resultado dela) deixa de valer.
+document.addEventListener('input', (e) => {
+  if (!('lookup' in e.target.dataset) || !ui.lookup.ai) return;
+  cancelAiSearch();
+  delete ui.lookup.ai;
+  renderLookup();
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter') return;
+  if ('aikey' in e.target.dataset) {
+    e.preventDefault();
+    saveGeminiKeyFromInput();
+  } else if ('keylink' in e.target.dataset) {
+    e.preventDefault();
+    actions['paste-keys']();
+  }
+});
+
+window.addEventListener('hashchange', () => {
+  cancelAiSearch();
+  if (parseRoute().name !== 'ajustes') ui.keyImport = null;
+});
 
 // ---------- Aparência e títulos grandes (v1.4) ----------
 // O tema já veio aplicado pelo index.html (antes do CSS); aqui a troca em Ajustes e o

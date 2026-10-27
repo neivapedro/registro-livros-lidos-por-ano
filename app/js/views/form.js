@@ -11,7 +11,64 @@ function segmented(options, current, action, label, cls = '') {
   return `<div class="segmented${cls ? ` ${cls}` : ''}" role="group" aria-label="${esc(label)}" style="--seg-count:${options.length}">${buttons}</div>`;
 }
 
-export function lookupResults(lookup) {
+// ---------- Busca com IA (Gemini), abaixo dos resultados comuns ----------
+// Só aparece depois de uma busca comum, e só roda quando a pessoa toca no botão.
+// Todo texto vindo da IA passa por esc(): é dado não confiável.
+
+function aiCard(r, i) {
+  const meta = [r.authors, r.pages ? `${r.pages} págs.` : '', r.year].filter(Boolean).join(' · ');
+  const from = r.sources?.length ? `fonte: ${r.sources.join(', ')}` : 'sem fonte informada';
+  return `
+    <button type="button" class="result ai-result" data-action="pick-ai-result" data-index="${i}">
+      ${cover(r, { size: 'xs', showText: false })}
+      <span class="result-text">
+        <span class="result-title">${esc(r.title)}</span>
+        <span class="muted small">${esc(meta)}</span>
+        ${r.publisher ? `<span class="muted small">${esc(r.publisher)}</span>` : ''}
+        <span class="ai-source small">${esc(from)}</span>
+        ${r.checkedBy ? `<span class="muted small">${icon('check', { size: 12, stroke: 2.4 })} Dados conferidos: ${esc(r.checkedBy)}</span>` : ''}
+      </span>
+    </button>`;
+}
+
+export function aiLookupBlock(lookup, aiEnabled) {
+  if (!lookup.searched || lookup.loading || lookup.query.trim().length < 2) return '';
+  if (!aiEnabled) return '<p class="faint small ai-hint">Ative a busca com IA em Ajustes</p>';
+  const ai = lookup.ai || {};
+  const button = (label) => `<button type="button" class="btn-outline ai-btn" data-action="ai-search">${icon('sparkle', { size: 18, stroke: 1.8 })}${label}</button>`;
+  if (ai.status === 'loading') {
+    return `
+    <div class="ai-box" aria-busy="true">
+      <p class="small ai-status">${icon('sparkle', { size: 16, stroke: 1.8, cls: 'accent' })}Buscando com IA na Busca Google…</p>
+      <span class="ai-progress" style="--ai-ms:${Number(ai.timeoutMs) || 25000}ms" aria-hidden="true"><span></span></span>
+      <button type="button" class="btn-text small ai-cancel" data-action="ai-cancel">Cancelar</button>
+    </div>`;
+  }
+  if (ai.status === 'error') {
+    return `
+    <div class="ai-box">
+      <p class="small ai-error">${esc(ai.message)}</p>
+      ${ai.retry ? button('Tentar de novo com IA') : ''}
+    </div>`;
+  }
+  if (ai.status === 'done' && !ai.results.length) {
+    return `
+    <div class="ai-box">
+      <p class="small ai-status">A IA não encontrou esse livro.</p>
+      <p class="muted small">Confira a grafia ou tente pelo ISBN, ou preencha os dados abaixo.</p>
+    </div>`;
+  }
+  if (ai.status === 'done') {
+    return `
+    <div class="ai-box">
+      <p class="small ai-label">${icon('sparkle', { size: 16, stroke: 1.8, cls: 'accent' })}Encontrado pela IA · confira os dados</p>
+      <div class="results">${ai.results.map(aiCard).join('')}</div>
+    </div>`;
+  }
+  return `<div class="ai-box">${button('Buscar com IA')}</div>`;
+}
+
+export function lookupResults(lookup, { aiEnabled = false } = {}) {
   if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
   // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
   // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
@@ -19,9 +76,10 @@ export function lookupResults(lookup) {
   const isbnTip = lookup.searched && !lookup.isbn
     ? '<p class="muted small lookup-tip">Não achou? Digite o ISBN: os 13 números perto do código de barras, no verso do livro.</p>'
     : '';
+  const ai = aiLookupBlock(lookup, aiEnabled);
   if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
     const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
-    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>${isbnTip}`;
+    return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>${isbnTip}${ai}`;
   }
   return lookup.results.map((r, i) => `
     <button type="button" class="result" data-action="pick-result" data-index="${i}">
@@ -30,7 +88,7 @@ export function lookupResults(lookup) {
         <span class="result-title">${esc(r.title)}</span>
         <span class="muted small">${esc([r.authors, r.pages ? `${r.pages} págs.` : '', r.year].filter(Boolean).join(' · '))}</span>
       </span>
-    </button>`).join('') + isbnTip;
+    </button>`).join('') + isbnTip + ai;
 }
 
 function lookupBlock(ui) {
@@ -42,7 +100,7 @@ function lookupBlock(ui) {
         <input id="lookup" type="search" inputmode="search" autocomplete="off" enterkeyhint="search"
           placeholder="Título, autor ou ISBN" value="${esc(ui.lookup.query)}" data-lookup>
       </div>
-      <div id="lookup-results" class="results" aria-live="polite">${lookupResults(ui.lookup)}</div>
+      <div id="lookup-results" class="results" aria-live="polite">${lookupResults(ui.lookup, { aiEnabled: Boolean(ui.geminiKey) })}</div>
     </section>`;
 }
 
