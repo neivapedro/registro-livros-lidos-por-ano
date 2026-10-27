@@ -1876,8 +1876,6 @@ p.ficha-progress-label { text-align: left; }
 .ficha-pace { display: flex; flex-direction: column; gap: 2px; font-size: 13px; color: var(--text-soft); }
 .ficha-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .ficha-actions .btn-timer, .ficha-actions .btn-outline { min-height: 48px; width: 100%; font-size: 14px; }
-.ficha-progress-edit { border-top: 0; padding-top: 0; }
-.ficha-progress-edit .btn-text { align-self: center; min-height: 44px; padding: 0 16px; }
 .ficha-card .btn-ghost.is-on { border-color: var(--accent); }
 .ficha-stop { font-size: 17px; font-weight: 700; }
 .ficha-reason { display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); }

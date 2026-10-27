@@ -80,15 +80,22 @@ function readBlock(book) {
   const tiles = [];
   // Do início ao fim, contando os dias sem leitura: "dias de leitura" é o que o gráfico de ritmo
   // conta (só os dias com registro no diário), e os dois números lado a lado se contradiriam.
-  if (days) tiles.push([num(days), days === 1 ? 'dia' : 'dias corridos']);
-  if (days && pages) {
-    const perDay = pages / days;
-    tiles.push([perDay >= 10 ? num(perDay) : decimal(perDay, 1).replace(/,0$/, ''), 'págs. por dia']);
+  if (days === 1) {
+    // Lido num dia só: "1 dia · 90 págs. por dia · 90 páginas" repetiria o mesmo número.
+    tiles.push(['Um dia', 'do início ao fim']);
+    if (pages) tiles.push([num(pages), 'páginas']);
+    if (minutes) tiles.push([formatMinutes(minutes), 'no cronômetro']);
+  } else {
+    if (days) tiles.push([num(days), 'dias corridos']);
+    if (days && pages) {
+      const perDay = pages / days;
+      tiles.push([perDay >= 10 ? num(perDay) : decimal(perDay, 1).replace(/,0$/, ''), 'págs. por dia']);
+    }
+    if (minutes) tiles.push([formatMinutes(minutes), 'no cronômetro']);
+    else if (pages) tiles.push([num(pages), 'páginas']);
   }
-  if (minutes) tiles.push([formatMinutes(minutes), 'no cronômetro']);
-  else if (pages) tiles.push([num(pages), 'páginas']);
   const line = hasPeriod
-    ? `Lido em ${plural(days, 'dia', 'dias')} · ${period(book.startDate, book.endDate)}`
+    ? `Lido em ${days === 1 ? 'um dia' : `${num(days)} dias`} · ${period(book.startDate, book.endDate)}`
     : isIsoDate(book.endDate) ? `Concluído em ${fullDate(book.endDate)}` : '';
   return `
     ${tiles.length >= 2 ? `<div class="ficha-stats">${tiles.map(([v, l]) => `<div><strong>${esc(v)}</strong><span>${esc(l)}</span></div>`).join('')}</div>` : ''}

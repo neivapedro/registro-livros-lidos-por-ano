@@ -242,10 +242,10 @@ try {
   assert.match(await page.getAttribute('.rchart-plot', 'aria-label'),
     /^Por semana, páginas de 1 jan → 10 set: 64 dias de leitura · média 10 págs\.\/dia\. Máximo de 20 págs\. numa semana\.$/);
 
-  step('lido num dia só: "1 dia" e a data uma vez');
+  step('lido num dia só: "um dia" e a data uma vez');
   await page.goto(`${BASE}#/livro/one`);
   await onDetail('one');
-  assert.equal(await text('.ficha-period'), 'Lido em 1 dia · 10 out 2026');
+  assert.equal(await text('.ficha-period'), 'Lido em um dia · 10 out 2026');
   assert.equal(await page.locator('.rchart-bar').count(), 1);
   assert.equal(await text('.rchart-axis'), '10 out');
 

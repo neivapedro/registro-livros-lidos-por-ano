@@ -513,6 +513,23 @@ try {
   assert.match(await page.textContent('.results-count'), /5 livros encontrados/);
   await page.click('[data-action="clear-filters"]');
   await page.waitForFunction(() => !document.querySelector('.fchip.is-on'));
+  // Filtro lá no fim da fileira: ao voltar para a Buscar, o chip ativo está à vista.
+  const tagValue = await page.$eval('[data-filter="tag"] option:nth-child(2)', (o) => o.value);
+  await page.selectOption('[data-filter="tag"]', tagValue);
+  await page.waitForSelector('.fchip.is-on');
+  const chipInView = () => page.evaluate(() => {
+    const row = document.querySelector('.fchips').getBoundingClientRect();
+    const chip = document.querySelector('.fchip.is-on').getBoundingClientRect();
+    return chip.left >= row.left - 1 && chip.right <= row.right + 1;
+  });
+  assert.ok(await chipInView(), 'chip escolhido continua à vista depois de redesenhar');
+  await page.goto(`${BASE}#/inicio`);
+  await onPage('inicio');
+  await page.goto(`${BASE}#/buscar`);
+  await onPage('buscar');
+  assert.ok(await chipInView(), 'ao voltar, o filtro ativo (Etiqueta) aparece na fileira');
+  await page.click('[data-action="clear-filter"][data-key="tag"]');
+  await page.waitForFunction(() => !document.querySelector('.fchip.is-on'));
   // Filtro vindo de um gráfico do Resumo continua com o seu chip.
   await page.goto(`${BASE}#/resumo/2026?aba=gostos`);
   await onPage('resumo');

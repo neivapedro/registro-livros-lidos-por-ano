@@ -98,8 +98,14 @@ test('ficha: lido mostra dias, páginas por dia, período, nota e favorito', () 
 
 test('ficha: lido num dia só e favorito só para lido', () => {
   const html = view(book({ startDate: '2026-10-10', endDate: '2026-10-10', journal: [] }));
-  assert.match(html, /<strong>1<\/strong><span>dia<\/span>/);
-  assert.match(html, /Lido em 1 dia · 10 out 2026</);
+  // Sem repetir o mesmo número ("1 dia · 256 págs. por dia · 256 páginas").
+  assert.match(html, /<strong>Um dia<\/strong><span>do início ao fim<\/span>/);
+  assert.match(html, /<strong>256<\/strong><span>páginas<\/span>/);
+  assert.doesNotMatch(html, /págs\. por dia/);
+  assert.match(html, /Lido em um dia · 10 out 2026</);
+  const timed = view(book({ startDate: '2026-10-10', endDate: '2026-10-10', journal: [e('2026-10-10', 0, 256, { minutes: 200 })] }));
+  assert.match(timed, /<strong>3h 20min<\/strong><span>no cronômetro/);
+  assert.match(timed, /<strong>256<\/strong><span>páginas/);
   assert.doesNotMatch(html, /10 out → 10 out/);
   assert.doesNotMatch(view(book({ status: 'lendo', endDate: null, favorite: false })), /detail-fav/);
 });

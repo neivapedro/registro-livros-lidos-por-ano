@@ -224,6 +224,9 @@ function render() {
   if (!ready) return;
   const route = parseRoute();
   let scrollY = null;
+  const sameScreen = route.key === currentKey;
+  // Filtros da Buscar: a fileira de chips rola na horizontal e não deve pular ao redesenhar.
+  const chipsScroll = sameScreen ? root.querySelector('.fchips')?.scrollLeft : null;
   if (route.key !== currentKey) {
     ui.editingProgress = null;
     closeSheet({ immediate: true, keepFocus: true });
@@ -294,6 +297,7 @@ function render() {
   root.innerHTML = html;
   root.dataset.page = route.name;
   if (scrollY) window.scrollTo(0, scrollY);
+  if (route.name === 'buscar') syncFilterChips(chipsScroll);
   applyTints(root);
   revealFinishFields();
   if (route.name === 'resumo') summaryIntro(route);
@@ -313,6 +317,25 @@ function render() {
   const summaryLink = nav.querySelector('[data-nav="resumo"]');
   if (summaryLink) summaryLink.href = `#/resumo/${ui.year}`;
   syncLargeTitle();
+}
+
+/**
+ * Fileira de filtros da Buscar: redesenhada na mesma tela, fica onde estava; ao chegar na
+ * tela, o primeiro filtro ativo aparece (não fica escondido à direita, fora da vista).
+ */
+function syncFilterChips(previousScroll) {
+  const row = root.querySelector('.fchips');
+  if (!row) return;
+  if (previousScroll != null) {
+    row.scrollLeft = previousScroll;
+    return;
+  }
+  const chip = row.querySelector('.fchip.is-on');
+  if (!chip) return;
+  const pad = parseFloat(getComputedStyle(row).paddingLeft) || 0;
+  const box = chip.getBoundingClientRect();
+  const left = box.left - row.getBoundingClientRect().left + row.scrollLeft;
+  if (left + box.width > row.clientWidth - pad) row.scrollLeft = left - pad;
 }
 
 // ---------- Persistência ----------
