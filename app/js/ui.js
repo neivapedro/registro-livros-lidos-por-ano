@@ -3,6 +3,7 @@
 import { formatShort } from './dates.js';
 import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
+import { isGoogleCoverHost, normalizeCoverUrl } from './cover-url.js';
 
 const ESC = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
 
@@ -84,8 +85,9 @@ export function cover(book, { size = 'md', showText = true } = {}) {
   const text = showText
     ? `<span class="cover-title">${esc(book.title)}</span><span class="cover-author">${esc(author)}</span>`
     : '';
-  const img = book.cover
-    ? `<img class="cover-img" src="${esc(book.cover)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
+  const src = normalizeCoverUrl(book.cover);
+  const img = src
+    ? `<img class="cover-img" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : '';
   return `<span class="cover cover-${size}" style="--cover-bg:${bg};--cover-fg:${fg}">${text}${img}</span>`;
 }
@@ -95,13 +97,14 @@ export function cover(book, { size = 'md', showText = true } = {}) {
  * Google Books: pede largura de 800px; Open Library: versão L (mantendo ?default=false
  * da capa pelo ISBN). Foto do celular: a própria.
  */
-export function largeCoverUrl(url) {
-  if (typeof url !== 'string' || !url) return null;
+export function largeCoverUrl(raw) {
+  const url = normalizeCoverUrl(raw);
+  if (!url) return null;
   if (url.startsWith('data:')) return url;
   try {
     const u = new URL(url);
     if (u.hostname === 'covers.openlibrary.org') return url.replace(/-[SM]\.jpg(?=$|\?)/, '-L.jpg');
-    if (u.hostname.endsWith('books.google.com') || u.hostname.endsWith('googleusercontent.com')) {
+    if (isGoogleCoverHost(u.hostname)) {
       u.searchParams.delete('zoom');
       u.searchParams.set('fife', 'w800');
       return u.href;
