@@ -476,8 +476,14 @@ try {
       window.scrollTo(0, head.getBoundingClientRect().top + window.scrollY + 60);
     });
     await page.waitForTimeout(100);
-    const sticky = await page.evaluate(() => Math.round(document.querySelector('.year-head').getBoundingClientRect().top));
-    assert.equal(sticky, 0, `${width}px: cabeçalho do ano não fica preso no topo`);
+    // Preso logo abaixo da barra compacta de vidro (V18), sem ficar escondido atrás dela.
+    const sticky = await page.evaluate(() => {
+      const bar = document.querySelector('.cbar');
+      return { top: Math.round(document.querySelector('.year-head').getBoundingClientRect().top), bar: Math.round(bar.getBoundingClientRect().bottom), on: bar.classList.contains('is-on') };
+    });
+    assert.ok(sticky.on, `${width}px: barra compacta não apareceu ao rolar`);
+    assert.equal(sticky.top, sticky.bar, `${width}px: cabeçalho do ano não fica preso sob a barra compacta`);
+    assert.equal(sticky.bar, 48, `${width}px: barra compacta com 48px`);
     await page.evaluate(() => { document.getElementById('app').style.paddingBottom = ''; });
     await page.click('[data-action="shelf-mode"][data-value="capas"]');
     await page.waitForSelector('.cover-grid');

@@ -119,7 +119,7 @@ async function waitState(predicate) {
 const bookIn = (s, id) => s.books.find((b) => b.id === id);
 const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n && !window.__vtActive, name);
-const onDetail = (id) => page.waitForFunction((i) => location.hash === `#/livro/${i}` && document.querySelector('.ficha-hero') && !window.__vtActive, id);
+const onDetail = (id) => page.waitForFunction((i) => location.hash === `#/livro/${i}` && document.querySelector(`.ficha-hero[data-id="${i}"]`) && !window.__vtActive, id);
 const text = async (sel) => (await page.textContent(sel)).replace(/\s+/g, ' ').trim();
 
 // Campos do livro salvo antes da ação, menos favorito/updatedAt (o app completa os campos que faltam).

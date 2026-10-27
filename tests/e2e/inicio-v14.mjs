@@ -60,11 +60,11 @@ const seed = {
     {
       id: 'r1', title: 'Fora de Série', authors: 'Malcolm Gladwell', status: 'lendo', format: 'fisico', pages: 300, currentPage: 120,
       startDate: '2026-10-01', targetDate: '2026-11-15', createdAt: TS, updatedAt: TS,
-      journal: [{ date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' }, { date: '2026-10-15', from: 92, to: 120, unit: 'page', note: '' }],
+      journal: [{ date: '2026-10-13', from: 36, to: 64, unit: 'page', note: '' }, { date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' }, { date: '2026-10-15', from: 92, to: 120, unit: 'page', note: '' }],
     },
     {
       id: 'r2', title: 'Livro no Kindle', authors: 'Alguém', status: 'lendo', format: 'kindle', currentPercent: 40,
-      startDate: '2026-10-05', createdAt: TS, updatedAt: TS, journal: [{ date: '2026-10-16', from: 34, to: 40, unit: 'percent', note: '' }],
+      startDate: '2026-10-05', createdAt: TS, updatedAt: TS, journal: [{ date: '2026-10-14', from: 22, to: 28, unit: 'percent', note: '' }, { date: '2026-10-15', from: 28, to: 34, unit: 'percent', note: '' }, { date: '2026-10-16', from: 34, to: 40, unit: 'percent', note: '' }],
     },
     {
       id: 'r3', title: 'Quase no fim', authors: 'Fulana', status: 'lendo', format: 'fisico', pages: 200, currentPage: 200,
@@ -452,8 +452,14 @@ try {
   await page.setViewportSize({ width: 390, height: 500 });
   await page.evaluate(() => window.scrollTo(0, 360));
   await page.waitForTimeout(100);
+  // Preso logo abaixo da barra compacta de vidro (V18), que aparece quando o título grande some.
   const stuck = await page.locator('.year-head').first().boundingBox();
-  assert.ok(Math.abs(stuck.y) < 2, `cabeçalho do ano não ficou preso (${stuck.y})`);
+  const bar = await page.evaluate(() => {
+    const el = document.querySelector('.cbar');
+    return { on: el.classList.contains('is-on'), bottom: el.getBoundingClientRect().bottom };
+  });
+  assert.ok(bar.on, 'barra compacta à vista ao rolar a Estante');
+  assert.ok(Math.abs(stuck.y - bar.bottom) < 2, `cabeçalho do ano não ficou preso sob a barra (${stuck.y} vs ${bar.bottom})`);
   await shot('estante-cabecalho-preso');
   await page.setViewportSize({ width: 390, height: 844 });
   await page.evaluate(() => window.scrollTo(0, 0));

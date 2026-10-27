@@ -51,7 +51,7 @@ export function bookTabScreen({ state, ui, today }) {
   const dirty = draftChanged(ui.draft, ui.original);
   return `
     <header class="form-top">
-      <a class="btn-text muted" href="${esc(ui.backHref)}">Voltar</a>
+      <a class="btn-text muted" href="${esc(ui.backHref)}" data-leave>Voltar</a>
       <h1 class="form-title book-tabs-title">${esc(book.title)}</h1>
       ${dirty
     ? '<button type="button" class="btn-text accent strong" data-action="book-save">Salvar</button>'

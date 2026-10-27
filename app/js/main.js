@@ -116,6 +116,42 @@ function go(href) {
   else location.hash = href;
 }
 
+// Cada entrada do histórico leva um número (history.state.n) e guardamos qual tela ela mostra.
+// Assim, sair da edição (Salvar, Cancelar, Voltar, Excluir) volta PELO histórico, como o gesto
+// de voltar do iPhone, em vez de empilhar a tela de antes de novo: o voltar seguinte leva para
+// onde a pessoa estava antes da ficha, e não de volta ao formulário.
+let historyIndex = 0;
+const historyKeys = new Map();
+
+function trackHistory(key) {
+  let n = history.state?.n;
+  if (!Number.isInteger(n)) {
+    n = historyIndex + 1;
+    try {
+      history.replaceState({ ...(history.state || {}), n }, '');
+    } catch { /* sem acesso ao histórico: sair da edição só troca a entrada atual */ }
+  }
+  historyIndex = n;
+  historyKeys.set(n, key);
+}
+
+/** Sai da edição (ou do livro novo) para href: volta pelo histórico se href é a tela de onde se veio. */
+function leaveForm(href) {
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  // Só atravessa telas do próprio livro (ficha, edição, livro novo) no caminho de volta.
+  for (let n = historyIndex - 1; historyKeys.has(n); n -= 1) {
+    const k = historyKeys.get(n);
+    if (k === key) {
+      history.go(n - historyIndex);
+      return;
+    }
+    if (!isBookKey(k) && !k.startsWith('novo')) break;
+  }
+  // Aberta por um link direto (ou depois de recarregar): troca a entrada da edição pela tela.
+  if (location.hash === href || (href === '#/inicio' && !location.hash)) render();
+  else location.replace(href);
+}
+
 function blankDraft(status) {
   const today = todayIso();
   return {
@@ -196,6 +232,7 @@ function render() {
     scrollY = isBookKey(currentKey) && !isBookKey(route.key) ? listScroll.get(route.key) || 0 : 0;
     previousKey = currentKey;
     currentKey = route.key;
+    trackHistory(route.key);
     enterRoute(route);
     window.scrollTo(0, 0);
   }
@@ -764,7 +801,7 @@ function saveBook() {
   persist(next, message);
   if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
-  go(ui.backHref);
+  leaveForm(ui.backHref);
 }
 
 function changeGoal(el, isDefault) {
@@ -813,7 +850,7 @@ const actions = {
     ui.original = null;
     persist(next, 'Releitura iniciada. Boa leitura!');
     ui.year = yearOf(todayIso());
-    go('#/inicio');
+    leaveForm('#/inicio');
   },
   'update-page'(el) {
     openProgressSheet(el.dataset.id, el);
@@ -862,7 +899,7 @@ const actions = {
     lastDeleted = { book: state.books[index], index, upNextIndex: (state.upNext || []).indexOf(ui.draft.id) };
     persist(removeBook(state, ui.draft.id));
     // Vindo da ficha do livro excluído: volta para a lista de onde a ficha foi aberta.
-    go(ui.backHref.startsWith(`#/livro/${encodeURIComponent(ui.draft.id)}`) ? ui.detailBack || '#/inicio' : ui.backHref);
+    leaveForm(ui.backHref.startsWith(`#/livro/${encodeURIComponent(ui.draft.id)}`) ? ui.detailBack || '#/inicio' : ui.backHref);
     toast(`"${lastDeleted.book.title}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-delete', duration: 7000 });
   },
   'start-reading'(el) {
@@ -1022,8 +1059,9 @@ function showSummaryTab(tab, year) {
   if (!SUMMARY_TABS.includes(tab)) return;
   ui.summaryTab = tab;
   // Link direto (#/resumo/2026?aba=ritmo) sem virar uma nova página: não rola para o topo.
-  history.replaceState(null, '', `#/resumo/${year}${tab === 'geral' ? '' : `?aba=${tab}`}`);
+  history.replaceState(history.state, '', `#/resumo/${year}${tab === 'geral' ? '' : `?aba=${tab}`}`);
   currentKey = parseRoute().key;
+  historyKeys.set(historyIndex, currentKey);
   render();
   // Trocar de aba lá embaixo: volta para o começo do painel, logo abaixo das abas fixas.
   const panel = document.getElementById('rs-panel');
@@ -1398,6 +1436,15 @@ window.addEventListener('hashchange', () => {
 document.addEventListener('error', (e) => {
   if (e.target.classList?.contains('cover-img')) e.target.remove();
 }, true);
+
+// Cancelar/Voltar da edição: volta pelo histórico (veja leaveForm).
+document.addEventListener('click', (e) => {
+  if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) return;
+  const link = e.target.closest?.('a[data-leave]');
+  if (!link) return;
+  e.preventDefault();
+  leaveForm(link.getAttribute('href'));
+});
 
 // Endereço já desenhado pela transição da capa (abaixo): o hashchange que chega depois não redesenha.
 let renderedByTransition = null;

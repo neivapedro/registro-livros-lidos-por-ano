@@ -62,14 +62,14 @@ const seed = {
       id: 'r1', title: 'Fora de Série', authors: 'Malcolm Gladwell', status: 'lendo', format: 'fisico', pages: 300, currentPage: 120,
       startDate: '2026-10-01', targetDate: '2026-11-15', createdAt: TS, updatedAt: TS,
       journal: [
-        { date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' },
+        { date: '2026-10-13', from: 36, to: 64, unit: 'page', note: '' }, { date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' },
         { date: '2026-10-15', from: 92, to: 120, unit: 'page', note: '' },
       ],
     },
     {
       id: 'r2', title: 'Livro no Kindle', authors: 'Alguém', status: 'lendo', format: 'kindle', currentPercent: 40,
       startDate: '2026-10-05', createdAt: TS, updatedAt: TS,
-      journal: [{ date: '2026-10-16', from: 34, to: 40, unit: 'percent', note: '' }],
+      journal: [{ date: '2026-10-14', from: 22, to: 28, unit: 'percent', note: '' }, { date: '2026-10-15', from: 28, to: 34, unit: 'percent', note: '' }, { date: '2026-10-16', from: 34, to: 40, unit: 'percent', note: '' }],
     },
     want('w1', 'O Gerente Minuto', { genre: 'Gestão' }),
     want('w2', 'Pai Rico, Pai Pobre', { genre: 'Gestão' }),

@@ -233,7 +233,7 @@ export function bookDetailView({ state, ui, today, book }) {
   }[book.status]?.() || '';
   const heroStats = book.status === STATUS.READ ? statusBlock : '';
   return `
-    <section class="ficha-hero" data-tint="${esc(book.cover || '')}" data-tint-title="${esc(book.title)}">
+    <section class="ficha-hero" data-id="${esc(book.id)}" data-tint="${esc(book.cover || '')}" data-tint-title="${esc(book.title)}">
       <header class="ficha-top">
         <a class="btn-text ficha-back" href="${esc(ui.detailBack || '#/inicio')}">${icon('chevronLeft', { size: 20, stroke: 2.2 })}Voltar</a>
         <a class="btn-text accent strong" href="${editHref(book.id)}">Editar</a>

@@ -275,7 +275,7 @@ export function formView({ state, ui, isEdit, today }) {
 
   return `
     <header class="form-top">
-      <a class="btn-text muted" href="${esc(ui.backHref)}">Cancelar</a>
+      <a class="btn-text muted" href="${esc(ui.backHref)}" data-leave>Cancelar</a>
       <h1 class="form-title">${!isEdit ? 'Adicionar livro' : ui.finishing ? 'Concluir leitura' : 'Editar livro'}</h1>
       <button type="submit" form="book-form" class="btn-text accent strong">Salvar</button>
     </header>

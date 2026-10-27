@@ -57,6 +57,7 @@ const seed = {
       pages: 600, currentPage: 120, startDate: '2026-10-01', targetDate: '2026-11-15', series: 'Gelo e Fogo', seriesNumber: 1,
       tags: ['Fantasia'], createdAt: TS, updatedAt: TS,
       journal: [
+        { date: '2026-10-13', from: 36, to: 64, unit: 'page', note: '' },
         { date: '2026-10-14', from: 64, to: 92, unit: 'page', note: '' },
         { date: '2026-10-15', from: 92, to: 120, unit: 'page', note: '', minutes: 40 },
       ],

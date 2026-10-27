@@ -9,6 +9,10 @@ import { FORMATS, STATUS } from './store.js';
 export const PACE_WINDOW_DAYS = 14;
 // Previsão muito distante não ajuda; acima disso mostra só o ritmo.
 const MAX_FORECAST_DAYS = 730;
+// Base mínima para um ritmo plausível: um dia só de leitura no diário (ou um livro começado
+// anteontem) daria números absurdos, como "25%/dia". Com menos que isso, nada de ritmo/previsão.
+export const MIN_PACE_READING_DAYS = 3;
+export const MIN_PACE_ELAPSED_DAYS = 7;
 
 function isNum(v) {
   return v !== null && v !== undefined && v !== '' && Number.isFinite(Number(v));
@@ -36,8 +40,9 @@ export function currentPosition(book) {
 
 /**
  * Ritmo em páginas (ou %) por dia de leitura.
- * - Diário: média do avanço nos dias com leitura dos últimos 14 dias.
- * - Sem leitura recente no diário: posição atual ÷ dias desde o início (a partir do 2º dia).
+ * - Diário: média do avanço nos dias com leitura dos últimos 14 dias (pelo menos 3 dias).
+ * - Senão: posição atual ÷ dias desde o início (pelo menos 7 dias, contando o primeiro).
+ * Sem base suficiente, null: o ritmo (e a previsão) só aparecem quando fazem sentido.
  * Devolve { perDay, unit, source: 'journal'|'start' } ou null.
  */
 export function readingPace(book, today, windowDays = PACE_WINDOW_DAYS) {
@@ -46,15 +51,18 @@ export function readingPace(book, today, windowDays = PACE_WINDOW_DAYS) {
   const from = addDays(today, -(windowDays - 1));
   const recent = (book.journal || [])
     .filter((e) => e.unit === unit && e.date >= from && e.date <= today && e.to > e.from);
-  if (recent.length) {
+  const readingDays = new Set(recent.map((e) => e.date)).size;
+  if (readingDays >= MIN_PACE_READING_DAYS) {
     const total = recent.reduce((s, e) => s + (e.to - e.from), 0);
-    return { perDay: total / recent.length, unit, source: 'journal' };
+    return { perDay: total / readingDays, unit, source: 'journal' };
   }
   const position = currentPosition(book);
-  // Começou hoje: a página informada no cadastro é o ponto de partida, não leitura do dia
-  // (sem isso, quem cadastra um livro na pág. 200 veria "Ritmo: 200 págs./dia").
+  // Começou há pouco: a página informada no cadastro é o ponto de partida, não leitura desses
+  // dias (sem isso, quem cadastra um livro na pág. 200 veria "Ritmo: 200 págs./dia").
   if (!isIsoDate(book.startDate) || book.startDate >= today || position <= 0) return null;
-  return { perDay: position / daysInclusive(book.startDate, today), unit, source: 'start' };
+  const days = daysInclusive(book.startDate, today);
+  if (days < MIN_PACE_ELAPSED_DAYS) return null;
+  return { perDay: position / days, unit, source: 'start' };
 }
 
 /** Quanto falta: páginas (físico, precisa do total) ou % (Kindle). null se não dá para saber. */

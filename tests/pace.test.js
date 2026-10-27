@@ -19,44 +19,62 @@ test('addDays atravessa meses e anos', () => {
   assert.equal(addDays('2026-03-01', -1), '2026-02-28');
 });
 
-test('ritmo pelo diário: média por dia de leitura nos últimos 14 dias', () => {
+test('ritmo pelo diário: média por dia de leitura nos últimos 14 dias (com 3 dias ou mais)', () => {
   const book = physical({
-    currentPage: 120,
+    currentPage: 150,
     journal: [
       entry('2026-09-20', 0, 40), // fora da janela
       entry('2026-10-10', 40, 70),
       entry('2026-10-12', 70, 70), // não avançou: não conta como dia de leitura
-      entry('2026-10-15', 70, 120),
+      entry('2026-10-14', 70, 90),
+      entry('2026-10-15', 90, 150),
     ],
   });
-  assert.deepEqual(readingPace(book, TODAY), { perDay: 40, unit: 'page', source: 'journal' });
+  assert.deepEqual(readingPace(book, TODAY), { perDay: 110 / 3, unit: 'page', source: 'journal' });
   // Primeiro dia da janela (hoje - 13) entra.
-  const edge = physical({ currentPage: 30, journal: [entry('2026-10-03', 0, 30)] });
+  const edge = physical({ currentPage: 90, journal: [entry('2026-10-03', 0, 30), entry('2026-10-04', 30, 60), entry('2026-10-05', 60, 90)] });
   assert.equal(readingPace(edge, TODAY).perDay, 30);
-  const out = physical({ currentPage: 30, startDate: '2026-10-01', journal: [entry('2026-10-02', 0, 30)] });
-  assert.equal(readingPace(out, TODAY).source, 'start');
+  assert.equal(readingPace(edge, TODAY).source, 'journal');
+  const out = physical({ currentPage: 32, startDate: '2026-10-01', journal: [entry('2026-10-02', 0, 32)] });
+  assert.deepEqual(readingPace(out, TODAY), { perDay: 2, unit: 'page', source: 'start' });
+});
+
+test('ritmo plausível: um ou dois dias no diário não viram ritmo; vale o tempo desde o início', () => {
+  // Começou há 16 dias, um dia só no diário com 25%: não é "25%/dia".
+  const k = kindle({ currentPercent: 25, startDate: '2026-09-30', journal: [entry('2026-10-15', 0, 25, 'percent')] });
+  assert.deepEqual(readingPace(k, TODAY), { perDay: 25 / 17, unit: 'percent', source: 'start' });
+  assert.equal(paceLines(k, TODAY).pace, 'Ritmo: 1%/dia · termina por volta de 6 dez');
+  // Dois dias no diário e começado há 3 dias: base pequena demais, sem ritmo nem previsão.
+  const fresh = physical({ currentPage: 90, startDate: '2026-10-14', journal: [entry('2026-10-14', 0, 40), entry('2026-10-15', 40, 90)] });
+  assert.equal(readingPace(fresh, TODAY), null);
+  assert.equal(forecastFinish(fresh, TODAY), null);
+  assert.deepEqual(paceLines(fresh, TODAY), { pace: '', target: '' });
+  // O mesmo dia registrado duas vezes conta como um dia de leitura.
+  const twice = physical({ currentPage: 60, startDate: '2026-10-14', journal: [entry('2026-10-15', 0, 30), entry('2026-10-15', 30, 60), entry('2026-10-16', 60, 60)] });
+  assert.equal(readingPace(twice, TODAY), null);
 });
 
 test('ritmo no Kindle em % e ignora entradas em outra unidade', () => {
   const book = kindle({
     currentPercent: 30,
-    journal: [entry('2026-10-14', 10, 20, 'percent'), entry('2026-10-15', 20, 30, 'percent'), entry('2026-10-13', 0, 50, 'page')],
+    journal: [entry('2026-10-12', 0, 10, 'percent'), entry('2026-10-14', 10, 20, 'percent'), entry('2026-10-15', 20, 30, 'percent'), entry('2026-10-13', 0, 50, 'page')],
   });
   assert.deepEqual(readingPace(book, TODAY), { perDay: 10, unit: 'percent', source: 'journal' });
 });
 
-test('sem diário: posição atual ÷ dias desde o início (contando o primeiro dia)', () => {
-  const book = physical({ currentPage: 80, startDate: '2026-10-13' }); // 4 dias
+test('sem diário: posição atual ÷ dias desde o início (contando o primeiro dia, a partir de 7 dias)', () => {
+  const book = physical({ currentPage: 140, startDate: '2026-10-10' }); // 7 dias
   assert.deepEqual(readingPace(book, TODAY), { perDay: 20, unit: 'page', source: 'start' });
+  assert.equal(readingPace(physical({ currentPage: 80, startDate: '2026-10-13' }), TODAY), null, '4 dias: cedo demais');
   assert.equal(readingPace(physical({ currentPage: 0 }), TODAY), null);
   assert.equal(readingPace(physical({ currentPage: 50, startDate: null }), TODAY), null);
   assert.equal(readingPace(physical({ currentPage: 50, startDate: '2026-10-20' }), TODAY), null, 'início no futuro');
   // Começou hoje: a página do cadastro é o ponto de partida, não 200 págs. lidas hoje.
   assert.equal(readingPace(physical({ currentPage: 200, startDate: TODAY }), TODAY), null, 'início hoje');
   assert.deepEqual(paceLines(physical({ currentPage: 200, startDate: TODAY }), TODAY), { pace: '', target: '' });
-  // Mas com leitura registrada hoje no diário, o ritmo aparece.
+  // Nem com uma leitura registrada hoje no diário: um dia só ainda não é ritmo.
   const today = physical({ currentPage: 230, startDate: TODAY, journal: [entry(TODAY, 200, 230)] });
-  assert.deepEqual(readingPace(today, TODAY), { perDay: 30, unit: 'page', source: 'journal' });
+  assert.equal(readingPace(today, TODAY), null);
 });
 
 test('quanto falta: físico precisa do total; Kindle usa %', () => {
@@ -68,9 +86,10 @@ test('quanto falta: físico precisa do total; Kindle usa %', () => {
 });
 
 test('previsão: hoje + falta ÷ ritmo, arredondando para cima', () => {
-  const book = physical({ currentPage: 120, journal: [entry('2026-10-15', 92, 120)] }); // 28/dia, faltam 180
-  assert.equal(forecastFinish(book, TODAY), '2026-10-23'); // ceil(180/28) = 7
-  assert.equal(forecastFinish(physical({ pages: null, currentPage: 120, journal: [entry('2026-10-15', 92, 120)] }), TODAY), null);
+  const days3 = [entry('2026-10-13', 64, 92), entry('2026-10-14', 92, 92), entry('2026-10-15', 92, 120), entry('2026-10-16', 120, 148)];
+  const book = physical({ currentPage: 148, journal: days3 }); // 28/dia, faltam 152
+  assert.equal(forecastFinish(book, TODAY), '2026-10-22'); // ceil(152/28) = 6
+  assert.equal(forecastFinish(physical({ pages: null, currentPage: 148, journal: days3 }), TODAY), null);
   assert.equal(forecastFinish(physical({ currentPage: 300 }), TODAY), null, 'nada falta');
   assert.equal(forecastFinish(physical(), TODAY), null, 'sem ritmo');
   // Ritmo baixíssimo: previsão longe demais não aparece.
@@ -95,18 +114,19 @@ test('formatPace: inteiro, singular e decimal abaixo de 1', () => {
 });
 
 test('linhas do cartão: ritmo, previsão e data alvo sem tom de cobrança', () => {
-  const book = physical({ currentPage: 120, journal: [entry('2026-10-15', 92, 120)], targetDate: '2026-11-15' });
+  const days3 = [entry('2026-10-13', 64, 92), entry('2026-10-15', 92, 120), entry('2026-10-16', 120, 148)];
+  const book = physical({ currentPage: 148, journal: days3, targetDate: '2026-11-15' });
   assert.deepEqual(paceLines(book, TODAY), {
-    pace: 'Ritmo: 28 págs./dia · termina por volta de 23 out',
-    target: 'Para terminar até 15 nov: 6 págs./dia',
+    pace: 'Ritmo: 28 págs./dia · termina por volta de 22 out',
+    target: 'Para terminar até 15 nov: 5 págs./dia',
   });
-  const k = kindle({ currentPercent: 40, journal: [entry('2026-10-16', 34, 40, 'percent')] });
-  assert.deepEqual(paceLines(k, TODAY), { pace: 'Ritmo: 6%/dia · termina por volta de 26 out', target: '' });
+  const k = kindle({ currentPercent: 40, journal: [entry('2026-10-14', 28, 34, 'percent'), entry('2026-10-15', 34, 34, 'percent'), entry('2026-10-15', 34, 37, 'percent'), entry('2026-10-16', 37, 40, 'percent'), entry('2026-10-12', 22, 28, 'percent')] });
+  assert.deepEqual(paceLines(k, TODAY), { pace: 'Ritmo: 5%/dia · termina por volta de 30 out', target: '' });
   // Data passada: só lembra a data, nunca "atrasado".
-  const late = physical({ currentPage: 120, journal: [entry('2026-10-15', 92, 120)], targetDate: '2026-10-01' });
+  const late = physical({ currentPage: 148, journal: days3, targetDate: '2026-10-01' });
   assert.equal(paceLines(late, TODAY).target, 'Meta de data: 1 out');
   // Sem total de páginas: ritmo sem previsão; data alvo neutra.
-  const noTotal = physical({ pages: null, currentPage: 60, startDate: '2026-10-14', targetDate: '2026-10-30' });
+  const noTotal = physical({ pages: null, currentPage: 140, startDate: '2026-10-10', targetDate: '2026-10-30' });
   assert.deepEqual(paceLines(noTotal, TODAY), { pace: 'Ritmo: 20 págs./dia', target: 'Meta de data: 30 out' });
   // Termina em outro ano: mostra o ano.
   const slow = physical({ currentPage: 10, startDate: '2026-10-07', pages: 400 }); // 1 pág./dia, 390 dias

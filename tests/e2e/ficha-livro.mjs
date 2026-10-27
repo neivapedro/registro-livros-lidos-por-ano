@@ -136,7 +136,7 @@ await page.route(/^https:\/\//, (r) => r.abort());
 const step = (msg) => console.log(`• ${msg}`);
 // Espera também a transição da capa terminar (durante ela, os toques vão para a camada da transição).
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n && !window.__vtActive, name);
-const onDetail = (id) => page.waitForFunction((i) => location.hash === `#/livro/${i}` && document.querySelector('.ficha-hero') && !window.__vtActive, id);
+const onDetail = (id) => page.waitForFunction((i) => location.hash === `#/livro/${i}` && document.querySelector(`.ficha-hero[data-id="${i}"]`) && !window.__vtActive, id);
 const toastHas = (re) => page.waitForFunction((src) => new RegExp(src).test(document.getElementById('toast').textContent), re.source);
 const text = async (sel) => (await page.textContent(sel)).replace(/\s+/g, ' ').trim();
 async function layoutProblems(label) {
@@ -296,6 +296,36 @@ try {
   await page.click('.ficha-back');
   await onPage('inicio');
 
+  step('Salvar e Cancelar voltam pelo histórico: o voltar seguinte sai da ficha, não reabre a edição');
+  await page.goto(`${BASE}#/estante?aba=lido`);
+  await page.waitForSelector('.book-row');
+  await page.click('.book-row-link:has-text("Hábitos")');
+  await onDetail('h1');
+  await page.click('.ficha-top a:has-text("Editar")');
+  await page.waitForSelector('#book-form');
+  await page.click('.form-top button[type="submit"]');
+  await onDetail('h1');
+  await page.goBack();
+  await onPage('estante');
+  assert.equal(page.url(), `${BASE}#/estante?aba=lido`);
+  await page.click('.book-row-link:has-text("Hábitos")');
+  await onDetail('h1');
+  await page.click('.ficha-top a:has-text("Editar")');
+  await page.waitForSelector('#book-form');
+  await page.click('[data-action="book-tab"][data-tab="diario"]');
+  await page.click('.form-top >> text=Voltar');
+  await onDetail('h1');
+  await page.goBack();
+  await onPage('estante');
+  // Edição aberta por link direto: Cancelar troca a entrada (o voltar não reabre o formulário).
+  await page.goto(`${BASE}#/livro/h1/editar`);
+  await page.reload();
+  await page.waitForSelector('#book-form');
+  await page.click('.form-top >> text=Cancelar');
+  await onDetail('h1');
+  await page.goBack();
+  await onPage('estante');
+
   step('série: chip "Duna · nº 1" e link para o próximo volume (ficha do outro livro)');
   await page.goto(`${BASE}#/estante?aba=lido`);
   await page.waitForSelector('.book-row');
@@ -437,7 +467,7 @@ try {
   assert.deepEqual(errors, []);
 } catch (err) {
   await page.screenshot({ path: join(SHOTS, 'ficha-falha.png'), fullPage: true }).catch(() => {});
-  console.error('\nFALHOU:', err.message);
+  console.error('\nFALHOU:', err.message, page.url());
   if (errors.length) console.error(errors.join('\n'));
   process.exitCode = 1;
 }
