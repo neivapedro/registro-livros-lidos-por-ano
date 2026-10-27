@@ -1183,6 +1183,15 @@ document.addEventListener('keydown', (e) => {
   } else if ('newGenre' in e.target.dataset) {
     e.preventDefault();
     actions['add-genre']();
+  } else if (e.target.matches?.('input:not([data-tag-input])') && e.target.closest('[data-submit="save-book"]') && parseRoute().name === 'novo') {
+    // Livro novo: o Return do teclado não salva (sairia "Lido" com a data de hoje sem querer).
+    // Título → Autor → Páginas; nos outros campos só fecha o teclado. Salvar é só pelo botão.
+    e.preventDefault();
+    const order = ['f-title', 'f-authors', 'f-pages'];
+    const at = order.indexOf(e.target.id);
+    const next = at >= 0 ? document.getElementById(order[at + 1]) : null;
+    if (next) next.focus();
+    else e.target.blur();
   }
 });
 
@@ -1643,7 +1652,9 @@ ui.shelfMode = readShelfMode();
 function openProgressSheet(id, opener) {
   const book = state.books.find((b) => b.id === id && b.status === STATUS.READING);
   if (!book) return;
-  ui.editingProgress = id;
+  // Só a folha marca a edição em andamento: ui.editingProgress faria a ficha desenhar, por
+  // trás dela, o formulário antigo (com outro #progress-input) no próximo redesenho.
+  ui.progressSheet = id;
   openSheet({
     id: 'progress',
     cls: 'sheet-progress',
@@ -1652,7 +1663,7 @@ function openProgressSheet(id, opener) {
     focus: '#progress-input',
     opener,
     onClose: () => {
-      if (ui.editingProgress === id) ui.editingProgress = null;
+      if (ui.progressSheet === id) ui.progressSheet = null;
     },
   });
 }
@@ -1814,7 +1825,8 @@ document.addEventListener('click', (e) => {
   const href = link.getAttribute('href');
   // Abrir a ficha a partir de uma capa (Início, Estante, Buscar, Resumo...).
   if (/^#\/livro\/[^/?]+$/.test(href)) {
-    const from = link.querySelector('.cover');
+    // No cartão "Lendo agora" a capa fica fora do link (que cobre o cartão inteiro).
+    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover');
     if (!from || href === location.hash) return;
     e.preventDefault();
     navigateWithCover(href, from);
@@ -1827,7 +1839,8 @@ document.addEventListener('click', (e) => {
     if (!from || !id || href === location.hash) return;
     e.preventDefault();
     navigateWithCover(href, from, () => {
-      const cover = root.querySelector(`a[href="#/livro/${CSS.escape(encodeURIComponent(id))}"] .cover`);
+      const cover = root.querySelector(`a[href="#/livro/${CSS.escape(encodeURIComponent(id))}"] .cover`)
+        || root.querySelector(`.reading[data-id="${CSS.escape(id)}"] .rn-cover .cover`);
       if (!cover) return null;
       const r = cover.getBoundingClientRect();
       return r.bottom > 0 && r.top < window.innerHeight ? cover : null;
@@ -1842,7 +1855,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
   // Versão nova instalada: recarrega sozinho, a não ser no meio de um cadastro.
   const applyUpdate = () => {
     const route = parseRoute();
-    const busy = route.name === 'novo' || isBookEdit(route) || ui.editingProgress;
+    const busy = route.name === 'novo' || isBookEdit(route) || ui.editingProgress || ui.progressSheet;
     if (busy || writing) toast('Nova versão do app disponível.', { actionLabel: 'Atualizar', action: 'reload', sticky: true });
     else window.location.reload();
   };

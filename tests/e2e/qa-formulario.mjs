@@ -119,7 +119,8 @@ async function seedAndOpen(hash) {
 async function openBook(id, query = '') {
   await page.goto(`${BASE}#/inicio`);
   await onPage('inicio');
-  await page.goto(`${BASE}#/livro/${id}${query}`);
+  // #/livro/:id é a ficha (1.4); a edição fica em #/livro/:id/editar.
+  await page.goto(`${BASE}#/livro/${id}/editar${query}`);
   await onPage('livro');
 }
 

@@ -207,9 +207,9 @@ export function emptyState(title, text, cta = '') {
 
 // ---------- v1.4: linhas compactas, grade de capas e anel de progresso ----------
 
-/** Endereço do "Concluir" de um livro em leitura. */
+/** Endereço do "Concluir" de um livro em leitura (o mesmo da ficha e do fim pela folha). */
 export function finishHref(id) {
-  return `#/livro/${encodeURIComponent(id)}?concluir=1`;
+  return `#/livro/${encodeURIComponent(id)}/editar?concluir=1`;
 }
 
 /** Ícones pequenos das listas, do cartão de leitura e dos menus (decorativos). */

@@ -287,9 +287,9 @@ export function formView({ state, ui, isEdit, today }) {
       <section class="field-group">
         <span class="label">${showLookup ? 'Ou preencha os dados' : 'Dados do livro'}</span>
         <div class="field-stack">
-          <div class="field"><label for="f-title">Título</label><input id="f-title" type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
-          <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors" type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
-          <div class="field"><label for="f-pages">Páginas</label><input id="f-pages" type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+          <div class="field"><label for="f-title">Título</label><input id="f-title"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
+          <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
+          <div class="field"><label for="f-pages">Páginas</label><input id="f-pages"${isEdit ? '' : ' enterkeyhint="done"'} type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
         </div>
         <div class="cover-edit">
           ${d.cover
