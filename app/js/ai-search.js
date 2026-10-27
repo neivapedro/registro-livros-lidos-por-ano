@@ -24,7 +24,8 @@ const API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/';
  * Modelos, em ordem de preferência. Se um deles não existir mais (404, ou 400 "model not
  * found"), ou estiver sobrecarregado (5xx), tenta o seguinte.
  */
-export const GEMINI_MODELS = ['gemini-3.8-flash', 'gemini-3.5-flash-lite', 'gemini-3.1-flash-lite'];
+// O mais barato primeiro (busca de livro não precisa do modelo maior); os outros só se ele não existir.
+export const GEMINI_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash', 'gemini-3.1-flash-lite'];
 
 /** Tempo máximo da busca com IA inteira (todas as tentativas de modelo). */
 export const AI_TIMEOUT_MS = 25000;

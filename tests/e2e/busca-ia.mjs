@@ -83,8 +83,8 @@ function geminiBehavior(prompt, model) {
   if (prompt.includes('chave ruim')) return { status: 400, json: apiError(400, 'INVALID_ARGUMENT', 'API key not valid. Please pass a valid API key.', 'API_KEY_INVALID') };
   if (prompt.includes('sem permissao')) return { status: 403, json: apiError(403, 'PERMISSION_DENIED', 'Requests from referer are blocked.', 'API_KEY_HTTP_REFERRER_BLOCKED') };
   if (prompt.includes('modelo velho')) {
-    return model === 'gemini-3.8-flash'
-      ? { status: 404, json: apiError(404, 'NOT_FOUND', 'models/gemini-3.8-flash is not found for API version v1beta') }
+    return model === 'gemini-3.5-flash-lite'
+      ? { status: 404, json: apiError(404, 'NOT_FOUND', 'models/gemini-3.5-flash-lite is not found for API version v1beta') }
       : { json: reply({ livros: [{ titulo: 'Achado no segundo modelo', autores: ['X'] }] }) };
   }
   if (prompt.includes('malicioso')) {
@@ -288,7 +288,7 @@ try {
   assert.match(text, /Dados conferidos: BrasilAPI \(CBL\)/);
   const call = geminiCalls[before];
   assert.equal(call.method, 'POST');
-  assert.equal(call.model, 'gemini-3.8-flash');
+  assert.equal(call.model, 'gemini-3.5-flash-lite');
   assert.equal(call.headers['x-goog-api-key'], GEMINI_KEY);
   assert.ok(!call.url.includes(GEMINI_KEY), 'a chave não vai no endereço');
   assert.deepEqual(call.body.tools, [{ google_search: {} }]);
@@ -350,7 +350,7 @@ try {
   await searchFor(page, 'modelo velho');
   await page.click('[data-action="ai-search"]');
   assert.match(await aiResult(page), /Achado no segundo modelo/);
-  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-3.8-flash']);
 
   step('HTML malicioso nos campos: aparece como texto, nada é executado');
   await searchFor(page, 'livro malicioso');

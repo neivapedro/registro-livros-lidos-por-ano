@@ -70,7 +70,7 @@ function behavior(prompt, model) {
   }
   if (prompt.includes('faturamento')) {
     if (prompt.includes('nenhum')) return billing;
-    return model === 'gemini-3.8-flash' ? billing : { json: json({ livros: [{ titulo: 'Achado sem faturamento', autores: ['C'] }] }) };
+    return model === 'gemini-3.5-flash-lite' ? billing : { json: json({ livros: [{ titulo: 'Achado sem faturamento', autores: ['C'] }] }) };
   }
   if (prompt.includes('lento')) {
     slowCount += 1;
@@ -236,7 +236,7 @@ try {
   const n0 = geminiCalls.length;
   text = await aiSearchFor('faturamento');
   assert.match(text, /Achado sem faturamento/);
-  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.8-flash', 'gemini-3.5-flash-lite']);
+  assert.deepEqual(geminiCalls.slice(n0).map((c) => c.model), ['gemini-3.5-flash-lite', 'gemini-3.8-flash']);
   text = await aiSearchFor('faturamento nenhum');
   assert.match(text, /exige o faturamento ativo[\s\S]*Google Cloud[\s\S]*5\.000 buscas do mês não são cobradas[\s\S]*alerta de orçamento/);
   assert.ok(!/gr[aá]tis|gratuit/i.test(text));
