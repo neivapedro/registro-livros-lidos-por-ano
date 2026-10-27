@@ -263,10 +263,11 @@ function openLibraryUrl(param) {
   return `${OPEN_LIBRARY_URL}?${param}&limit=10&fields=${OPEN_LIBRARY_FIELDS}`;
 }
 
-function googleUrl(query, { portuguese, key, start = 0 }) {
+function googleUrl(query, { portuguese, key, start = 0, newest = false }) {
   const lang = portuguese ? '&langRestrict=pt' : '';
   const page = start ? `&startIndex=${start}` : '';
-  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=${GOOGLE_PAGE}${page}&printType=books${lang}&key=${encodeURIComponent(key)}`;
+  const order = newest ? '&orderBy=newest' : '';
+  return `${GOOGLE_URL}?q=${encodeURIComponent(query)}&maxResults=${GOOGLE_PAGE}${page}${order}&printType=books${lang}&key=${encodeURIComponent(key)}`;
 }
 
 /**
@@ -312,6 +313,10 @@ async function searchText(fetchImpl, q, googleKey, opts) {
       for (let p = 0; p < GOOGLE_PAGES; p += 1) {
         sources.push({ url: googleUrl(q, { portuguese, key: googleKey, start: p * GOOGLE_PAGE }), parse: parseGoogle, optional: p > 0 });
       }
+      // Lançamentos: a ordem por relevância do Google enterra os livros recém-publicados
+      // (para "Freida McFadden", "Cara Debbie", de set/2026, não vinha entre os 20 primeiros).
+      // Uma consulta pelos mais novos entra na mistura; a ordenação depois tira o que não combina.
+      sources.push({ url: googleUrl(q, { portuguese, key: googleKey, newest: true }), parse: parseGoogle, optional: true });
     }
     return sources;
   };

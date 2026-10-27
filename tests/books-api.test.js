@@ -197,8 +197,9 @@ test('busca por título inclui o Google Books quando há chave', async () => {
   ]);
   const { results } = await searchBooks('a meta goldratt', { fetchImpl: impl, googleKey: 'minha chave' });
   assert.deepEqual(results.map((r) => r.source).sort(), ['Google Books', 'Open Library']);
-  assert.equal(calls.length, 3, 'Open Library + 2 páginas do Google');
+  assert.equal(calls.length, 4, 'Open Library + 2 páginas do Google + mais novos');
   assert.ok(calls.some((u) => u.startsWith(GOOGLE) && u.includes('startIndex=20')));
+  assert.ok(calls.some((u) => u.startsWith(GOOGLE) && u.includes('orderBy=newest')), 'consulta dos lançamentos');
   const google = calls.find((u) => u.startsWith(GOOGLE));
   assert.match(google, /q=a%20meta%20goldratt&/);
   assert.match(google, /langRestrict=pt/);
@@ -398,7 +399,7 @@ test('Google com erro 503 passageiro: tenta de novo e traz o livro', async () =>
   const unavailable = () => ({ ok: false, status: 503, json: async () => ({}) });
   const { impl } = fakeFetch([
     [GOOGLE, (url) => {
-      if (url.includes('startIndex')) return ok({});
+      if (url.includes('startIndex') || url.includes('orderBy=newest')) return ok({});
       n += 1;
       return n === 1 ? unavailable() : ok({ items: [googleItem] });
     }],
