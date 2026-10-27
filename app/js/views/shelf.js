@@ -4,6 +4,7 @@ import { FORMAT_LABELS, MAX_UP_NEXT, STATUS } from '../store.js';
 import { booksReadInYear, countByStatus, readBooks } from '../stats.js';
 import { GLYPHS, bookItem, chip, cover, coverItem, emptyState, esc, itemGroup, plural } from '../ui.js';
 import { drawCandidates, wantQueue } from '../upnext.js';
+import { compactBar } from '../large-title.js';
 
 const TABS = [[STATUS.WANT, 'Quero ler'], [STATUS.READING, 'Lendo'], [STATUS.READ, 'Lidos'], [STATUS.DROPPED, 'Abandonei']];
 
@@ -172,7 +173,8 @@ export function shelfView({ state, ui, tab }) {
   else if (tab === STATUS.DROPPED) body = droppedList(state.books, mode);
   else body = readList(state.books, ui?.groupSeries, mode);
   return `
-    <header class="top"><h1 class="display sm">Estante</h1></header>
+    <header class="top"><h1 class="display sm" data-large-title>Estante</h1></header>
+    ${compactBar({ title: 'Estante' })}
     <nav class="segmented tabs-4 shelf-tabs" style="--seg-count:4" aria-label="Listas">${tabs}</nav>
     <div class="list shelf-list" data-mode="${mode}">${body}</div>`;
 }

@@ -12,6 +12,7 @@ import { yearPairCompare } from './charts.js';
 import { yearSelect } from './home.js';
 import { kpiTile, sparkline } from './kpi.js';
 import { milestonesSection } from './marcos.js';
+import { compactBar } from '../large-title.js';
 
 function yearsCard(s) {
   const max = Math.max(...s.years.map((y) => y.count), 1);
@@ -63,14 +64,16 @@ export function allTimeView({ state, ui, today }) {
   const nQuotes = countQuotes(state.books);
   const currentYear = yearOf(today);
   const s = allTimeStats(state.books, today);
+  const back = `<a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>`;
   const header = `
     <header class="top">
-      <a class="icon-btn" href="#/inicio" aria-label="Voltar">${icon('chevronLeft', { stroke: 2 })}</a>
+      ${back}
       ${yearSelect(yearsWithData(state.books, currentYear), 'todos', 'summary-year', { withAll: true })}
     </header>
+    ${compactBar({ title: 'Todos os anos', start: back })}
     <div class="page-title">
       <span class="eyebrow">Todos os anos</span>
-      <h1 class="display">Sua história <em>de leitor</em></h1>
+      <h1 class="display" data-large-title>Sua história <em>de leitor</em></h1>
     </div>`;
   if (!s.count) {
     return `${header}${emptyState('Nenhum livro concluído ainda', 'Seus números de todos os anos aparecem aqui.')}${nQuotes ? quotesLink(nQuotes) : ''}`;
