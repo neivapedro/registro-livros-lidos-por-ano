@@ -72,6 +72,10 @@ export function responseText(data) {
   return parts.filter((p) => typeof p?.text === 'string' && !p.thought).map((p) => p.text).join('');
 }
 
+const MAX_SCAN = 50000;
+const MAX_SCAN_TRIES = 40;
+const isRecord = (v) => Boolean(v) && typeof v === 'object' && !Array.isArray(v);
+
 /** Fim do objeto/lista JSON que começa em start (respeita aspas e escapes), ou -1. */
 function matchingEnd(text, start) {
   const stack = [];
@@ -107,12 +111,19 @@ export function extractJson(text) {
       return JSON.parse(attempt);
     } catch { /* tenta o próximo jeito */ }
   }
-  for (let i = 0; i < s.length; i += 1) {
-    if (s[i] !== '{' && s[i] !== '[') continue;
-    const end = matchingEnd(s, i);
+  // No meio do texto só vale objeto (ou lista com objeto): uma citação "[1]" antes do JSON
+  // não pode passar por resposta. Texto e tentativas limitados, porque a resposta não é
+  // confiável e milhares de "[" sem par travariam a tela (cada tentativa lê o resto do texto).
+  const head = s.slice(0, MAX_SCAN);
+  let tries = 0;
+  for (let i = 0; i < head.length && tries < MAX_SCAN_TRIES; i += 1) {
+    if (head[i] !== '{' && head[i] !== '[') continue;
+    tries += 1;
+    const end = matchingEnd(head, i);
     if (end < 0) continue;
     try {
-      return JSON.parse(s.slice(i, end + 1));
+      const value = JSON.parse(head.slice(i, end + 1));
+      if (isRecord(value) || (Array.isArray(value) && value.some(isRecord))) return value;
     } catch { /* continua procurando */ }
   }
   return null;
@@ -260,8 +271,9 @@ export function parseAiResponse(data, opts) {
 const MESSAGES = {
   key: 'Chave da IA inválida. Confira a chave em Ajustes.',
   permission: 'A chave não tem permissão para a IA. Em Ajustes, veja se ela está liberada para este site e para a “Generative Language API”.',
-  quota: 'Limite gratuito de hoje atingido. Tente de novo amanhã.',
-  billing: 'A busca com Google não está liberada para esta chave. No Google AI Studio, ative o faturamento do projeto (veja Ajustes).',
+  // Sem prometer "grátis": com faturamento ativo, o 429 é o limite de uso (por minuto ou dia).
+  quota: 'A chave atingiu o limite de uso da IA por agora. Tente de novo mais tarde.',
+  billing: 'O Google exige o faturamento ativo no projeto desta chave para a busca com Google. Ative no Google Cloud, em Faturamento (no AI Studio: “Set up billing”). As primeiras 5.000 buscas do mês não são cobradas; crie um alerta de orçamento para ser avisado de qualquer cobrança. Veja Ajustes.',
   offline: 'Sem internet. Conecte-se e tente de novo.',
   network: 'Não consegui falar com o Google. Confira a internet e tente de novo.',
   timeout: 'A IA demorou demais para responder. Tente de novo.',
@@ -301,7 +313,7 @@ export function mapGeminiError(status, body) {
   const message = String(err.message || '');
   const reasons = (Array.isArray(err.details) ? err.details : []).map((d) => d?.reason).filter(Boolean);
   const has = (...r) => reasons.some((x) => r.includes(x));
-  if (status === 401 || has('API_KEY_INVALID', 'API_KEY_EXPIRED', 'ACCESS_TOKEN_TYPE_UNSUPPORTED') || /api key (not valid|expired)/i.test(message)) return 'key';
+  if (status === 401 || has('API_KEY_INVALID', 'API_KEY_EXPIRED', 'ACCESS_TOKEN_TYPE_UNSUPPORTED') || /api key (not valid|expired|not found)/i.test(message)) return 'key';
   if (status === 429 || err.status === 'RESOURCE_EXHAUSTED') {
     // Cota zero: o plano gratuito não inclui a busca do Google para este modelo.
     return /limit:\s*0\b/.test(message) ? 'billing' : 'quota';
@@ -324,9 +336,10 @@ export function mapGeminiError(status, body) {
  * Busca com IA. Devolve { results, sources, notFound, model } ou lança AiSearchError
  * (code: key, permission, quota, billing, offline, network, timeout, model, server, blocked,
  * bad-response, bad-request, cancelled).
+ * onSend(): chamado uma vez, quando o primeiro pedido sai de fato para o Google.
  */
 export async function aiSearch(query, {
-  key, fetchImpl = fetch, signal, timeoutMs = AI_TIMEOUT_MS, models = GEMINI_MODELS, today = new Date(),
+  key, fetchImpl = fetch, signal, timeoutMs = AI_TIMEOUT_MS, models = GEMINI_MODELS, today = new Date(), onSend,
   online = () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false),
 } = {}) {
   const q = String(query ?? '').trim();
@@ -350,9 +363,16 @@ export async function aiSearch(query, {
 
   const body = JSON.stringify(buildRequest(q, { today }));
   let lastError = new AiSearchError('model');
+  let sent = false;
   try {
     for (const model of models) {
       let res;
+      if (ctrl.signal.aborted) throw new AiSearchError(timedOut ? 'timeout' : 'cancelled');
+      // Uma busca conta uma vez (no limite de segurança do aparelho), na hora em que sai de fato.
+      if (!sent) {
+        sent = true;
+        onSend?.();
+      }
       try {
         res = await Promise.race([fetchImpl(`${API_URL}${encodeURIComponent(model)}:generateContent`, {
           method: 'POST',
@@ -377,9 +397,11 @@ export async function aiSearch(query, {
         return { ...parseAiResponse(data, { today }), model };
       }
       const code = mapGeminiError(res.status, data);
-      lastError = new AiSearchError(code, res.status);
-      // Modelo que não existe mais ou sobrecarregado: tenta o próximo da lista.
-      if (code !== 'model' && code !== 'server') throw lastError;
+      // Modelo que não existe mais ou sobrecarregado: tenta o próximo da lista. Sem
+      // faturamento ('billing', cota zero) também: a cota grátis é de cada modelo e o próximo
+      // pode tê-la; se nenhum servir, o aviso de faturamento é o que a pessoa vê.
+      if (code !== 'model' && code !== 'server' && code !== 'billing') throw new AiSearchError(code, res.status);
+      if (lastError.code !== 'billing') lastError = new AiSearchError(code, res.status);
     }
     throw lastError;
   } finally {
@@ -390,12 +412,33 @@ export async function aiSearch(query, {
 
 // ---------- Conferência pelo ISBN ----------
 
+const STOP_WORDS = new Set(['the', 'and', 'uma', 'com', 'para', 'por', 'que', 'dos', 'das', 'nos', 'nas', 'del', 'los', 'las']);
+
+/** Palavras com 3+ letras, sem acento e em minúsculas ("O Diário de Anne" → diario, anne). */
+function words(text) {
+  return String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+}
+
+/** O livro da IA e o do ISBN parecem o mesmo? (alguma palavra do título ou do autor em comum) */
+function sameBook(ai, official) {
+  const shares = (a, b) => {
+    const set = new Set(words(a));
+    return words(b).some((w) => set.has(w));
+  };
+  if (!words(official.title).length && !words(official.authors).length) return true;
+  return shares(ai.title, official.title) || shares(ai.authors, official.authors);
+}
+
 /**
  * Com ISBN, consulta o caminho de sempre (BrasilAPI, Open Library, Google Books) e
  * prefere os dados de lá; a capa da IA só entra se não houver outra.
  * lookupIsbn(isbn) → Promise<resultado | null>.
+ * Se o ISBN da IA for de outro livro (nem título nem autor batem com os dados oficiais),
+ * ele é descartado e ficam os dados da IA, a não ser que seja o próprio ISBN digitado
+ * na busca (queryIsbn): aí valem os dados oficiais desse ISBN.
  */
-export async function enrichAiResults(results, lookupIsbn) {
+export async function enrichAiResults(results, lookupIsbn, { queryIsbn = '' } = {}) {
   return Promise.all(results.map(async (r) => {
     if (!r.isbn) return r;
     let official = null;
@@ -405,6 +448,7 @@ export async function enrichAiResults(results, lookupIsbn) {
       official = null;
     }
     if (!official) return r;
+    if (r.isbn !== queryIsbn && !sameBook(r, official)) return { ...r, isbn: '' };
     // A capa "pelo ISBN" da Open Library muitas vezes não existe: a da IA vem antes dela.
     const guessed = (c) => !c || c.includes('covers.openlibrary.org/b/isbn/');
     return {

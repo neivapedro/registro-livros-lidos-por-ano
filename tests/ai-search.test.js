@@ -5,10 +5,11 @@ import {
   groundingSources, isRetryable, mapGeminiError, parseAiResponse, safeHttpsUrl, validateCandidate, wasGrounded,
 } from '../app/js/ai-search.js';
 import {
+  AI_MONTHLY_LIMIT, AI_USAGE_STORAGE, aiLimitReached, aiSearchesThisMonth, countAiSearch, readAiUsage,
   decodeKeysParam, encodeKeysParam, keysLink, looksLikeGeminiKey, readGeminiKey, removeGeminiKey, saveGeminiKey,
 } from '../app/js/prefs.js';
-import { aiLookupBlock, lookupResults } from '../app/js/views/form.js';
-import { keyImportCard } from '../app/js/views/settings.js';
+import { aiLookupBlock, aiLookupOptions, lookupResults } from '../app/js/views/form.js';
+import { keyImportCard, settingsView } from '../app/js/views/settings.js';
 
 const TODAY = new Date('2026-10-27T12:00:00Z');
 const KEY = 'AQ.Ab8RN6KtestetestetestetestetestetesteXYZ';
@@ -182,7 +183,7 @@ test('mapGeminiError: chave, permissão, cota, faturamento, modelo, servidor', (
 });
 
 test('mensagens em português; chave e cota não oferecem "tentar de novo"', () => {
-  assert.equal(aiErrorMessage('quota'), 'Limite gratuito de hoje atingido. Tente de novo amanhã.');
+  assert.equal(aiErrorMessage('quota'), 'A chave atingiu o limite de uso da IA por agora. Tente de novo mais tarde.');
   assert.match(aiErrorMessage('key'), /Chave da IA inválida/);
   assert.match(aiErrorMessage('offline'), /Sem internet/);
   assert.match(aiErrorMessage('timeout'), /demorou demais/);
@@ -370,4 +371,129 @@ test('cartão de confirmação: mostra só o fim das chaves e avisa substituiç�
   assert.match(html, /data-action="import-keys"/);
   assert.match(html, /data-action="cancel-import-keys"/);
   assert.equal(keyImportCard(null), '');
+});
+
+// ---------- Conferência de QA (bugs achados depois da primeira versão) ----------
+
+test('QA: citação "[1]" antes do JSON não vira "não encontrei"', () => {
+  const out = parseAiResponse(geminiResponse('Encontrei o livro [1], [2] na Amazon: {"encontrado": true, "livros": [{"titulo": "X", "autores": ["A"]}]}'), { today: TODAY });
+  assert.equal(out.notFound, false);
+  assert.equal(out.results[0].title, 'X');
+  assert.deepEqual(extractJson('veja [1] e {"livros": []}'), { livros: [] });
+  assert.equal(extractJson('só [1] e [2, 3]'), null);
+});
+
+test('QA: resposta com milhares de "[" ou "{" sem par não trava a tela', () => {
+  for (const junk of ['['.repeat(60000), '{"a":'.repeat(30000), `${'{'.repeat(40000)} {"livros":[]}`]) {
+    const t0 = Date.now();
+    extractJson(junk);
+    assert.ok(Date.now() - t0 < 1500, `levou ${Date.now() - t0} ms`);
+  }
+});
+
+test('QA: "API Key not found" é chave inválida', () => {
+  assert.equal(mapGeminiError(400, { error: { status: 'INVALID_ARGUMENT', message: 'API Key not found. Please pass a valid API key.' } }), 'key');
+});
+
+test('QA: sem faturamento num modelo (cota zero), tenta o próximo; se nenhum servir, o aviso é o de faturamento', async () => {
+  const billing = () => jsonResponse(429, { error: { code: 429, status: 'RESOURCE_EXHAUSTED', message: 'Quota exceeded for metric: x, limit: 0, model: a' } });
+  const gone = () => jsonResponse(404, { error: { code: 404, status: 'NOT_FOUND', message: 'models/b is not found' } });
+  const ok = () => jsonResponse(200, geminiResponse('{"encontrado": false, "livros": []}'));
+  let replies = [billing(), ok()];
+  const out = await aiSearch('xyz', { key: KEY, fetchImpl: async () => replies.shift(), models: ['a', 'b'] });
+  assert.equal(out.model, 'b');
+  replies = [billing(), gone()];
+  await assert.rejects(aiSearch('xyz', { key: KEY, fetchImpl: async () => replies.shift(), models: ['a', 'b'] }), (e) => e.code === 'billing');
+  replies = [gone(), billing()];
+  await assert.rejects(aiSearch('xyz', { key: KEY, fetchImpl: async () => replies.shift(), models: ['a', 'b'] }), (e) => e.code === 'billing');
+});
+
+test('QA: mensagens não prometem uso grátis; a de faturamento diz onde ativar', () => {
+  for (const code of ['quota', 'billing']) assert.ok(!/gr[aá]t|gratuit/i.test(aiErrorMessage(code)), code);
+  assert.match(aiErrorMessage('billing'), /exige o faturamento ativo[\s\S]*Google Cloud[\s\S]*5\.000 buscas do mês não são cobradas[\s\S]*alerta de orçamento/);
+});
+
+test('QA: ISBN da IA que é de outro livro é descartado (a não ser o ISBN digitado na busca)', async () => {
+  const [r] = parseAiResponse(geminiResponse(JSON.stringify({ livros: [book] })), { today: TODAY }).results;
+  const other = { source: 'BrasilAPI', title: 'Manual de Jardinagem', authors: 'Fulano de Tal', pages: 90, year: 1999, cover: null };
+  const [out] = await enrichAiResults([r], async () => other);
+  assert.equal(out.title, 'Cara Debbie');
+  assert.equal(out.isbn, '', 'ISBN de outro livro não vai junto');
+  assert.equal(out.checkedBy, undefined);
+  const [typed] = await enrichAiResults([r], async () => other, { queryIsbn: r.isbn });
+  assert.equal(typed.title, 'Manual de Jardinagem', 'o ISBN digitado vale: dados oficiais dele');
+  assert.equal(typed.isbn, r.isbn);
+  const [same] = await enrichAiResults([r], async () => ({ ...other, title: 'Dear Debbie', authors: 'Freida McFadden' }));
+  assert.equal(same.checkedBy, 'BrasilAPI', 'mesmo autor: é o mesmo livro');
+});
+
+// ---------- Limite de segurança: no máximo 30 buscas com IA por mês neste aparelho ----------
+
+function seededStorage(init = {}) {
+  const m = new Map(Object.entries(init));
+  return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), removeItem: (k) => m.delete(k), m };
+}
+
+test('limite do mês: conta por mês, recomeça no mês seguinte, aguenta registro estragado', () => {
+  assert.equal(AI_MONTHLY_LIMIT, 30);
+  const s = memoryStorage();
+  assert.deepEqual(readAiUsage(s), { mes: '', n: 0 });
+  assert.deepEqual(countAiSearch(s, '2026-10-27'), { mes: '2026-10', n: 1 });
+  assert.deepEqual(countAiSearch(s, '2026-10-31'), { mes: '2026-10', n: 2 });
+  assert.equal(s.getItem(AI_USAGE_STORAGE), '{"mes":"2026-10","n":2}');
+  assert.equal(aiSearchesThisMonth(readAiUsage(s), '2026-10-31'), 2);
+  assert.equal(aiSearchesThisMonth(readAiUsage(s), '2026-11-01'), 0, 'dia 1º recomeça');
+  assert.deepEqual(countAiSearch(s, '2026-11-01'), { mes: '2026-11', n: 1 });
+  for (const bad of ['xyz', '{"mes":"2026-10","n":-3}', '{"mes":5,"n":1}', 'null']) {
+    assert.deepEqual(readAiUsage(seededStorage({ [AI_USAGE_STORAGE]: bad })), { mes: '', n: 0 }, bad);
+  }
+  assert.deepEqual(readAiUsage({ getItem: () => { throw new Error('bloqueado'); } }), { mes: '', n: 0 });
+  // Sem gravar (modo privado): a contagem em memória continua valendo.
+  const blocked = { getItem: () => null, setItem: () => { throw new Error('cheio'); } };
+  let usage = null;
+  for (let i = 0; i < 30; i += 1) usage = countAiSearch(blocked, '2026-10-27', usage);
+  assert.equal(usage.n, 30);
+  assert.equal(aiLimitReached(usage, '2026-10-27'), true);
+  assert.equal(aiLimitReached({ mes: '2026-10', n: 29 }, '2026-10-27'), false);
+  assert.equal(aiLimitReached({ mes: '2026-09', n: 30 }, '2026-10-01'), false);
+});
+
+test('limite do mês: conta só a busca que saiu de fato, uma vez mesmo com troca de modelo', async () => {
+  let sent = 0;
+  const onSend = () => { sent += 1; };
+  const gone = async () => jsonResponse(404, { error: { code: 404 } });
+  await assert.rejects(aiSearch('xyz', { key: KEY, fetchImpl: gone, models: ['a', 'b', 'c'], onSend }));
+  assert.equal(sent, 1, 'três modelos tentados, uma busca contada');
+  await assert.rejects(aiSearch('xyz', { key: KEY, fetchImpl: gone, online: () => false, onSend }), (e) => e.code === 'offline');
+  await assert.rejects(aiSearch('xyz', { key: '', fetchImpl: gone, onSend }), (e) => e.code === 'key');
+  assert.equal(await aiSearch('x', { key: KEY, fetchImpl: gone, onSend }).then((r) => r.notFound), true);
+  const ctrl = new AbortController();
+  ctrl.abort();
+  let fetched = 0;
+  await assert.rejects(aiSearch('xyz', { key: KEY, fetchImpl: async () => { fetched += 1; return gone(); }, signal: ctrl.signal, onSend }), (e) => e.code === 'cancelled');
+  assert.equal(fetched, 0);
+  assert.equal(sent, 1, 'sem internet, sem chave, busca curta ou já cancelada: nada contado');
+});
+
+test('limite do mês: botão desligado com o aviso; Ajustes mostra o uso', () => {
+  const html = lookupResults(lookup(), { aiEnabled: true, aiLimit: true });
+  assert.match(html, /<button[^>]*class="btn-outline ai-btn" disabled/);
+  assert.ok(!html.includes('data-action="ai-search"'));
+  assert.match(html, /Limite de segurança do mês atingido \(30 buscas\)\. Volta no dia 1º\./);
+  const retry = aiLookupBlock(lookup({ ai: { status: 'error', message: 'x', retry: true } }), true, { limitReached: true });
+  assert.ok(!retry.includes('data-action="ai-search"'));
+  const results = aiLookupBlock(lookup({ ai: { status: 'done', results: [validateCandidate(book, { today: TODAY })] } }), true, { limitReached: true });
+  assert.match(results, /pick-ai-result/, 'resultados já achados continuam escolhíveis');
+  assert.deepEqual(aiLookupOptions({ geminiKey: KEY, aiUsage: { mes: '2026-10', n: 30 } }, '2026-10-27'), { aiEnabled: true, aiLimit: true });
+  assert.deepEqual(aiLookupOptions({ geminiKey: '', aiUsage: null }, '2026-10-27'), { aiEnabled: false, aiLimit: false });
+
+  const state = { books: [], goals: {}, defaultGoal: 12, lastBackupAt: null };
+  const page = (usage, geminiKey = KEY) => settingsView({ state, ui: { geminiKey, aiUsage: usage }, today: '2026-10-27' });
+  assert.match(page({ mes: '2026-10', n: 2 }), /Buscas com IA este mês: 2 de 30/);
+  assert.match(page({ mes: '2026-09', n: 30 }), /Buscas com IA este mês: 0 de 30/);
+  assert.match(page({ mes: '2026-10', n: 30 }), /Limite de segurança do mês atingido \(30 buscas\)/);
+  assert.ok(!/Buscas com IA este mês/.test(page(null, '')), 'sem chave, sem contador');
+  const help = page(null);
+  assert.match(help, /exige o faturamento ativo[\s\S]*5\.000 buscas do mês não são cobradas[\s\S]*alerta de orçamento[\s\S]*no máximo 30 buscas/);
+  assert.ok(!/gr[aá]tis|gratuit/i.test(help.slice(help.indexOf('set-aikey'), help.indexOf('set-chaves'))), 'nada de "grátis" no cartão da IA');
 });

@@ -80,6 +80,53 @@ export function removeGeminiKey(storage) {
   }
 }
 
+// ---------- Limite de segurança da busca com IA ----------
+// Para nunca chegar perto da cota sem custo do Google (5.000 buscas por mês com o
+// faturamento ativo), cada aparelho faz no máximo AI_MONTHLY_LIMIT buscas com IA por mês.
+// Só conta a busca que de fato foi enviada ao Google. Fica no localStorage, fora do backup.
+
+export const AI_USAGE_STORAGE = 'leituras:iaUso';
+export const AI_MONTHLY_LIMIT = 30;
+
+/** Mês "AAAA-MM" de uma data ISO ("2026-10-27") ou de um Date (no fuso do aparelho). */
+function monthOf(today) {
+  if (typeof today === 'string') return today.slice(0, 7);
+  const d = today instanceof Date ? today : new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+/** { mes, n } guardado, ou um registro vazio se não houver (ou estiver estragado). */
+export function readAiUsage(storage) {
+  try {
+    const raw = JSON.parse(storage.getItem(AI_USAGE_STORAGE) || 'null');
+    if (raw && typeof raw.mes === 'string' && Number.isInteger(raw.n) && raw.n >= 0) return { mes: raw.mes, n: raw.n };
+  } catch { /* registro estragado ou sem acesso: começa do zero */ }
+  return { mes: '', n: 0 };
+}
+
+/** Buscas com IA feitas no mês de today (registro de outro mês = 0). */
+export function aiSearchesThisMonth(usage, today) {
+  return usage && usage.mes === monthOf(today) && Number.isInteger(usage.n) ? usage.n : 0;
+}
+
+/** Chegou ao limite de segurança deste mês? */
+export function aiLimitReached(usage, today) {
+  return aiSearchesThisMonth(usage, today) >= AI_MONTHLY_LIMIT;
+}
+
+/**
+ * Conta uma busca enviada e devolve o novo { mes, n }. current: a contagem em memória
+ * (vale a maior das duas, para o limite valer mesmo se o navegador recusar gravar).
+ */
+export function countAiSearch(storage, today, current = null) {
+  const n = Math.max(aiSearchesThisMonth(readAiUsage(storage), today), aiSearchesThisMonth(current, today)) + 1;
+  const usage = { mes: monthOf(today), n };
+  try {
+    storage.setItem(AI_USAGE_STORAGE, JSON.stringify(usage));
+  } catch { /* sem armazenamento: vale só enquanto o app estiver aberto */ }
+  return usage;
+}
+
 // ---------- Levar as chaves para outro celular ----------
 // Um link do app com as duas chaves no fragmento (#/ajustes?chaves=...): o que vem depois
 // do # nunca vai para servidor nenhum. Só as chaves de busca entram, nunca dados de livros.
