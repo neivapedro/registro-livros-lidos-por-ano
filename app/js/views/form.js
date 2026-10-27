@@ -2,6 +2,7 @@ import { daysInclusive, formatShort, isIsoDate, yearOf } from '../dates.js';
 import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
 import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags, validateBook } from '../store.js';
 import { hasTag } from '../tags.js';
+import { AI_MONTHLY_LIMIT, aiLimitReached } from '../prefs.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
 
@@ -31,11 +32,15 @@ function aiCard(r, i) {
     </button>`;
 }
 
-export function aiLookupBlock(lookup, aiEnabled) {
+export function aiLookupBlock(lookup, aiEnabled, { limitReached = false } = {}) {
   if (!lookup.searched || lookup.loading || lookup.query.trim().length < 2) return '';
   if (!aiEnabled) return '<p class="faint small ai-hint">Ative a busca com IA em Ajustes</p>';
   const ai = lookup.ai || {};
-  const button = (label) => `<button type="button" class="btn-outline ai-btn" data-action="ai-search">${icon('sparkle', { size: 18, stroke: 1.8 })}${label}</button>`;
+  // Limite de segurança do mês (prefs.js): o botão fica desligado, com o motivo.
+  const button = (label) => (limitReached
+    ? `<button type="button" class="btn-outline ai-btn" disabled aria-describedby="ai-limit">${icon('sparkle', { size: 18, stroke: 1.8 })}${label}</button>
+      <p class="muted small ai-limit" id="ai-limit">Limite de segurança do mês atingido (${AI_MONTHLY_LIMIT} buscas). Volta no dia 1º.</p>`
+    : `<button type="button" class="btn-outline ai-btn" data-action="ai-search">${icon('sparkle', { size: 18, stroke: 1.8 })}${label}</button>`);
   if (ai.status === 'loading') {
     return `
     <div class="ai-box" aria-busy="true">
@@ -68,7 +73,7 @@ export function aiLookupBlock(lookup, aiEnabled) {
   return `<div class="ai-box">${button('Buscar com IA')}</div>`;
 }
 
-export function lookupResults(lookup, { aiEnabled = false } = {}) {
+export function lookupResults(lookup, { aiEnabled = false, aiLimit = false } = {}) {
   if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
   // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
   // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
@@ -76,7 +81,7 @@ export function lookupResults(lookup, { aiEnabled = false } = {}) {
   const isbnTip = lookup.searched && !lookup.isbn
     ? '<p class="muted small lookup-tip">Não achou? Digite o ISBN: os 13 números perto do código de barras, no verso do livro.</p>'
     : '';
-  const ai = aiLookupBlock(lookup, aiEnabled);
+  const ai = aiLookupBlock(lookup, aiEnabled, { limitReached: aiLimit });
   if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
     const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
     return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>${isbnTip}${ai}`;
@@ -91,7 +96,12 @@ export function lookupResults(lookup, { aiEnabled = false } = {}) {
     </button>`).join('') + isbnTip + ai;
 }
 
-function lookupBlock(ui) {
+/** Opções da busca com IA para lookupResults (com chave? já no limite do mês?). */
+export function aiLookupOptions(ui, today) {
+  return { aiEnabled: Boolean(ui.geminiKey), aiLimit: aiLimitReached(ui.aiUsage, today) };
+}
+
+function lookupBlock(ui, today) {
   return `
     <section class="field-group">
       <label class="label" for="lookup">Buscar livro</label>
@@ -100,7 +110,7 @@ function lookupBlock(ui) {
         <input id="lookup" type="search" inputmode="search" autocomplete="off" enterkeyhint="search"
           placeholder="Título, autor ou ISBN" value="${esc(ui.lookup.query)}" data-lookup>
       </div>
-      <div id="lookup-results" class="results" aria-live="polite">${lookupResults(ui.lookup, { aiEnabled: Boolean(ui.geminiKey) })}</div>
+      <div id="lookup-results" class="results" aria-live="polite">${lookupResults(ui.lookup, aiLookupOptions(ui, today))}</div>
     </section>`;
 }
 
@@ -339,7 +349,7 @@ export function formView({ state, ui, isEdit, today }) {
     </header>
     ${isEdit ? bookTabBar(storedBook(state, ui), 'dados') : ''}
     <form id="book-form" class="form form-lean" data-submit="save-book" novalidate>
-      ${showLookup ? lookupBlock(ui) : ''}
+      ${showLookup ? lookupBlock(ui, today) : ''}
       ${pickedCard}
 
       <section class="field-group">

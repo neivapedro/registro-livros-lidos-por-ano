@@ -332,7 +332,7 @@ try {
   step('não encontrado, limite (429), chave inválida (400), sem permissão (403)');
   const cases = [
     ['livro inexistente', /A IA não encontrou esse livro/, false],
-    ['cota', /Limite gratuito de hoje atingido/, false],
+    ['cota', /limite de uso da IA/, false],
     ['chave ruim', /Chave da IA inválida/, false],
     ['sem permissao', /não tem permissão[\s\S]*Generative Language API/, false],
   ];

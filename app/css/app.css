@@ -832,6 +832,8 @@ textarea::placeholder { color: var(--faint); }
 .ai-box { display: flex; flex-direction: column; gap: 8px; padding-top: 6px; }
 .ai-hint { padding: 6px 2px 0; }
 .ai-btn { width: 100%; min-height: 48px; gap: 8px; font-size: 15px; }
+.ai-btn:disabled { opacity: 0.45; cursor: default; }
+.ai-limit, .ai-usage { padding: 0 2px; }
 .ai-status, .ai-label { display: inline-flex; align-items: center; gap: 6px; font-weight: 700; color: var(--text-soft); padding: 0 2px; }
 .ai-label { color: var(--accent); }
 .ai-error { color: var(--danger-text); border: 1px solid var(--danger-line); background: color-mix(in srgb, var(--danger) 8%, transparent); border-radius: 14px; padding: 10px 12px; }

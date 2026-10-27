@@ -31,7 +31,7 @@ import { BOOK_TABS } from './views/book-tabs.js';
 import { bookDetailView, loadedHdCovers } from './views/book-detail.js';
 import { calendarUi, heatmapDayAt } from './views/calendar.js';
 import { compareYearsOf } from './views/charts.js';
-import { detailsHaveErrors, detailsSummary, formView, lookupResults, readingSummary } from './views/form.js';
+import { detailsHaveErrors, detailsSummary, aiLookupOptions, formView, lookupResults, readingSummary } from './views/form.js';
 import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
@@ -55,7 +55,7 @@ import { finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
 import { AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
-import { decodeKeysParam, keysLink, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
+import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -600,7 +600,7 @@ async function setCoverFromPhoto(input) {
 
 function renderLookup() {
   const el = document.getElementById('lookup-results');
-  if (el) el.innerHTML = lookupResults(ui.lookup, { aiEnabled: Boolean(ui.geminiKey) });
+  if (el) el.innerHTML = lookupResults(ui.lookup, aiLookupOptions(ui, todayIso()));
 }
 
 async function runLookup() {
@@ -2024,6 +2024,7 @@ if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.
 // O link de chaves (#/ajustes?chaves=...) só mostra um pedido de confirmação em Ajustes.
 
 ui.geminiKey = readGeminiKey(localStorage);
+ui.aiUsage = readAiUsage(localStorage);
 ui.keyImport = null;
 let aiAbort = null;
 
@@ -2036,6 +2037,13 @@ async function runAiSearch() {
   const lookup = ui.lookup;
   const query = lookup.query;
   if (!ui.geminiKey || query.trim().length < 2) return;
+  // Limite de segurança do mês neste aparelho (prefs.js): o botão já vem desligado.
+  const stored = readAiUsage(localStorage); // outra aba pode ter contado também
+  if (aiSearchesThisMonth(stored, todayIso()) > aiSearchesThisMonth(ui.aiUsage, todayIso())) ui.aiUsage = stored;
+  if (aiLimitReached(ui.aiUsage, todayIso())) {
+    renderLookup();
+    return;
+  }
   cancelAiSearch();
   const ctrl = new AbortController();
   aiAbort = ctrl;
@@ -2043,10 +2051,11 @@ async function runAiSearch() {
   renderLookup();
   const stale = () => ctrl.signal.aborted || ui.lookup !== lookup || lookup.query !== query;
   try {
-    const found = await aiSearch(query, { key: ui.geminiKey, signal: ctrl.signal });
+    const onSend = () => { ui.aiUsage = countAiSearch(localStorage, todayIso(), ui.aiUsage); };
+    const found = await aiSearch(query, { key: ui.geminiKey, signal: ctrl.signal, onSend });
     // Com ISBN, os dados oficiais (BrasilAPI, Open Library, Google Books) valem mais que os da IA.
     const lookupIsbn = (isbn) => searchBooks(isbn, { signal: ctrl.signal, googleKey: googleBooksKey() }).then((o) => o.results[0] || null);
-    const results = await enrichAiResults(found.results, lookupIsbn);
+    const results = await enrichAiResults(found.results, lookupIsbn, { queryIsbn: lookup.isbn });
     if (stale()) return;
     lookup.ai = { status: 'done', results };
   } catch (err) {
@@ -2145,7 +2154,8 @@ Object.assign(actions, {
   'pick-ai-result'(el) {
     const r = ui.lookup.ai?.results?.[Number(el.dataset.index)];
     if (!r || !ui.draft) return;
-    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn });
+    // Sem ISBN conferido da IA, fica o ISBN que a pessoa digitou na busca (se digitou).
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn || ui.lookup.isbn || '' });
     ui.picked = true;
     render();
   },
