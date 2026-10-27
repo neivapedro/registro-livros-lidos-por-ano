@@ -363,7 +363,7 @@ try {
   await page.waitForSelector(`${openSheet} .qm`);
   assert.equal(await page.evaluate(() => document.getElementById('app').dataset.page), 'inicio', 'segurar não abre o livro');
   assert.deepEqual((await page.locator(`${openSheet} .qm-item`).allTextContents()).map((t) => t.trim()),
-    ['Abrir livro', 'Registrar leitura', 'Ler agora', 'Concluir']);
+    ['Abrir livro', 'Registrar leitura', 'Ler agora', 'Concluir', 'Voltar para Quero ler']);
   assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.reading')).userSelect), 'none', 'sem seleção de texto ao segurar');
   await shot('menu-lendo');
   // Registrar leitura a partir do menu: a folha troca.

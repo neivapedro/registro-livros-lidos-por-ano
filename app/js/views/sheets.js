@@ -66,6 +66,7 @@ export function quickMenu(book, state) {
       menuItem({ label: 'Registrar leitura', glyph: GLYPHS.pencil, action: 'update-page', id, close: false }),
       menuItem({ label: 'Ler agora', glyph: `<span class="qm-play">${GLYPHS.play}</span>`, action: 'start-timer', id }),
       menuItem({ label: 'Concluir', glyph: icon('check', { size: 20, stroke: 2 }), href: finishHref(id) }),
+      menuItem({ label: 'Voltar para Quero ler', glyph: GLYPHS.queue, action: 'pause-reading', id }),
     );
   }
   if (book.status === STATUS.WANT) {
