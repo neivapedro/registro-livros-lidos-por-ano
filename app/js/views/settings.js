@@ -134,6 +134,15 @@ function appearanceCard(pref) {
   'Automático acompanha o iPhone: claro de dia, escuro à noite. Vale só para este aparelho (não vai para o backup).', 'theme-card');
 }
 
+/** Nome da saudação do Início (v1.5): só neste aparelho, fora do backup (prefs.js). */
+function nameCard(name) {
+  return group('nome', 'Seu nome', `
+        <div class="field">
+          <label for="set-name">Nome na saudação do Início</label>
+          <input id="set-name" type="text" maxlength="30" autocomplete="given-name" autocapitalize="words" enterkeyhint="done" spellcheck="false" placeholder="Opcional" value="${esc(name)}" data-username>
+        </div>`, 'Aparece como “Boa noite, Nome”. Fica só neste aparelho e não vai para o backup.', 'name-card');
+}
+
 export function settingsView({ state, ui, today }) {
   const year = yearOf(today);
   const goal = getGoal(state, year);
@@ -147,6 +156,7 @@ export function settingsView({ state, ui, today }) {
       <span class="icon-btn-spacer"></span>
     </header>
 ${keyImportCard(ui?.keyImport, { googleBooksKey: ui?.googleKey, geminiKey: ui?.geminiKey })}
+${nameCard(ui?.userName || '')}
 ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}

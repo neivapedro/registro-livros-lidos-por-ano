@@ -57,6 +57,7 @@ const SHELL = [
   './js/longpress.js',
   './js/swipe.js',
   './js/motion.js',
+  './js/greeting.js',
   './js/calendar.js',
   './js/charts.js',
   './js/cover-photo.js',

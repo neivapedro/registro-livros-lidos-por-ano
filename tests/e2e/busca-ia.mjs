@@ -277,7 +277,10 @@ try {
   await page.goto(`${BASE}#/ajustes`);
   await onPage(page, 'ajustes');
   const heads = await page.$$eval('.set-head', (els) => els.map((e) => e.textContent));
-  assert.deepEqual(heads.slice(3, 6), ['Busca de livros', 'Busca com IA (gratuita)', 'Outro celular']);
+  // Os três cartões de chaves, juntos e nessa ordem (1.5: "Seu nome" entrou no topo de Ajustes).
+  const keysAt = heads.indexOf('Busca de livros');
+  assert.ok(keysAt > heads.indexOf('Backup dos dados'), 'chaves depois do backup');
+  assert.deepEqual(heads.slice(keysAt, keysAt + 3), ['Busca de livros', 'Busca com IA (gratuita)', 'Outro celular']);
   assert.equal(await page.getAttribute('#ai-key', 'type'), 'password');
   assert.match(await page.textContent('#set-aikey + .set-card .gkey-status'), /Sem chave — busca com IA desligada/);
   assert.equal(await page.isDisabled('[data-action="remove-aikey"]'), true);
