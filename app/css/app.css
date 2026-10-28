@@ -2796,3 +2796,234 @@ body [data-theme] { color: var(--text); }
   .empty-art :is(.f, .p) { fill: var(--surface-2); }
   .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
 }
+
+/* ===== 1.6 Texto, contraste e telas largas ===== */
+/* Tamanho do texto: os font-size do arquivo são calc(Npx * var(--type-scale, 1))
+   (tools/escala-texto.mjs); --type-scale, --type-scale-nav e --type-scale-ui (com teto) e
+   data-text-size ('pequeno' | 'padrao' | 'grande' | 'enorme') vêm do index.html e de
+   js/text-scale.js. Aqui: o fator dos títulos e os ajustes de layout para letra grande.
+   Depois: "Aumentar contraste" e "Reduzir transparência" do iPhone, e telas largas (iPad,
+   celular deitado). */
+
+/* Títulos (28 px ou mais) crescem metade do texto comum, como os títulos grandes do iOS. */
+:root { --type-scale-lg: calc(1 + (var(--type-scale, 1) - 1) * 0.5); }
+
+/* Números e contadores não quebram no meio ("1" / "5"). */
+.book-tab-count, .seg-count, .tag-count-n { white-space: nowrap; }
+
+/* Seletores e abas: a letra cresce até 1,3× (--type-scale-ui), senão as opções não cabem. */
+.segmented, .mini-seg, .book-tabs, .rs-tabs { --type-scale: var(--type-scale-ui, 1); }
+
+/* Letra grande (data-text-size): seletores de 4 opções em 2 linhas, títulos de seção que quebram,
+   data da saudação inteira; na "enorme", botões e números da ficha e do Resumo empilhados. */
+:is([data-text-size="grande"], [data-text-size="enorme"]) .segmented[style*="--seg-count:4"] { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .segmented .seg-btn { padding-inline: 4px; line-height: 1.15; text-align: center; }
+/* Nome da cor escolhida: nas pontas, alinhado à borda em vez de centrado (não sai do cartão). */
+:is([data-text-size="grande"], [data-text-size="enorme"]) .accent-sw:first-child .accent-name { align-self: flex-start; padding-left: 4px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .accent-sw:last-child .accent-name { align-self: flex-end; padding-right: 4px; }
+.accent-row { --type-scale: var(--type-scale-ui, 1); }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .tabs-4 .seg-btn { min-height: 48px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .shelf-tabs[style*="--seg-count:4"] { border-radius: 26px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .book-tab { padding-inline: 2px; gap: 4px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .rs-tab { line-height: 1.15; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .section-head { flex-wrap: wrap; row-gap: 6px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .section-head h2 { min-width: 0; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .sc-head h2 { white-space: normal; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .greet-date { white-space: normal; line-height: 1.3; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .top-title { text-align: center; line-height: 1.2; }
+[data-text-size="enorme"] .ficha-actions { grid-template-columns: minmax(0, 1fr); }
+[data-text-size="enorme"] .ppd { flex-wrap: wrap; }
+[data-text-size="enorme"] .ppd-cell { flex: 1 1 8.5em; }
+[data-text-size="enorme"] .kpis { grid-template-columns: minmax(0, 1fr); }
+
+/* Ajustes → Aparência → Tamanho do texto. */
+.text-size-pick { display: flex; flex-direction: column; gap: 8px; margin: 6px -6px -6px; padding: 14px 6px 8px; border-top: 1px solid var(--line); }
+.text-size-pick .accent-head { padding: 0 10px; }
+
+/* ---------- Aumentar contraste (iPhone: Acessibilidade → Tela e Tamanho do Texto) ---------- */
+/* Texto e texto secundário mais fortes (7:1 no corpo), contornos em cartões, botões e chips,
+   vidro opaco, nada de texto translúcido e anel de foco mais grosso. Cada cor de destaque tem
+   uma versão mais clara (escuro) ou mais funda (claro). */
+@media (prefers-contrast: more) {
+  :root:not([data-theme="light"]), [data-theme="dark"] {
+    --text: #FAF7F3;
+    --text-soft: #EAE3DC;
+    --muted: #D9D1CA;
+    --faint: #BDB3AA;
+    --line: #4A433E;
+    --line-strong: #7A716A;
+    --star-off: #6E655E;
+    --chart-guide: #8C827A;
+    --danger: #F09A8B;
+    --danger-text: #F8C6BD;
+    --good: #A9D3AF;
+    --acc-terracota: #EDB485; --acc-terracota-hover: #F3C9A4;
+    --acc-oliva: #C4CC8C; --acc-oliva-hover: #D6DCAA;
+    --acc-petroleo: #8CCBD3; --acc-petroleo-hover: #ABDAE0;
+    --acc-vinho: #EFB5C1; --acc-vinho-hover: #F5CBD3;
+    --acc-grafite: #CDD2D8; --acc-grafite-hover: #E0E3E7;
+    --bd-scrim-top: 66%; --bd-scrim-cover: 50%; --bd-scrim-mid: 74%; --bd-scrim-low: 92%;
+    --tint-a: 0.4;
+    --hero-tint-a: 0.7;
+  }
+  [data-theme="light"] {
+    --text: #120E0B;
+    --text-soft: #2E2620;
+    --muted: #3A312A;
+    --faint: #463C34;
+    --line: #A89C91;
+    --line-strong: #6E645B;
+    --star-off: #A89C91;
+    --chart-guide: #6E645B;
+    --danger: #8E2E1F;
+    --danger-text: #7A2617;
+    --good: #1F5129;
+    --acc-terracota: #6A3812; --acc-terracota-hover: #5E3210;
+    --acc-oliva: #3B4515; --acc-oliva-hover: #333C12;
+    --acc-petroleo: #134A57; --acc-petroleo-hover: #10414D;
+    --acc-vinho: #7A2236; --acc-vinho-hover: #6E1D30;
+    --acc-grafite: #33383F; --acc-grafite-hover: #2B3036;
+    --bd-scrim-top: 66%; --bd-scrim-cover: 54%; --bd-scrim-mid: 78%; --bd-scrim-low: 92%;
+    --tint-a: 0.16;
+    --hero-tint-a: 0.24;
+  }
+  /* Terracota (o padrão) usava os tokens de sempre: passa a usar a versão forte. */
+  [data-accent="terracota"], [data-accent="terracota"] [data-theme] { --accent: var(--acc-terracota); --accent-hover: var(--acc-terracota-hover); }
+
+  /* Contornos: cartões, blocos, listas, folhas e botões sem borda ganham uma. */
+  .card, .tile, .group, .qm-list, .ppd-cell, .segmented, .mini-seg, .sheet, .nav, .cbar { border-color: var(--line-strong); }
+  .bento .tile, .tile.dark, .icon-btn.sm, .icon-btn.dark { border: 1px solid var(--line-strong); }
+  .rn-icon, .qm-cancel, .btn-tonal, .pill-muted, .pill-accent, .chip, .ficha-chip, .ficha-status, .book-tab-count,
+  .ficha-stats > div, .ficha-fav, .kpi, .psheet-chip {
+    border: 1px solid var(--line-strong);
+  }
+  .btn-tonal { box-shadow: none; border-color: var(--accent); }
+  .btn-ghost, .chip-btn, .fchip, .btn-outline, .search-box, .field, .chip.chip-tag, .ficha-chip.is-tag { border-color: var(--line-strong); }
+  .seg-btn.is-on, .segmented.has-ind > .tab-ind { box-shadow: inset 0 0 0 1px var(--text); }
+  /* Nada de texto translúcido. */
+  .seg-count, .li-extra, .cover-author, .ficha-hero.has-backdrop .ficha-author { opacity: 1; }
+  .ficha-hero.has-backdrop .ficha-status { background: var(--bg); }
+  /* Texto em destaque sobre fundos tingidos pelo próprio destaque: fundo neutro. */
+  .btn-tonal, .psheet-chip, .quote-page { background: var(--surface-2); }
+  .ficha-top .btn-text.accent { background: var(--bg); border: 1px solid var(--line-strong); }
+  .nav a.is-on { background: var(--surface-2); }
+  /* Foco bem visível. */
+  :focus-visible { outline-width: 3px; outline-offset: 3px; }
+}
+
+/* Vidro opaco: com "Aumentar contraste" e com "Reduzir transparência" (se o navegador souber). */
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  :root, [data-theme] {
+    --glass-bg: var(--surface);
+    --glass-solid: var(--surface);
+    --bar-bg: var(--bg);
+  }
+  .nav, .cbar, .sheet, .rs-tabs, .group-head, body::before {
+    -webkit-backdrop-filter: none; backdrop-filter: none;
+  }
+  .nav { background: var(--surface); }
+  .sheet { background: var(--surface); }
+  .rs-tabs, .group-head { background: var(--bg); }
+  .ficha-backdrop-img { filter: blur(40px) saturate(1) brightness(var(--bd-bright)); }
+}
+
+/* ---------- Telas largas: iPad, computador e celular deitado ---------- */
+/* Até 767 px nada muda. A partir de 768 px o conteúdo fica centralizado: telas de leitura e
+   formulários numa coluna de 680 px; Início, ficha, Estante e Resumo usam até 1100 px, em duas
+   colunas. A barra de baixo continua a cápsula flutuante; no celular deitado (altura curta)
+   ela vira um trilho vertical à esquerda e os topos ficam mais baixos. */
+@media (min-width: 768px) {
+  .app { --app-max: 680px; max-width: var(--app-max); padding-inline: 24px; }
+  .app:is([data-page="inicio"], [data-page="estante"], [data-page="resumo"]),
+  .app[data-page="livro"]:has(> .ficha-hero) { --app-max: 1100px; }
+  .rs-tabs { margin-inline: -24px; padding-inline: 24px; }
+  /* A barra compacta do alto acompanha a largura do conteúdo. */
+  .cbar { padding-inline: max(8px, calc(50% - var(--app-max, 480px) / 2 + 16px)); }
+
+  /* Início: "Lendo agora" à esquerda; números, lidos e a fila à direita. */
+  .app[data-page="inicio"]:has(> .section .card.reading) {
+    display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto 1fr; column-gap: 28px; align-items: start; align-content: start;
+  }
+  .app[data-page="inicio"]:has(> .section .card.reading) > * { grid-column: 1 / -1; }
+  .app[data-page="inicio"]:has(> .section .card.reading) > .bento { grid-column: 2; grid-row: 2; }
+  .app[data-page="inicio"]:has(> .section .card.reading) > .section:has(.card.reading) { grid-column: 1; grid-row: 2 / -1; }
+  .app[data-page="inicio"]:has(> .section .card.reading) > .section:not(:has(.card.reading)) { grid-column: 2; grid-row: 3; }
+  .app[data-page="inicio"]:has(> .section .card.reading) > .teaser { grid-column: 2; grid-row: 4; }
+  /* Com o cronômetro rodando, a faixa dele ocupa a linha de cima, inteira. */
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) { grid-template-rows: auto auto auto auto auto 1fr; }
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) > .timer-banner { grid-row: 2; }
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) > .bento { grid-row: 3; }
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) > .section:has(.card.reading) { grid-row: 3 / -1; }
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) > .section:not(:has(.card.reading)) { grid-row: 4; }
+  .app[data-page="inicio"]:has(> .section .card.reading):has(> .timer-banner) > .teaser { grid-row: 5; }
+  .app[data-page="inicio"] > .section:has(.card.reading) { gap: 14px; }
+
+  /* Ficha: capa e dados à esquerda (presos ao rolar, se couberem); o resto à direita. */
+  .app[data-page="livro"]:has(> .ficha-hero) {
+    display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr);
+    grid-template-rows: repeat(11, auto) 1fr; column-gap: 32px; row-gap: 0; align-items: start; align-content: start;
+  }
+  .app[data-page="livro"]:has(> .ficha-hero) > * { grid-column: 2; margin-bottom: 20px; }
+  .app[data-page="livro"] > .ficha-hero {
+    grid-column: 1; grid-row: 1 / -1; margin: 0;
+    padding: 6px 18px 22px; border-radius: 28px; border: 1px solid var(--line);
+  }
+  .app[data-page="livro"] > .ficha-hero .ficha-top { margin-inline: -10px; }
+
+  /* Estante: listas em duas colunas, capas em mais colunas. */
+  .shelf-list .group { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .shelf-list .group > .li:nth-child(2)::before { content: none; }
+  .shelf-list .group > .li:nth-child(even) { box-shadow: inset 1px 0 0 var(--line-strong); }
+  .shelf-list .group > .li + .li::before { left: 58px; }
+  .cover-grid { grid-template-columns: repeat(auto-fill, minmax(116px, 1fr)); gap: 20px 14px; }
+
+  /* Resumo: os cartões em duas colunas (cada um inteiro numa coluna). */
+  .app[data-page="resumo"] .rs-panel { display: block; columns: 2; column-gap: 16px; }
+  .app[data-page="resumo"] .rs-panel > * { break-inside: avoid; margin-bottom: 14px; }
+  .app[data-page="resumo"] .rs-panel > :is(.kpis, .kpi-caption) { column-span: all; }
+  .app[data-page="resumo"] .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .app[data-page="resumo"] .rs-panel > .kpi-caption { margin: -6px 4px 14px; }
+}
+/* Ficha presa ao rolar só se ela cabe inteira na altura da tela. */
+@media (min-width: 768px) and (min-height: 760px) {
+  .app[data-page="livro"] > .ficha-hero { position: sticky; top: calc(var(--safe-t) + 16px); }
+}
+/* Telas largas e altas: as folhas (Registrar leitura, menu rápido) aparecem no meio. */
+@media (min-width: 768px) and (min-height: 600px) {
+  .sheet {
+    top: 50%; bottom: auto; translate: 0 -50%;
+    max-height: calc(100dvh - var(--kb, 0px) - 48px);
+    transform: translateY(calc(50dvh + 50% + 20px));
+    box-shadow: 0 20px 60px var(--shadow-color), inset 0 1px 0 var(--glass-hi);
+  }
+  .sheet-layer.is-open .sheet { transform: none; }
+}
+
+/* Celular deitado (pouca altura): barra de navegação vira um trilho à esquerda, topos baixos. */
+@media (orientation: landscape) and (max-height: 520px) {
+  :root, [data-theme] {
+    --nav-space: 0px;
+    --safe-l: env(safe-area-inset-left, 0px);
+    --safe-r: env(safe-area-inset-right, 0px);
+    --rail: 76px;
+  }
+  /* Títulos grandes menores: a altura é curta. */
+  :root { --type-scale-lg: calc(0.82 * (1 + (var(--type-scale, 1) - 1) * 0.5)); }
+  body { padding-left: calc(var(--safe-l) + var(--rail) + 8px); padding-right: var(--safe-r); }
+  body.no-nav { padding-left: var(--safe-l); }
+  .app { padding-top: calc(10px + var(--safe-t)); padding-bottom: calc(28px + var(--safe-b)); }
+  .nav {
+    left: calc(var(--safe-l) + 8px); right: auto; top: 50%; bottom: auto;
+    transform: translateY(-50%);
+    width: var(--rail); height: auto; max-height: calc(100dvh - 16px);
+    flex-direction: column; justify-content: center; gap: 2px; padding: 6px;
+    border-radius: 30px;
+  }
+  .nav a { flex: 0 0 auto; width: 100%; height: 50px; border-radius: 22px; }
+  .nav .nav-add { flex: 0 0 auto; width: 52px; height: 52px; margin: 2px auto; }
+  body:not(.no-nav)::after { display: none; }
+  .toast { bottom: calc(var(--safe-b) + 14px); }
+  .top, .greet-row, .ficha-top { min-height: 44px; }
+  .cbar { left: calc(var(--safe-l) + var(--rail) + 8px); }
+}
