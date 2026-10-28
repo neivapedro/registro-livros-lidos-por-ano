@@ -2170,3 +2170,225 @@ body [data-theme] { color: var(--text); }
 
 /* Ficha: "Voltar para Quero ler", discreto abaixo de Ler agora / Concluir. */
 .ficha-card .ficha-pause { display: flex; justify-content: center; width: 100%; margin-top: 4px; color: var(--muted); font-weight: 600; }
+
+/* ===== 1.5 Capas, lombadas e textura ===== */
+/* Capa desenhada com cara de capa de livro (cor funda, luz em diagonal, ornamento fixo por
+   título, título em serifa e autor em versalete; nas pequenas, as iniciais), lombada e borda
+   de páginas sobre qualquer capa (com ou sem imagem), o modo "Lombadas" da Estante e um
+   grão de papel no fundo do app. A capa é um objeto: a luz dela é a mesma nos dois temas. */
+
+:root, [data-theme] {
+  --cv-sheen: rgb(255 255 255 / 0.13);
+  --cv-shade: rgb(0 0 0 / 0.26);
+  --cv-crease: rgb(0 0 0 / 0.34);
+  --cv-crease-soft: rgb(0 0 0 / 0.14);
+  --cv-crease-hi: rgb(255 255 255 / 0.22);
+  --cv-edge-hi: rgb(255 255 255 / 0.2);
+  --cv-edge-lo: rgb(0 0 0 / 0.22);
+  --cv-panel: rgb(0 0 0 / 0.2);
+  /* Estante de lombadas: fundo do móvel, tábua (topo, frente, quina) e sombras. */
+  --case-bg: #15120F;
+  --case-line: #26201B;
+  --case-shade: rgb(0 0 0 / 0.42);
+  --plank-top: #5A4636;
+  --plank: #3A2D23;
+  --plank-lo: #1F1712;
+  --plank-cast: rgb(0 0 0 / 0.5);
+  --sp-shade: rgb(0 0 0 / 0.34);
+  --sp-hi: rgb(255 255 255 / 0.16);
+  --sp-gap: rgb(0 0 0 / 0.55);
+  /* Grão de papel: quase nada no escuro. */
+  --grain-a: 0.08;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .38 0 0 0 0 .27 0 0 0 0 .17 0 0 0 1.3 -.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+[data-theme="light"] {
+  --case-bg: #EFE5D8;
+  --case-line: #E2D5C5;
+  --case-shade: rgb(90 60 30 / 0.16);
+  --plank-top: #E6D4BD;
+  --plank: #CDB394;
+  --plank-lo: #A88B69;
+  --plank-cast: rgb(80 52 28 / 0.22);
+  --sp-gap: rgb(60 35 15 / 0.35);
+  --grain-a: 0.24;
+}
+
+/* ---------- Capa desenhada ---------- */
+/* container-type: o ornamento e as iniciais medem pela largura da própria capa (cqw).
+   A capa já tem largura definida em todos os tamanhos. */
+.cover {
+  container-type: inline-size; isolation: isolate;
+  background-color: var(--cover-bg);
+  background-image: linear-gradient(158deg, var(--cv-sheen), transparent 38%, transparent 62%, var(--cv-shade));
+}
+.cover-title { text-wrap: balance; letter-spacing: -0.1px; }
+.cover-author {
+  font-weight: 700; text-transform: none; letter-spacing: 0.07em; opacity: 0.88;
+  font-variant-caps: all-small-caps; font-size: 11px;
+  padding-top: 5px;
+  background: linear-gradient(var(--cover-acc), var(--cover-acc)) 0 0 / 14px 1px no-repeat;
+}
+.cover-sm .cover-author { display: none; }
+.cover-fill .cover-author, .cover-hero .cover-author { font-size: 12.5px; }
+.cover-xl .cover-author { font-size: 14px; }
+.cal-cover .cover-title, .retro-mosaic .cover-title { text-wrap: wrap; }
+/* Grade de capas: o autor em versalete também (uma linha, cortada se precisar). */
+.cg-link .cover-fill .cover-author { display: block; font-size: 10px; padding-top: 4px; }
+
+/* Ornamento (atrás do texto; a imagem, quando existe, cobre tudo). */
+.cover-deco { position: absolute; inset: 0; z-index: -1; pointer-events: none; color: var(--cover-acc); }
+/* 0 · moldura dupla de filetes */
+.cover-d0 .cover-deco { inset: clamp(3px, 6cqw, 11px); border: 1px solid; opacity: 0.55; border-radius: 1px; }
+.cover-d0 .cover-deco::after { content: ''; position: absolute; inset: 2px; border: 1px solid; opacity: 0.45; }
+/* 1 · dois filetes no alto e um no pé */
+.cover-d1 .cover-deco {
+  opacity: 0.7;
+  background:
+    linear-gradient(currentColor, currentColor) 0 clamp(3px, 6cqw, 12px) / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 calc(clamp(3px, 6cqw, 12px) + 3px) / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 calc(100% - clamp(3px, 6cqw, 12px)) / 100% 1px no-repeat;
+}
+/* 2 · arcos concêntricos no canto */
+.cover-d2 .cover-deco {
+  opacity: 0.4;
+  background: repeating-radial-gradient(circle at 112% 108%, transparent 0 calc(9cqw - 1px), currentColor calc(9cqw - 1px) 9cqw);
+  -webkit-mask-image: radial-gradient(circle at 112% 108%, #000 34cqw, transparent 78cqw);
+  mask-image: radial-gradient(circle at 112% 108%, #000 34cqw, transparent 78cqw);
+}
+/* 3 · faixa hachurada no alto */
+.cover-d3 .cover-deco {
+  opacity: 0.55;
+  background:
+    linear-gradient(currentColor, currentColor) 0 clamp(4px, 9cqw, 18px) / 100% 1px no-repeat,
+    repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 4px) 0 0 / 100% clamp(4px, 9cqw, 18px) no-repeat;
+}
+/* 4 · rótulo escuro no pé, com filete */
+.cover-d4 .cover-deco {
+  top: auto; height: 28%;
+  background: var(--cv-panel);
+  border-top: 1px solid currentColor;
+}
+
+/* Iniciais (capas pequenas sem texto). */
+.cover-ini {
+  margin: auto; padding-left: max(1px, 4cqw);
+  font-family: var(--serif); font-size: 14px; font-size: 42cqw; line-height: 1; letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* ---------- Lombada e borda de páginas (toda capa, com ou sem imagem) ---------- */
+.cover::before {
+  content: ''; position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; pointer-events: none;
+  width: 8px; width: clamp(3px, 10cqw, 17px);
+  background: linear-gradient(to right, var(--cv-crease) 0, var(--cv-crease-hi) 18%, var(--cv-crease-soft) 52%, var(--cv-crease-hi) 66%, transparent);
+}
+.cover::after {
+  content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(158deg, var(--cv-sheen), transparent 30%);
+  box-shadow: inset 0 1px 0 var(--cv-edge-hi), inset -1px 0 0 var(--cv-edge-hi), inset -2px 0 0 var(--cv-edge-lo), inset 0 -1px 0 var(--cv-edge-lo);
+}
+/* Miniaturas: só um sopro da lombada. */
+:is(.cover-xs, .cover-li)::before { opacity: 0.6; }
+:is(.cover-xs, .cover-li)::after { box-shadow: inset -1px 0 0 var(--cv-edge-lo); background: linear-gradient(158deg, var(--cv-sheen), transparent 40%); }
+/* Capa grande da ficha e do cronômetro: a dobra da capa dura aparece mais. */
+:is(.cover-hero, .cover-xl)::before {
+  width: clamp(8px, 9cqw, 17px);
+  background: linear-gradient(to right, var(--cv-crease) 0, var(--cv-crease-hi) 12%, var(--cv-crease-soft) 40%, var(--cv-crease) 54%, var(--cv-crease-hi) 66%, transparent);
+}
+:is(.cover-hero, .cover-xl)::after {
+  box-shadow: inset 0 1px 0 var(--cv-edge-hi), inset -1px 0 0 var(--cv-edge-hi), inset -3px 0 0 var(--cv-edge-lo), inset -4px 0 0 var(--cv-edge-hi), inset 0 -2px 0 var(--cv-edge-lo);
+}
+
+/* ---------- Estante: escolha de modo com três botões ---------- */
+/* Em telas de celular, os botões apagados ficam só com o ícone (o nome está no aria-label). */
+@media (max-width: 460px) {
+  .shelf-modes .mini-seg-btn { padding: 0 12px; }
+  .shelf-modes .mini-seg-btn:not(.is-on) .mini-seg-label { display: none; }
+}
+/* iPhone SE: o ativo fica só com o nome, os outros só com o ícone (cabe ao lado do Sortear). */
+@media (max-width: 359px) {
+  .shelf-modes .mini-seg-btn:not(.is-on) .icon { display: inline-block; }
+}
+
+/* ---------- Modo Lombadas ---------- */
+/* Cada fileira tem altura fixa (--row): o fundo repete uma tábua a cada fileira, de ponta a
+   ponta do móvel, com a sombra da tábua de cima no alto. As lombadas ficam de pé sobre ela. */
+.spine-shelf {
+  --row: 164px; --plank-h: 13px;
+  list-style: none; margin: 0; padding: 0 12px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; align-content: flex-start;
+  border-radius: 18px; border: 1px solid var(--case-line); overflow: hidden;
+  background:
+    linear-gradient(to bottom, var(--case-shade), transparent 34px) 0 0 / 100% var(--row) repeat-y,
+    linear-gradient(to bottom,
+      transparent calc(var(--row) - var(--plank-h)),
+      var(--plank-top) calc(var(--row) - var(--plank-h)) calc(var(--row) - var(--plank-h) + 3px),
+      var(--plank) calc(var(--row) - var(--plank-h) + 3px) calc(var(--row) - 2px),
+      var(--plank-lo) calc(var(--row) - 2px)) 0 0 / 100% var(--row) repeat-y,
+    var(--case-bg);
+}
+.group-section > .spine-shelf { margin-top: 6px; }
+.sp-item {
+  position: relative; height: var(--row); padding: 0 1px var(--plank-h);
+  display: flex; align-items: flex-end;
+}
+.spine {
+  position: relative; flex-shrink: 0;
+  width: var(--sp-w); height: var(--sp-h);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 0 7px; overflow: hidden;
+  border-radius: 2px 2px 1px 1px;
+  background-color: var(--sp-bg); color: var(--sp-fg);
+  background-image: linear-gradient(to right, var(--sp-shade), var(--sp-hi) 20%, transparent 46%, transparent 72%, var(--sp-shade));
+  box-shadow: inset 0 1px 0 var(--sp-hi), 1px 0 0 var(--sp-gap), 0 -1px 3px var(--plank-cast);
+  transition: transform .22s var(--ease-out);
+}
+.spine:active { transform: translateY(-5px); }
+.spine:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sp-title {
+  order: 1; flex: 0 1 auto; min-height: 0; margin: auto 0;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  /* Tamanho calculado para o título caber (js/spines.js); "inline" aqui é a altura. */
+  font-family: var(--serif); font-size: var(--sp-fs, 12px); line-height: 1.05;
+  max-inline-size: calc(var(--sp-h) - 46px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sp-2l .sp-title { white-space: normal; text-align: center; max-block-size: 2.1em; text-wrap: balance; }
+.sp-foot {
+  order: 3; flex-shrink: 0;
+  font: 800 8px/1 var(--sans); letter-spacing: 0.04em;
+}
+/* Frisos da lombada (no alto e no pé), fixos por título. */
+.spine::before, .spine::after { content: ''; flex-shrink: 0; align-self: stretch; opacity: 0.5; }
+.spine::before { order: 0; }
+.spine::after { order: 2; }
+.sp-d0::before, .sp-d0::after { height: 5px; border-top: 1px solid; border-bottom: 1px solid; }
+.sp-d1::before { height: 15px; margin-top: -8px; background: currentColor; opacity: 0.16; }
+.sp-d1::after { height: 1px; background: currentColor; }
+.sp-d2::before, .sp-d2::after { height: 2px; background: currentColor; opacity: 0.38; }
+.sp-d3::before, .sp-d3::after { height: 0; }
+/* Favorito do ano: fitinha caramelo no alto da lombada. */
+.spine.is-fav {
+  background-image: linear-gradient(var(--accent), var(--accent)), linear-gradient(to right, var(--sp-shade), var(--sp-hi) 20%, transparent 46%, transparent 72%, var(--sp-shade));
+  background-size: 4px 14px, auto; background-position: right 3px top 0, 0 0; background-repeat: no-repeat;
+}
+/* Próximas da fila: a posição sobre o alto da lombada. */
+.sp-item .next-pos {
+  position: absolute; z-index: 1; left: 50%; bottom: calc(var(--plank-h) + var(--sp-h) - 9px); transform: translateX(-50%);
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 2px var(--case-bg);
+  font: 800 10px/18px var(--sans); text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spine { transition: none; }
+  .spine:active { transform: none; }
+}
+
+/* ---------- Grão de papel no fundo ---------- */
+/* Camada fixa atrás de tudo (z-index -1 no contexto da página): não repinta ao rolar, não
+   recebe toque e fica por baixo dos cartões, das barras de vidro e da navegação. */
+.app::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: var(--grain); background-size: 180px 180px;
+  opacity: var(--grain-a);
+}

@@ -7,6 +7,7 @@ import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
 import { applyTints } from './cover-color.js';
+import { applySpineColors } from './spines.js';
 import { initCoverRetry, warmCovers } from './cover-cache.js';
 import { normalizeCoverUrl } from './cover-url.js';
 import { photoToCover } from './cover-photo.js';
@@ -36,7 +37,7 @@ import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
 import { APP_VERSION, settingsView, storageLine } from './views/settings.js';
-import { shelfView } from './views/shelf.js';
+import { SHELF_MODES, shelfView } from './views/shelf.js';
 import { SUMMARY_TABS, summaryView } from './views/summary.js';
 import { playIntro } from './views/kpi.js';
 import { curveMonthAt } from './views/scurve.js';
@@ -332,6 +333,7 @@ function render() {
   if (scrollY) window.scrollTo(0, scrollY);
   if (route.name === 'buscar') syncFilterChips(chipsScroll);
   applyTints(root);
+  applySpineColors(root);
   revealFinishFields();
   if (route.name === 'resumo') summaryIntro(route);
   // Primeira vez no Início nesta sessão: o anel enche e os números contam.
@@ -1789,7 +1791,8 @@ const SHELF_MODE_KEY = 'leituras:estante-modo';
 
 function readShelfMode() {
   try {
-    return sessionStorage.getItem(SHELF_MODE_KEY) === 'capas' ? 'capas' : 'lista';
+    const saved = sessionStorage.getItem(SHELF_MODE_KEY);
+    return SHELF_MODES.includes(saved) ? saved : 'lista';
   } catch {
     return 'lista';
   }
@@ -1855,7 +1858,7 @@ Object.assign(actions, {
     go(finishHref(el.dataset.id));
   },
   'shelf-mode'(el) {
-    ui.shelfMode = el.dataset.value === 'capas' ? 'capas' : 'lista';
+    ui.shelfMode = SHELF_MODES.includes(el.dataset.value) ? el.dataset.value : 'lista';
     try {
       sessionStorage.setItem(SHELF_MODE_KEY, ui.shelfMode);
     } catch {

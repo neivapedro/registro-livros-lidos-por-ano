@@ -53,6 +53,7 @@ const SHELL = [
   './js/cover-color.js',
   './js/cover-cache.js',
   './js/cover-url.js',
+  './js/spines.js',
   './js/sheet.js',
   './js/longpress.js',
   './js/swipe.js',

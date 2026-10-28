@@ -2,7 +2,8 @@ import { yearOf } from '../dates.js';
 import { groupBySeries } from '../series.js';
 import { FORMAT_LABELS, MAX_UP_NEXT, STATUS } from '../store.js';
 import { booksReadInYear, countByStatus, readBooks } from '../stats.js';
-import { GLYPHS, bookItem, chip, cover, coverItem, emptyState, esc, itemGroup, plural } from '../ui.js';
+import { GLYPHS, bookItem, chip, cover, coverItem, emptyState, esc, hasQuickMenu, itemGroup, plural } from '../ui.js';
+import { authorInitials, spineLook } from '../spines.js';
 import { drawCandidates, wantQueue } from '../upnext.js';
 import { compactBar } from '../large-title.js';
 
@@ -33,9 +34,15 @@ function nextTools(b, index, count) {
 
 const posBadge = (i) => `<span class="next-pos">${i + 1}º</span>`;
 
+/** Modos da Estante: Lista, Capas e Lombadas (a escolha fica na sessão, em main.js). */
+export const SHELF_MODES = ['lista', 'capas', 'lombadas'];
+
+const SPINES_GLYPH = '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" aria-hidden="true"><rect x="3.5" y="6" width="4" height="13" rx=".8"/><rect x="9.5" y="3.5" width="4.5" height="15.5" rx=".8"/><path d="M15.6 7.4l3.3-.9 2.6 11.8-3.3.8z"/><path d="M2.5 21h19"/></svg>';
+
 function modeToggle(mode) {
-  const btn = (value, label, glyph) => `<button type="button" class="mini-seg-btn${mode === value ? ' is-on' : ''}" data-action="shelf-mode" data-value="${value}" aria-pressed="${mode === value}">${glyph}${label}</button>`;
-  return `<div class="mini-seg" role="group" aria-label="Mostrar como">${btn('lista', 'Lista', GLYPHS.list)}${btn('capas', 'Capas', GLYPHS.grid)}</div>`;
+  // O rótulo dos botões apagados some em telas estreitas (fica o ícone; o nome vai no aria-label).
+  const btn = (value, label, glyph) => `<button type="button" class="mini-seg-btn${mode === value ? ' is-on' : ''}" data-action="shelf-mode" data-value="${value}" aria-pressed="${mode === value}" aria-label="${label}">${glyph}<span class="mini-seg-label">${label}</span></button>`;
+  return `<div class="mini-seg shelf-modes" role="group" aria-label="Mostrar como">${btn('lista', 'Lista', GLYPHS.list)}${btn('capas', 'Capas', GLYPHS.grid)}${btn('lombadas', 'Lombadas', SPINES_GLYPH)}</div>`;
 }
 
 function toolsRow(mode, extra = '') {
@@ -43,6 +50,32 @@ function toolsRow(mode, extra = '') {
 }
 
 const coverGrid = (items) => `<ul class="cover-grid" role="list">${items}</ul>`;
+
+/**
+ * Um livro de pé na prateleira: lombada com o título na vertical (de cima para baixo, como nas
+ * lombadas brasileiras) e as iniciais do autor ao pé. Mesmo link, data-id e toque longo da lista.
+ */
+export function spineItem(b, { badge = '' } = {}) {
+  const look = spineLook(b);
+  const author = (b.authors || '').split(',')[0].trim();
+  const label = `${b.title}${author ? `, ${author}` : ''}`;
+  const ini = authorInitials(b.authors);
+  return `
+    <li class="sp-item" style="--sp-w:${look.w}px;--sp-h:${look.h}px">
+      <a class="spine sp-d${look.deco}${look.lines > 1 ? ' sp-2l' : ''}${b.favorite ? ' is-fav' : ''}" href="#/livro/${encodeURIComponent(b.id)}"${hasQuickMenu(b) ? ' data-longpress' : ''} data-id="${esc(b.id)}"${b.cover ? ` data-spine="${esc(b.cover)}"` : ''} style="--sp-bg:${look.bg};--sp-fg:${look.fg};--sp-fs:${look.fs}px" aria-label="${esc(label)}">
+        <span class="sp-title" aria-hidden="true">${esc(b.title)}</span>${ini ? `<span class="sp-foot" aria-hidden="true">${esc(ini)}</span>` : ''}
+      </a>${badge}
+    </li>`;
+}
+
+/** Prateleiras de lombadas (quebram em várias fileiras, cada uma sobre a sua tábua). */
+const spineShelf = (items) => `<ul class="spine-shelf" role="list">${items}</ul>`;
+
+/** Lombadas ou capas, conforme o modo (os dois modos visuais usam os mesmos grupos). */
+function visualList(mode, books, opts = () => ({})) {
+  if (mode === 'lombadas') return spineShelf(books.map((b, i) => spineItem(b, opts(b, i))).join(''));
+  return coverGrid(books.map((b, i) => coverItem(b, opts(b, i))).join(''));
+}
 
 function drawSelect(name, label, options, value) {
   const opts = options.map(([v, t]) => `<option value="${esc(v)}"${String(v) === String(value) ? ' selected' : ''}>${esc(t)}</option>`).join('');
@@ -97,9 +130,9 @@ function wantList(state, ui, mode) {
   const drawBtn = `<button type="button" class="chip-btn sm draw-open" data-action="draw-open" aria-expanded="false">${DICE}Sortear</button>`;
   const top = toolsRow(mode, draw ? '' : drawBtn) + (draw ? drawPanel(state.books, draw) : '');
   const add = '<a class="btn-ghost add-queue" href="#/novo?status=quero">+ Adicionar à fila</a>';
-  if (mode === 'capas') {
-    const items = next.map((b, i) => coverItem(b, { badge: posBadge(i) })).join('') + rest.map((b) => coverItem(b)).join('');
-    return top + coverGrid(items) + add;
+  if (mode !== 'lista') {
+    const nextCount = next.length;
+    return top + visualList(mode, [...next, ...rest], (b, i) => (i < nextCount ? { badge: posBadge(i) } : {})) + add;
   }
   const nextHead = `<h2 class="list-head group-head">Próximas <span class="muted small">${next.length} de ${MAX_UP_NEXT}</span></h2>`;
   const nextRows = next.map((b, i) => bookItem(b, { badge: posBadge(i), tools: nextTools(b, i, next.length), swipe: swipeButtons(b, true) })).join('');
@@ -117,7 +150,7 @@ function readingList(books, mode) {
   if (!reading.length) {
     return emptyState('Nenhuma leitura em andamento', 'Na aba "Quero ler", toque em "Começar" para iniciar um livro.');
   }
-  if (mode === 'capas') return toolsRow(mode) + coverGrid(reading.map((b) => coverItem(b)).join(''));
+  if (mode !== 'lista') return toolsRow(mode) + visualList(mode, reading);
   return toolsRow(mode) + itemGroup('', '', reading.map((b) => bookItem(b, { tools: moreButton(b) })).join(''));
 }
 
@@ -127,7 +160,7 @@ function readBySeries(books, mode) {
   return groupBySeries(read).map((g) => {
     const title = g.name ? esc(g.name) : 'Fora de séries';
     const count = plural(g.books.length, 'livro', 'livros');
-    if (mode === 'capas') return `<section class="group-section"><h2 class="year-head group-head">${title} <span class="muted small">${count}</span></h2>${coverGrid(g.books.map((b) => coverItem(b)).join(''))}</section>`;
+    if (mode !== 'lista') return `<section class="group-section"><h2 class="year-head group-head">${title} <span class="muted small">${count}</span></h2>${visualList(mode, g.books)}</section>`;
     return itemGroup(title, count, g.books.map((b) => bookItem(b)).join(''));
   }).join('');
 }
@@ -144,7 +177,7 @@ function readList(books, groupSeries, mode) {
   return top + years.map((y) => {
     const list = booksReadInYear(books, y);
     const count = plural(list.length, 'livro', 'livros');
-    if (mode === 'capas') return `<section class="group-section"><h2 class="year-head group-head">${y} <span class="muted small">${count}</span></h2>${coverGrid(list.map((b) => coverItem(b)).join(''))}</section>`;
+    if (mode !== 'lista') return `<section class="group-section"><h2 class="year-head group-head">${y} <span class="muted small">${count}</span></h2>${visualList(mode, list)}</section>`;
     return itemGroup(String(y), count, list.map((b) => bookItem(b)).join(''));
   }).join('');
 }
@@ -155,7 +188,7 @@ function droppedList(books, mode) {
   if (!dropped.length) {
     return emptyState('Nenhum livro abandonado', 'Quando largar um livro, marque o status "Abandonei" e conte o porquê.');
   }
-  if (mode === 'capas') return toolsRow(mode) + coverGrid(dropped.map((b) => coverItem(b)).join(''));
+  if (mode !== 'lista') return toolsRow(mode) + visualList(mode, dropped);
   const rows = dropped.map((b) => bookItem(b, {
     extra: b.dropReason ? `<span class="li-extra drop-reason"><span class="eyebrow">Por que parei</span> ${esc(b.dropReason)}</span>` : '',
   })).join('');
@@ -164,7 +197,7 @@ function droppedList(books, mode) {
 
 export function shelfView({ state, ui, tab }) {
   const counts = countByStatus(state.books);
-  const mode = ui?.shelfMode === 'capas' ? 'capas' : 'lista';
+  const mode = SHELF_MODES.includes(ui?.shelfMode) ? ui.shelfMode : 'lista';
   const tabs = TABS.map(([value, label]) => `
     <a class="seg-btn${value === tab ? ' is-on' : ''}" href="#/estante?aba=${value}" aria-current="${value === tab ? 'page' : 'false'}">${label} <span class="seg-count">${counts[value]}</span></a>`).join('');
   let body;

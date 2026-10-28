@@ -59,37 +59,69 @@ export function icon(name, { size = 20, stroke = 1.8, cls = '', label = '', fill
   return `<svg class="icon ${cls}" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" ${a11y}>${PATHS[name]}</svg>`;
 }
 
-const COVER_PALETTE = [
-  ['#6B4A32', '#F4EFEA'], ['#3A3633', '#F4EFEA'], ['#8C6A4F', '#F4EFEA'], ['#D9D2CA', '#1A1715'],
-  ['#4E3B2E', '#F4EFEA'], ['#2B2826', '#F4EFEA'], ['#A39A92', '#1A1715'], ['#5C4636', '#F4EFEA'],
+// Capas desenhadas (livro sem imagem): tons fundos de encadernação — bordô, verde-floresta,
+// azul-tinta, ocre, ameixa, petróleo, terracota, grafite, oliva, pergaminho, sálvia e
+// caramelo — com o texto e um filete de destaque que combinam: [fundo, texto, filete].
+// Ficam bem nos dois temas (a capa é um objeto, não muda com o tema).
+export const COVER_PALETTE = [
+  ['#6A2630', '#F3E6D8', '#D9A86C'], ['#26473A', '#EFE7D6', '#C9A96A'], ['#1F3550', '#EDE6DA', '#C8A36A'],
+  ['#C4924A', '#24180E', '#5A3814'], ['#4A2A48', '#F2E6DA', '#D7A97A'], ['#1E4C52', '#EFE8DA', '#D3B37C'],
+  ['#9C4A2F', '#FBEFE3', '#F0C99A'], ['#2E3136', '#ECE6DD', '#C6A46E'], ['#555A2C', '#F2EEDB', '#D9C38A'],
+  ['#E7DBC4', '#2B2118', '#8E5A2B'], ['#B9BFA6', '#20261C', '#55603F'], ['#6B4A32', '#F4EADF', '#DDB27C'],
 ];
+/** Quantos desenhos de ornamento existem (classes .cover-d0 … .cover-d4 no CSS). */
+export const COVER_DECOS = 5;
 
-function hash(str) {
+export function hash(str) {
   let h = 0;
   for (let i = 0; i < str.length; i += 1) h = (h * 31 + str.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
 
+/** Cores [fundo, texto, filete] e ornamento da capa desenhada deste título (sempre os mesmos). */
+export function coverStyle(title) {
+  const h = hash(title || '');
+  const [bg, fg, acc] = COVER_PALETTE[h % COVER_PALETTE.length];
+  return { bg, fg, acc, deco: Math.floor(h / COVER_PALETTE.length) % COVER_DECOS };
+}
+
 /** Cor de fundo da capa desenhada deste título (a mesma usada em cover()). */
 export function coverFallbackColor(title) {
-  return COVER_PALETTE[hash(title || '') % COVER_PALETTE.length][0];
+  return coverStyle(title).bg;
+}
+
+// Palavras que não entram nas iniciais ("O Nome da Rosa" → "NR").
+const MINOR_WORDS = new Set(['o', 'a', 'os', 'as', 'um', 'uma', 'uns', 'umas', 'de', 'do', 'da', 'dos', 'das', 'e', 'em', 'no', 'na', 'nos', 'nas',
+  'por', 'para', 'com', 'ao', 'aos', 'the', 'an', 'of', 'and', 'el', 'la', 'los', 'las', 'y', 'le', 'les', 'du', 'des', 'et']);
+
+/** Iniciais do título para a capa pequena: 1 ou 2 letras ("Dom Casmurro" → "DC", "Duna" → "D"). */
+export function titleInitials(title) {
+  const words = String(title || '').split(/[\s\-–—:;,.!?/()[\]"'“”‘’«»]+/)
+    .map((w) => w.replace(/^[^\p{L}\p{N}]+/u, ''))
+    .filter(Boolean);
+  const main = words.filter((w) => !MINOR_WORDS.has(w.toLocaleLowerCase('pt-BR')));
+  const pick = (main.length ? main : words).slice(0, 2);
+  // Um ano ou número sozinho ("1984") vale inteiro, até 4 algarismos.
+  if (pick.length === 1 && /^\d{2,4}$/.test(pick[0])) return pick[0];
+  return pick.map((w) => [...w][0].toLocaleUpperCase('pt-BR')).join('');
 }
 
 /**
  * Capa do livro: a imagem real quando existe, sobre uma capa desenhada
- * (que aparece se a imagem não carregar ou estiver offline).
+ * (que aparece se a imagem não carregar ou estiver offline). A desenhada tem cor e
+ * ornamento fixos por título; sem espaço para o texto (showText: false), mostra as iniciais.
  */
 export function cover(book, { size = 'md', showText = true } = {}) {
-  const [bg, fg] = COVER_PALETTE[hash(book.title || '') % COVER_PALETTE.length];
-  const author = (book.authors || '').split(',')[0];
+  const { bg, fg, acc, deco } = coverStyle(book.title);
+  const author = (book.authors || '').split(',')[0].trim();
   const text = showText
     ? `<span class="cover-title">${esc(book.title)}</span><span class="cover-author">${esc(author)}</span>`
-    : '';
+    : `<span class="cover-ini" aria-hidden="true">${esc(titleInitials(book.title))}</span>`;
   const src = normalizeCoverUrl(book.cover);
   const img = src
     ? `<img class="cover-img" src="${esc(src)}" alt="" loading="lazy" referrerpolicy="no-referrer">`
     : '';
-  return `<span class="cover cover-${size}" style="--cover-bg:${bg};--cover-fg:${fg}">${text}${img}</span>`;
+  return `<span class="cover cover-${size} cover-d${deco}" style="--cover-bg:${bg};--cover-fg:${fg};--cover-acc:${acc}"><span class="cover-deco" aria-hidden="true"></span>${text}${img}</span>`;
 }
 
 /**
