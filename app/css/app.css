@@ -2170,3 +2170,126 @@ body [data-theme] { color: var(--text); }
 
 /* Ficha: "Voltar para Quero ler", discreto abaixo de Ler agora / Concluir. */
 .ficha-card .ficha-pause { display: flex; justify-content: center; width: 100%; margin-top: 4px; color: var(--muted); font-weight: 600; }
+
+/* ===== 1.5 Ficha, trechos e busca ===== */
+/* Topo da ficha com a própria capa ampliada e desfocada (views/book-detail.js heroBackdrop),
+   linha discreta do ritmo sem diário, trechos como citações tipográficas (book-tabs.js,
+   all-quotes.js) e cartões "esqueleto" enquanto a busca de livros roda (form.js). */
+
+:root, [data-theme="dark"] {
+  /* Véu sobre a capa desfocada: o texto do topo continua legível com qualquer capa. */
+  --bd-scrim-top: 46%;
+  --bd-scrim-cover: 28%;
+  --bd-scrim-mid: 56%;
+  --bd-scrim-low: 84%;
+  --bd-saturate: 1.5;
+  --bd-bright: 0.85;
+  --skel: color-mix(in srgb, var(--text) 9%, transparent);
+  --skel-sheen: color-mix(in srgb, var(--text) 7%, transparent);
+}
+[data-theme="light"] {
+  --bd-scrim-top: 44%;
+  --bd-scrim-cover: 34%;
+  --bd-scrim-mid: 62%;
+  --bd-scrim-low: 86%;
+  --bd-saturate: 1.35;
+  --bd-bright: 1.05;
+  --skel: color-mix(in srgb, var(--text) 8%, transparent);
+  --skel-sheen: color-mix(in srgb, var(--surface) 80%, transparent);
+}
+
+/* Fundo desfocado: um único elemento com filter (nada de backdrop-filter), recortado pelo topo.
+   Fica invisível até a imagem carregar; até lá (ou sem imagem) vale o degradê de --tint. */
+.ficha-hero { position: relative; isolation: isolate; overflow: hidden; }
+.ficha-backdrop {
+  position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background: var(--bg); opacity: 0; transition: opacity 0.45s ease;
+}
+.ficha-backdrop:has(> .is-loaded) { opacity: 1; }
+.ficha-backdrop-img {
+  position: absolute; top: -72px; left: -72px; width: calc(100% + 144px); height: calc(100% + 144px);
+  object-fit: cover; object-position: 50% 30%;
+  filter: blur(40px) saturate(var(--bd-saturate)) brightness(var(--bd-bright));
+  transform: translateZ(0);
+}
+.ficha-backdrop::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-top), transparent) 0%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-cover), transparent) 24%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-mid), transparent) 46%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-low), transparent) 74%,
+    var(--bg) 100%);
+}
+/* Tela larga (iPad, computador): as bordas laterais também se dissolvem. */
+@media (min-width: 540px) {
+  .ficha-backdrop { -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ficha-backdrop { transition: none; }
+}
+/* Selos sobre a capa desfocada: um pouco mais de corpo que sobre a cor lisa. */
+.ficha-hero.has-backdrop .ficha-status { background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--text); }
+.ficha-hero.has-backdrop .ficha-author { color: var(--text); opacity: 0.86; }
+.ficha-hero.has-backdrop .ficha-top .btn-text.accent { background: color-mix(in srgb, var(--bg) 40%, transparent); }
+[data-theme="light"] .ficha-hero.has-backdrop .ficha-top .btn-text.accent { background: color-mix(in srgb, var(--surface) 66%, transparent); }
+[data-theme="light"] .ficha-hero.has-backdrop .ficha-status { background: color-mix(in srgb, var(--surface) 72%, transparent); }
+
+/* Ritmo sem diário: uma linha tracejada, como "Guardar um trecho". */
+.ficha-rhythm-empty {
+  justify-content: flex-start; gap: 12px; padding: 12px 18px;
+  font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--muted);
+}
+.ficha-rhythm-empty strong { color: var(--text-soft); font-weight: 800; }
+.ficha-row.ficha-rhythm-empty .icon { flex-shrink: 0; color: var(--muted); }
+
+/* Trechos como citação impressa: aspa grande em caramelo, texto serifado, página num selo. */
+.quote-card, .ficha-quote { gap: 10px; padding: 16px 18px 14px; }
+.quote-link, .ficha-quote { padding-bottom: 16px; }
+.quote-card::before, .ficha-quote::before { content: none; }
+.quote-mark {
+  display: block; height: 24px; margin: 0 0 -8px -3px;
+  font-family: var(--serif); font-size: 76px; line-height: 0.9; color: var(--accent);
+  user-select: none; -webkit-user-select: none; pointer-events: none;
+}
+.quote-text, .ficha-quote blockquote {
+  font-family: var(--serif); font-style: normal; font-size: 22px; line-height: 1.36; letter-spacing: 0.05px;
+  color: var(--text); text-wrap: pretty;
+}
+.quote-meta, .ficha-quote-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.2px; color: var(--muted);
+}
+.quote-page {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; flex-shrink: 0;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-variant-numeric: tabular-nums;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.quote-date { color: var(--muted); }
+.quote-note { padding-left: 12px; border-left: 2px solid var(--line-strong); }
+/* Tela "Trechos salvos": o livro como assinatura, com travessão. */
+.quote-source { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 12px; padding-top: 2px; }
+.quote-source-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.quote-book::before { content: '— '; color: var(--accent); }
+.quote-author { padding-left: 1.1em; font-size: 12px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.quote-source .quote-page { margin-top: 1px; }
+
+/* Buscando: três cartões vazios no formato do resultado, com um brilho que passa. */
+.result-skel { position: relative; overflow: hidden; pointer-events: none; }
+.skel { display: block; background: var(--skel); }
+.skel-cover { width: 34px; height: 50px; border-radius: 4px; flex-shrink: 0; }
+.result-skel .result-text { flex: 1; gap: 8px; }
+.skel-line { height: 10px; border-radius: 999px; }
+.skel-line.is-title { height: 14px; width: 68%; }
+.skel-line.is-meta { width: 46%; }
+.skel-line.is-short { width: 28%; }
+.result-skel::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, var(--skel-sheen) 50%, transparent 80%);
+  animation: skel-sheen 1.5s ease-in-out infinite; animation-delay: calc(var(--skel-i, 0) * 0.12s);
+}
+@keyframes skel-sheen { to { transform: translateX(100%); } }
+.ai-box .result-skel { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .result-skel::after { content: none; animation: none; }
+}

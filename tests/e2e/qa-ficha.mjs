@@ -138,7 +138,8 @@ async function layoutProblems(label) {
     const small = [...document.querySelectorAll('#app button, #app a')]
       .filter((el) => el.offsetParent && el.getBoundingClientRect().height < 44).map((el) => el.outerHTML.slice(0, 70));
     if (small.length) out.push(`${lbl}: alvos < 44px: ${small.join(' | ')}`);
-    for (const el of document.querySelectorAll('#app .ficha-hero *, #app .rchart, #app .ficha-card')) {
+    // O fundo desfocado (1.5) é maior que o topo de propósito e fica recortado por ele (sem sobra lateral).
+    for (const el of document.querySelectorAll('#app .ficha-hero *:not(.ficha-backdrop-img), #app .rchart, #app .ficha-card')) {
       const r = el.getBoundingClientRect();
       if (r.width && (r.left < -1 || r.right > window.innerWidth + 1)) out.push(`${lbl}: ${el.className || el.tagName} passa da tela`);
     }

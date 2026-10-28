@@ -228,7 +228,10 @@ try {
 
   step('Lido: trecho mais recente, anotações, gênero, etiquetas e ISBN');
   assert.match(await text('.ficha-quote blockquote'), /^Você não sobe ao nível/);
-  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.ficha-quote blockquote')).fontStyle), 'italic');
+  // 1.5: citação tipográfica (serifa reta, aspa decorativa em caramelo e página em selo).
+  assert.match(await page.evaluate(() => getComputedStyle(document.querySelector('.ficha-quote blockquote')).fontFamily), /Instrument Serif/);
+  assert.equal(await page.locator('.ficha-quote .quote-mark').count(), 1);
+  assert.equal(await text('.ficha-quote .quote-page'), 'p. 27');
   assert.equal(await text('.ficha-section .section-head .link'), 'Ver todos (2)');
   assert.match(await page.innerText('.ficha-notes'), /Sistemas > metas\.\nRever o capítulo 4\./);
   assert.deepEqual(await page.locator('.ficha-chip').allTextContents(), ['Desenvolvimento pessoal', 'Físico', 'indicação', 'trabalho']);
@@ -333,7 +336,8 @@ try {
   await onDetail('d1');
   assert.equal(await text('.ficha-series .ficha-chip'), 'Duna · nº 1');
   assert.equal(await text('.ficha-next'), 'Próximo: nº 2 · O Messias de Duna');
-  assert.equal(await page.locator('.rchart.is-empty').count(), 1, 'lido sem diário: aviso discreto');
+  assert.equal(await page.locator('.ficha-rhythm-empty').count(), 1, 'lido sem diário: aviso discreto');
+  assert.equal(await page.locator('.rchart').count(), 0, 'sem cartão vazio');
   await page.click('.ficha-next');
   await onDetail('d2');
   assert.equal(await page.getAttribute('.ficha-back', 'href'), '#/estante?aba=lido', 'o Voltar segue para a lista de origem');
