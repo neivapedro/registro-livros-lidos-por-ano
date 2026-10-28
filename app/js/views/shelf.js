@@ -2,8 +2,9 @@ import { yearOf } from '../dates.js';
 import { groupBySeries } from '../series.js';
 import { FORMAT_LABELS, MAX_UP_NEXT, STATUS } from '../store.js';
 import { booksReadInYear, countByStatus, readBooks } from '../stats.js';
-import { GLYPHS, bookItem, chip, cover, coverItem, emptyState, esc, hasQuickMenu, itemGroup, plural } from '../ui.js';
+import { GLYPHS, bookItem, chip, cover, coverItem, esc, hasQuickMenu, itemGroup, plural } from '../ui.js';
 import { authorInitials, spineLook } from '../spines.js';
+import { emptyScene } from '../empty-art.js';
 import { drawCandidates, wantQueue } from '../upnext.js';
 import { compactBar } from '../large-title.js';
 
@@ -123,7 +124,7 @@ function drawPanel(books, draw) {
 function wantList(state, ui, mode) {
   const { next, rest } = wantQueue(state);
   if (!next.length && !rest.length) {
-    return emptyState('A fila está vazia', 'Adicione os livros que você quer ler a seguir.',
+    return emptyScene('quero', 'A fila está vazia', 'Adicione os livros que você quer ler a seguir.',
       '<a class="btn-outline" href="#/novo?status=quero">Adicionar à fila</a>');
   }
   const draw = ui?.draw;
@@ -148,7 +149,8 @@ function wantList(state, ui, mode) {
 function readingList(books, mode) {
   const reading = books.filter((b) => b.status === STATUS.READING);
   if (!reading.length) {
-    return emptyState('Nenhuma leitura em andamento', 'Na aba "Quero ler", toque em "Começar" para iniciar um livro.');
+    return emptyScene('lendo', 'Nenhuma leitura em andamento', 'Na aba "Quero ler", toque em "Começar" para iniciar um livro.',
+      '<a class="btn-outline" href="#/estante?aba=quero">Ver a fila</a>');
   }
   if (mode !== 'lista') return toolsRow(mode) + visualList(mode, reading);
   return toolsRow(mode) + itemGroup('', '', reading.map((b) => bookItem(b, { tools: moreButton(b) })).join(''));
@@ -167,7 +169,10 @@ function readBySeries(books, mode) {
 
 function readList(books, groupSeries, mode) {
   const read = readBooks(books);
-  if (!read.length) return emptyState('Nenhum livro concluído', 'Os livros que você terminar aparecem aqui, separados por ano.');
+  if (!read.length) {
+    return emptyScene('lido', 'Nenhum livro concluído', 'Os livros que você terminar aparecem aqui, separados por ano.',
+      '<a class="btn-outline" href="#/novo">Registrar um livro lido</a>');
+  }
   const seriesBtn = read.some((b) => b.series)
     ? `<button type="button" class="chip-btn sm${groupSeries ? ' is-on' : ''}" data-action="toggle-group-series" aria-pressed="${groupSeries}">Agrupar por série</button>`
     : '';
@@ -186,7 +191,7 @@ function droppedList(books, mode) {
   const dropped = books.filter((b) => b.status === STATUS.DROPPED)
     .sort((a, b) => (b.endDate || b.updatedAt).localeCompare(a.endDate || a.updatedAt));
   if (!dropped.length) {
-    return emptyState('Nenhum livro abandonado', 'Quando largar um livro, marque o status "Abandonei" e conte o porquê.');
+    return emptyScene('abandonado', 'Nenhum livro abandonado', 'Quando largar um livro, marque o status "Abandonei" e conte o porquê.');
   }
   if (mode !== 'lista') return toolsRow(mode) + visualList(mode, dropped);
   const rows = dropped.map((b) => bookItem(b, {

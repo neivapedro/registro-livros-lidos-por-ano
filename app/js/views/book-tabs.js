@@ -7,7 +7,8 @@ import { UNITS } from '../journal.js';
 import { STATUS } from '../store.js';
 import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
 import { dayLabel, formatMinutes, weekGroups } from '../reading-days.js';
-import { emptyState, esc, icon, num, plural } from '../ui.js';
+import { esc, icon, num, plural } from '../ui.js';
+import { emptyScene } from '../empty-art.js';
 import { amountText, rhythmChart } from './rhythm.js';
 
 export const BOOK_TABS = ['dados', 'diario', 'trechos'];
@@ -125,7 +126,7 @@ function diaryTab(book, ui, today) {
     const hint = book.status === STATUS.WANT
       ? `Quando começar a ler, cada vez que você atualizar ${where} no cartão do Início, o dia fica registrado aqui.`
       : `O diário se preenche sozinho: cada vez que você atualiza ${where} no cartão do Início, o dia fica registrado aqui.`;
-    return `<section class="book-tab-panel" role="tabpanel">${emptyState('Nenhum dia registrado ainda', hint)}</section>`;
+    return `<section class="book-tab-panel" role="tabpanel">${emptyScene('diario', 'Nenhum dia registrado ainda', hint)}</section>`;
   }
   const weeks = weekGroups(book).map((week, i) => diaryWeek(book, week, i, ui, today)).join('');
   return `
@@ -212,7 +213,7 @@ function quotesTab(book, ui) {
   const addButton = '<button type="button" class="btn-outline sm" data-action="quote-new">+ Trecho</button>';
   const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q) : quoteCard(book, q))).join('');
   const body = !quotes.length && !adding
-    ? emptyState('Nenhum trecho salvo', 'Guarde aqui as frases que marcaram você neste livro.', addButton)
+    ? emptyScene('trechos', 'Nenhum trecho salvo', 'Guarde aqui as frases que marcaram você neste livro.', addButton)
     : `${adding ? quoteForm(book, null) : ''}<div class="quote-list">${list}</div>`;
   return `
     <section class="book-tab-panel" role="tabpanel">

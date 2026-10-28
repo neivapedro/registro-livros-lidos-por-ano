@@ -1,15 +1,16 @@
 // Tela "Trechos salvos" (#/trechos): os trechos de todos os livros, com busca.
 
 import { countQuotes, quotePosition, searchQuotes } from '../quotes.js';
-import { emptyState, esc, icon, plural } from '../ui.js';
+import { esc, icon, plural } from '../ui.js';
+import { emptyScene } from '../empty-art.js';
 
 /** Só a lista: redesenhada a cada letra digitada, sem tirar o foco da busca. */
 export function allQuotesResults(state, query) {
   if (!countQuotes(state.books)) {
-    return emptyState('Nenhum trecho salvo ainda', 'Na página de um livro, abra a aba Trechos e toque em + Trecho.');
+    return emptyScene('trechos', 'Nenhum trecho salvo ainda', 'Na página de um livro, abra a aba Trechos e toque em + Trecho.');
   }
   const found = searchQuotes(state.books, query);
-  if (!found.length) return emptyState('Nenhum trecho encontrado', 'Tente outra palavra do trecho, do título ou do autor.');
+  if (!found.length) return emptyScene('nada', 'Nenhum trecho encontrado', 'Tente outra palavra do trecho, do título ou do autor.');
   const count = query.trim() ? plural(found.length, 'trecho encontrado', 'trechos encontrados') : plural(found.length, 'trecho', 'trechos');
   return `<p class="muted small">${count}</p>${found.map(({ quote, book }) => {
     const author = book.authors.split(',')[0].trim();

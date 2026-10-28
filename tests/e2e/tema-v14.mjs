@@ -238,6 +238,15 @@ function auditContrast() {
       const grads = cs.backgroundImage !== 'none' && !thin ? gradients(cs.backgroundImage) : [];
       if (grads.length || (color && color[3] > 0)) layers.push({ n, color, grads });
       if (color && color[3] >= 1) break;
+      // Aba marcada (1.5): o fundo é a marca que desliza (.tab-ind), irmã logo atrás do botão.
+      const ind = n.classList.contains('is-on') && n.parentElement?.classList.contains('has-ind') ? n.parentElement.querySelector(':scope > .tab-ind') : null;
+      if (ind) {
+        const ics = getComputedStyle(ind);
+        const icolor = parse(ics.backgroundColor)[0];
+        const igrads = ics.backgroundImage !== 'none' ? gradients(ics.backgroundImage) : [];
+        if (igrads.length || (icolor && icolor[3] > 0)) layers.push({ n: ind, color: icolor, grads: igrads });
+        if (icolor && icolor[3] >= 1) break;
+      }
     }
     return points.map(([px, py]) => {
       let c = over(canvas, [255, 255, 255, 1]);

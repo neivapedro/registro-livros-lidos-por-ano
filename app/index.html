@@ -52,6 +52,11 @@
       var metas = document.querySelectorAll('meta[name="theme-color"]');
       for (var i = 0; i < metas.length; i++) metas[i].setAttribute('content', light ? '#F6F1EB' : '#0E0C0B');
       document.querySelector('meta[name="color-scheme"]').setAttribute('content', theme);
+      // Cor de destaque ('leituras:acento', js/accent.js): só um dos valores conhecidos.
+      var accent = null;
+      try { accent = localStorage.getItem('leituras:acento'); } catch (e) { /* sem armazenamento: padrão */ }
+      var accents = ['terracota', 'oliva', 'petroleo', 'vinho', 'grafite'];
+      document.documentElement.setAttribute('data-accent', accents.indexOf(accent) >= 0 ? accent : 'terracota');
     })();
   </script>
   <link rel="stylesheet" href="css/app.css">
