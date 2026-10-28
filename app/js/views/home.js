@@ -10,8 +10,9 @@ import { timerBanner } from './timer.js';
 import { compactBar } from '../large-title.js';
 import { firstUpNext } from '../upnext.js';
 import { currentDayStreak, greetingFor, longDate, streakText } from '../greeting.js';
-import { readingDays } from '../journal.js';
-import { editHref } from './book-detail.js';
+import { minutesListenedInYear, readingDays } from '../journal.js';
+import { editHref, registerHint } from './book-detail.js';
+import { formatDuration, headphonesIcon, hoursText } from '../audio.js';
 
 const RING_R = 50;
 const RING_C = 2 * Math.PI * RING_R;
@@ -56,7 +57,10 @@ function ringTile(stats, streak, isCurrentYear) {
 function pagesTile(state, stats, today) {
   const goal = getPageGoal(state, stats.year);
   const value = stats.pages ? `<span class="tile-value" data-count="${Math.round(stats.pages)}">${num(stats.pages)}</span>` : '<span class="tile-value">—</span>';
-  if (!goal) return `<div class="tile bento-pages">${value}<span class="tile-label">páginas</span></div>`;
+  // Audiolivros: as horas ouvidas numa linha discreta sob as páginas.
+  const listened = minutesListenedInYear(state.books, stats.year);
+  const heard = listened ? `<span class="bento-heard" aria-label="${esc(`${formatDuration(listened)} ouvidas`)}">${headphonesIcon(12)}${hoursText(listened)} h ouvidas</span>` : '';
+  if (!goal) return `<div class="tile bento-pages">${value}<span class="tile-label">páginas</span>${heard}</div>`;
   const p = pageGoalProgress(stats.pages, goal, stats.year, today);
   const note = p.met ? 'meta batida' : p.projection ? `ritmo de ~${num(p.projection)}` : '';
   return `
@@ -66,6 +70,7 @@ function pagesTile(state, stats, today) {
         <span class="hero-pages-track" role="img" aria-label="${esc(pageGoalLine(p))}"><span class="hero-pages-fill" style="width:${(p.progress * 100).toFixed(1)}%"></span></span>
         ${note ? `<span class="hero-pages-text">${esc(note)}</span>` : ''}
       </div>
+      ${heard}
     </div>`;
 }
 
@@ -93,13 +98,18 @@ function shortDate(iso, today) {
 /** "pág. 264 de 420 · termina ~3 nov" (ou "38% no Kindle · …"). */
 function progressLine(b, today) {
   const p = progressOf(b);
-  if (!p) return `<span class="rn-progress muted">${b.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`;
+  // Audiolivro: os fones de ouvido antes do tempo ouvido.
+  const lead = b.format === FORMATS.AUDIO ? headphonesIcon(13, 'rn-audio') : '';
+  if (!p) return `<span class="rn-progress muted">${lead}${registerHint(b)}</span>`;
   const where = b.format === FORMATS.KINDLE ? `${p.pct}% no Kindle` : p.label;
-  // Sem o total de páginas não há % nem previsão.
-  // O pedido é um link: abre a edição com o cursor no campo Páginas.
-  if (p.pct === null) return `<span class="rn-progress">${esc(where)} <span class="muted">· <a class="pages-ask" href="${editHref(b.id, 'campo=paginas')}">informe o total de páginas</a> para ver o %</span></span>`;
+  // Sem o total de páginas (ou a duração) não há % nem previsão.
+  // O pedido é um link: abre a edição com o cursor no campo Páginas (ou Duração).
+  if (p.pct === null) {
+    const ask = p.audio ? ['campo=duracao', 'informe a duração'] : ['campo=paginas', 'informe o total de páginas'];
+    return `<span class="rn-progress">${lead}${esc(where)} <span class="muted">· <a class="pages-ask" href="${editHref(b.id, ask[0])}">${ask[1]}</a> para ver o %</span></span>`;
+  }
   const finish = forecastFinish(b, today);
-  return `<span class="rn-progress">${esc(where)}${finish ? ` · <span class="nowrap">termina ~${esc(shortDate(finish, today))}</span>` : ''}</span>`;
+  return `<span class="rn-progress">${lead}${esc(where)}${finish ? ` · <span class="nowrap">termina ~${esc(shortDate(finish, today))}</span>` : ''}</span>`;
 }
 
 // Só com data-alvo: quanto ler por dia (sem tom de cobrança).
@@ -114,7 +124,8 @@ function moreButton(b) {
 
 function timerButton(b, session) {
   const running = session?.bookId === b.id;
-  return `<button type="button" class="rn-icon btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(b.id)}">${GLYPHS.play}<span class="sr-only">${running ? 'Ler agora: voltar ao cronômetro' : 'Ler agora'}</span></button>`;
+  const verb = b.format === FORMATS.AUDIO ? 'Ouvir agora' : 'Ler agora';
+  return `<button type="button" class="rn-icon btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(b.id)}">${GLYPHS.play}<span class="sr-only">${running ? `${verb}: voltar ao cronômetro` : verb}</span></button>`;
 }
 
 // Só o primeiro cartão tem o botão cheio; nos outros ele é tonal (mesmo tamanho, menos peso).
@@ -162,7 +173,8 @@ function nextUpCard(state) {
           <div class="rn-text">
             <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}"><span class="serif-title">${esc(b.title)}</span></a>
             <span class="rn-author">${esc(b.authors || 'Autor não informado')}</span>
-            ${b.pages ? `<span class="rn-progress muted">${num(b.pages)} páginas</span>` : ''}
+            ${b.format === FORMATS.AUDIO && b.durationMin ? `<span class="rn-progress muted">${headphonesIcon(13, 'rn-audio')}${esc(formatDuration(b.durationMin))}</span>`
+    : b.pages ? `<span class="rn-progress muted">${num(b.pages)} páginas</span>` : ''}
           </div>
         </div>
         <div class="rn-actions">

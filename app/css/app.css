@@ -2796,3 +2796,83 @@ body [data-theme] { color: var(--text); }
   .empty-art :is(.f, .p) { fill: var(--surface-2); }
   .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
 }
+
+/* ===== 1.6 Audiolivro ===== */
+/* Formato novo: duração e posição em horas e minutos (dois campos numéricos lado a lado,
+   teclado de números no iPhone), fones de ouvido nos chips do formato, terceira cor na barra
+   de formatos e as horas ouvidas no Início e no Resumo. Só tokens. */
+
+/* Campos h + min: cada número tem a largura dos seus algarismos (--len, ajustado ao digitar);
+   a parte inteira (número e unidade) é tocável, com uma folga em volta. */
+.time-field { display: flex; align-items: baseline; gap: 14px; min-width: 0; }
+.time-part {
+  display: inline-flex; align-items: baseline; gap: 3px; min-width: 0;
+  padding: 6px 6px; margin: -6px -6px; border-radius: 10px; cursor: text;
+}
+.time-part input {
+  width: calc(var(--len, 2) * 1ch + 0.2ch); min-width: 0; padding: 2px 0; border: 0; outline: none; background: transparent;
+  font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; color: var(--text);
+  -moz-appearance: textfield; appearance: textfield;
+}
+.time-part input::-webkit-outer-spin-button, .time-part input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.time-part input::placeholder { color: var(--faint); font-weight: 500; }
+.time-unit { font-size: 14px; font-weight: 700; color: var(--muted); }
+.field .time-part input { min-height: 26px; }
+.field-time label .faint, .field label .faint { font-weight: 500; }
+/* A borda de foco do cartão marca o grupo inteiro (os campos não têm borda própria). */
+.time-part input:focus-visible { outline: none; }
+.time-part:focus-within .time-unit { color: var(--accent); }
+
+/* Folha "Registrar leitura": o mesmo número grande da página, em horas e minutos. */
+.psheet-field.is-time { flex-wrap: wrap; row-gap: 0; column-gap: 12px; }
+.time-field.is-lg { gap: 16px; }
+.time-field.is-lg .time-part input {
+  font-size: 46px; font-weight: 800; letter-spacing: -1.5px; line-height: 1.15; padding: 0;
+  width: calc(var(--len, 2) * 0.92ch + 0.15ch);
+}
+.time-field.is-lg .time-part input::placeholder { letter-spacing: -1.5px; }
+.time-field.is-lg .time-unit { font-size: 17px; }
+@media (max-width: 359px) {
+  .time-field.is-lg .time-part input { font-size: 40px; }
+}
+/* Cronômetro ("Parar"): campos do tamanho do campo de página. */
+.timer-stop .progress-edit-field.is-time { justify-content: center; gap: 12px; }
+.timer-stop .time-part input { font-size: 22px; font-weight: 800; }
+
+/* Formato com três opções: o controle ocupa a linha; no iPhone SE, abaixo do rótulo. */
+.format-row .seg-mini { grid-template-columns: repeat(var(--seg-count), minmax(0, 1fr)); flex: 1 1 auto; max-width: 300px; }
+.format-row .seg-mini .seg-btn { padding: 0 6px; }
+@media (max-width: 359px) {
+  .format-row { flex-direction: column; align-items: stretch; gap: 8px; }
+  .format-row .seg-mini { max-width: none; }
+}
+
+/* Fones de ouvido: chips do formato, cartão do Início e ficha. */
+.chip-audio { display: inline-flex; align-items: center; gap: 4px; }
+.chip-audio .icon { flex-shrink: 0; }
+.ficha-chip.chip-audio .icon { color: var(--accent); }
+.rn-progress .rn-audio { vertical-align: -2px; margin-right: 5px; color: var(--accent); }
+.bento-heard {
+  display: inline-flex; align-items: center; gap: 4px; margin-top: 4px;
+  font-size: 11.5px; font-weight: 700; color: var(--text-soft); font-variant-numeric: tabular-nums;
+}
+.bento-heard .icon { color: var(--accent); flex-shrink: 0; }
+
+/* Terceira cor da barra de formatos (audiolivro). Com três formatos a legenda vira uma lista
+   (nome e % à esquerda, livros e páginas/horas à direita): três colunas não cabem no iPhone SE. */
+.split-c, .dot-c { background: var(--bar-partial); }
+.fmt-labels.is-3 { flex-direction: column; gap: 0; margin-top: -2px; }
+.fmt-labels.is-3 .fmt-label {
+  flex-direction: row; align-items: baseline; justify-content: space-between; gap: 10px;
+  margin-left: 0; text-align: left; width: 100%;
+}
+.fmt-labels.is-3 .fmt-label + .fmt-label { border-top: 1px solid var(--line); }
+.fmt-labels.is-3 .fmt-name { flex-shrink: 0; }
+.fmt-labels.is-3 .fmt-detail { text-align: right; min-width: 0; }
+
+/* Resumo: "Horas ouvidas" ocupa a linha inteira do mosaico. */
+.kpi.is-wide { grid-column: 1 / -1; }
+.kpi.is-audio .kpi-spark { opacity: .9; }
+.listen-head { display: flex; align-items: center; gap: 8px; }
+.listen-card .ppd-value { font-size: 20px; white-space: nowrap; }
+.retro-heard { margin-top: 6px; }

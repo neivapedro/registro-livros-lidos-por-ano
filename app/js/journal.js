@@ -1,18 +1,32 @@
 // Diário de leitura: quanto foi lido em cada dia.
 // Cada livro guarda em book.journal entradas { date, from, to, unit, note, minutes? }:
 // a posição em que estava no começo do dia (from) e onde parou (to),
-// em páginas (livro físico) ou em % (Kindle). Uma entrada por livro por dia.
+// em páginas (livro físico), em % (Kindle) ou em minutos (audiolivro). Uma entrada por livro por dia.
 // 'minutes' (opcional) soma as sessões do cronômetro no dia.
 // Funções puras: recebem o livro e devolvem um diário novo, sem alterar o original.
 
-import { isIsoDate, yearOf } from './dates.js';
+import { isIsoDate, monthOf, yearOf } from './dates.js';
 import { FORMATS, STATUS } from './store.js';
 
-export const UNITS = { PAGE: 'page', PERCENT: 'percent' };
+export const UNITS = { PAGE: 'page', PERCENT: 'percent', MINUTE: 'minute' };
 
-/** Unidade do progresso do livro: % no Kindle, página no físico. */
+/** Unidade do progresso do livro: % no Kindle, minutos no audiolivro, página no físico. */
 export function unitOf(book) {
-  return book.format === FORMATS.KINDLE ? UNITS.PERCENT : UNITS.PAGE;
+  if (book.format === FORMATS.KINDLE) return UNITS.PERCENT;
+  return book.format === FORMATS.AUDIO ? UNITS.MINUTE : UNITS.PAGE;
+}
+
+/** Campo do livro com a posição nesta unidade: currentPercent, currentMin ou currentPage. */
+export function positionField(unit) {
+  if (unit === UNITS.PERCENT) return 'currentPercent';
+  return unit === UNITS.MINUTE ? 'currentMin' : 'currentPage';
+}
+
+/** Fim do livro na unidade: 100%, a duração do audiolivro ou o nº de páginas (null se não informado). */
+export function unitTotal(book, unit = unitOf(book)) {
+  if (unit === UNITS.PERCENT) return 100;
+  const total = Number(unit === UNITS.MINUTE ? book.durationMin : book.pages);
+  return total > 0 ? total : null;
 }
 
 function isNum(v) {
@@ -24,7 +38,7 @@ function lastPosition(book, journal, unit) {
   for (let i = journal.length - 1; i >= 0; i -= 1) {
     if (journal[i].unit === unit) return journal[i].to;
   }
-  const current = unit === UNITS.PERCENT ? book.currentPercent : book.currentPage;
+  const current = book[positionField(unit)];
   return isNum(current) ? current : 0;
 }
 
@@ -87,12 +101,12 @@ export function addMinutes(book, minutes, today) {
 }
 
 /**
- * Livro concluído: a entrada do dia termina no fim do livro
- * (total de páginas no físico, 100% no Kindle). Físico sem total de páginas: nada muda.
+ * Livro concluído: a entrada do dia termina no fim do livro (total de páginas no físico,
+ * 100% no Kindle, a duração no audiolivro). Sem o total: nada muda.
  */
 export function closeOnFinish(book, today) {
   const unit = unitOf(book);
-  const total = unit === UNITS.PERCENT ? 100 : Number(book.pages) || null;
+  const total = unitTotal(book, unit);
   if (!total) return [...(book.journal || [])];
   return recordProgress(book, total, unit, today);
 }
@@ -103,7 +117,7 @@ export function closeOnFinish(book, today) {
  * - Livro novo ou que estava em "Quero ler": sem entrada. A página informada é o
  *   ponto de partida, não leitura feita hoje (marcar direto como Lido também não
  *   inventa um dia com o livro inteiro; as páginas entram no ano do término).
- * - Formato trocado (físico ↔ Kindle): sem entrada; é correção do cadastro, e a
+ * - Formato trocado (físico ↔ Kindle ↔ audiolivro): sem entrada; é correção do cadastro, e a
  *   posição na unidade nova vira o ponto de partida.
  * - Conclusão: fecha no dia do término informado, se não for no futuro nem antes do diário.
  * - Lendo/Abandonado com posição nova: registra no dia.
@@ -119,11 +133,13 @@ export function journalOnSave(d, original, today) {
     if (original.status === STATUS.READ) return journal;
     const last = journal[journal.length - 1]?.date || '';
     const day = isIsoDate(d.endDate) && d.endDate <= today && d.endDate >= last ? d.endDate : today;
-    return closeOnFinish({ ...d, currentPage: original.currentPage, currentPercent: original.currentPercent }, day);
+    return closeOnFinish({
+      ...d, currentPage: original.currentPage, currentPercent: original.currentPercent, currentMin: original.currentMin,
+    }, day);
   }
   if (d.status !== STATUS.READING && d.status !== STATUS.DROPPED) return journal;
   const unit = unitOf(d);
-  const field = unit === UNITS.PERCENT ? 'currentPercent' : 'currentPage';
+  const field = positionField(unit);
   const value = d[field];
   if (value === null || value === undefined || value === '' || Number(value) === original[field]) return journal;
   return recordProgress({ ...d, [field]: original[field] }, Number(value), unit, today);
@@ -131,15 +147,18 @@ export function journalOnSave(d, original, today) {
 
 /**
  * Páginas avançadas numa entrada. Kindle: % convertido em páginas quando o total é conhecido.
+ * Audiolivro: minutos convertidos em "páginas equivalentes" só com páginas E duração informadas;
+ * senão 0 (o tempo ouvido conta à parte, em minutesListenedInYear).
  * A conversão arredonda as posições (não a diferença): entradas encadeadas de 0% a 100%
  * somam exatamente o total do livro (20 dias de 5% num livro de 416 págs. = 416, não 420).
  */
 export function entryPages(book, entry) {
   const delta = Math.max(0, entry.to - entry.from);
-  if (entry.unit === UNITS.PERCENT) {
+  if (entry.unit === UNITS.PERCENT || entry.unit === UNITS.MINUTE) {
     const pages = Number(book.pages) || 0;
-    if (!pages || !delta) return 0;
-    const at = (pct) => Math.round((pct * pages) / 100);
+    const total = entry.unit === UNITS.PERCENT ? 100 : Number(book.durationMin) || 0;
+    if (!pages || !total || !delta) return 0;
+    const at = (v) => Math.round((Math.min(v, total) * pages) / total);
     return Math.max(0, at(entry.to) - at(entry.from));
   }
   return delta;
@@ -250,4 +269,69 @@ export function pagesReadInYear(books, year) {
     if (finishedInYear && book.pages) total += Math.max(0, book.pages - all);
   }
   return total;
+}
+
+/**
+ * Minutos ouvidos (audiolivro) que cada entrada soma, como countedEntries faz com as páginas:
+ * só o avanço além da maior posição já alcançada, sem passar da duração. Devolve [{ entry, minutes }].
+ */
+export function listenedEntries(book) {
+  const total = Number(book.durationMin) || 0;
+  let high;
+  let sum = 0;
+  return [...(book.journal || [])]
+    .filter((e) => e.unit === UNITS.MINUTE)
+    .sort((a, b) => a.date.localeCompare(b.date))
+    .map((entry) => {
+      const from = high === undefined ? entry.from : Math.max(entry.from, high);
+      high = high === undefined ? entry.to : Math.max(high, entry.to);
+      let minutes = Math.max(0, entry.to - from);
+      if (total) minutes = Math.max(0, Math.min(minutes, total - sum));
+      sum += minutes;
+      return { entry, minutes };
+    });
+}
+
+/**
+ * Minutos ouvidos, datados: [{ date, minutes }]. Mesma regra das páginas: as entradas em minutos
+ * do diário; audiolivro Lido sem diário (ou com diário incompleto) soma a duração que falta
+ * no dia do término.
+ */
+function listenedDated(books) {
+  const out = [];
+  for (const book of books) {
+    if (book.status === STATUS.WANT) continue;
+    let all = 0;
+    for (const { entry, minutes } of listenedEntries(book)) {
+      all += minutes;
+      if (minutes) out.push({ date: entry.date, minutes });
+    }
+    const rest = book.format === FORMATS.AUDIO && book.status === STATUS.READ && isIsoDate(book.endDate)
+      ? Math.max(0, (Number(book.durationMin) || 0) - all) : 0;
+    if (rest) out.push({ date: book.endDate, minutes: rest });
+  }
+  return out;
+}
+
+/** Minutos ouvidos em audiolivros no ano; sem ano (null), de todos os anos. */
+export function minutesListenedInYear(books, year = null) {
+  return listenedDated(books).reduce((s, x) => s + (year === null || yearOf(x.date) === year ? x.minutes : 0), 0);
+}
+
+/** Minutos ouvidos em cada mês do ano (12 números; a soma é minutesListenedInYear). */
+export function minutesListenedByMonth(books, year) {
+  const months = Array(12).fill(0);
+  for (const x of listenedDated(books)) if (yearOf(x.date) === year) months[monthOf(x.date)] += x.minutes;
+  return months;
+}
+
+/** Minutos ouvidos por dia (todos os livros). Map 'AAAA-MM-DD' → minutos. */
+export function minutesListenedPerDay(books) {
+  const days = new Map();
+  for (const book of books) {
+    for (const { entry, minutes } of listenedEntries(book)) {
+      if (minutes > 0) days.set(entry.date, (days.get(entry.date) || 0) + minutes);
+    }
+  }
+  return days;
 }

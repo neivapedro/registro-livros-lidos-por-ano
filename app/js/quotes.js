@@ -31,9 +31,9 @@ export function quotePosition(quote, book = null) {
   return '';
 }
 
-/** Kindle marca o trecho em %, livro físico em página. */
+/** Kindle (e audiolivro) marca o trecho em %, livro físico em página. */
 export function quoteUsesPercent(book) {
-  return book.format === FORMATS.KINDLE;
+  return book.format === FORMATS.KINDLE || book.format === FORMATS.AUDIO;
 }
 
 /**

@@ -4,6 +4,8 @@
 // Sessão: { bookId, startedAt, pausedAt, pausedMs } (horários em ms desde 1970).
 // Uma sessão por vez, guardada no localStorage para sobreviver a fechar o app.
 
+import { formatDuration } from './audio.js';
+
 export const SESSION_KEY = 'leituras:sessao';
 
 export function startSession(bookId, now) {
@@ -90,13 +92,16 @@ export function wholeMinutes(ms) {
 }
 
 /**
- * Resumo depois de salvar: "32 min · 18 págs. · 34 págs./hora" (Kindle: "32 min · 6%").
- * delta: quanto avançou na sessão (páginas ou pontos de %).
+ * Resumo depois de salvar: "32 min · 18 págs. · 34 págs./hora" (Kindle: "32 min · 6%";
+ * audiolivro: "32 min · 45 min ouvidos", o avanço no áudio, que pode ser acelerado).
+ * delta: quanto avançou na sessão (páginas, pontos de % ou minutos do áudio).
  */
 export function sessionSummary({ minutes, unit, delta }) {
   const parts = [minutes > 0 ? `${minutes} min` : 'menos de 1 min'];
   if (delta > 0) {
-    if (unit === 'percent') {
+    if (unit === 'minute') {
+      parts.push(`${formatDuration(delta)} ouvidos`);
+    } else if (unit === 'percent') {
       parts.push(`${delta}%`);
     } else {
       parts.push(`${delta} ${delta === 1 ? 'pág.' : 'págs.'}`);

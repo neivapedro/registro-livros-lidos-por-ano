@@ -54,7 +54,7 @@ test('pagesByMonth soma o mesmo que pagesReadInYear', () => {
 });
 
 test('pagesByFormat separa físico e Kindle', () => {
-  assert.deepEqual(pagesByFormat(mixed, 2026), { fisico: 200 + 40 + 50 + 300, kindle: 30 });
+  assert.deepEqual(pagesByFormat(mixed, 2026), { fisico: 200 + 40 + 50 + 300, kindle: 30, audio: 0 });
 });
 
 test('filtros vindos do gráfico', () => {

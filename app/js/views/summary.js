@@ -13,6 +13,8 @@ import { yearSelect } from './home.js';
 import { deltaLine, kpiTile, sparkline } from './kpi.js';
 import { sCurveCard } from './scurve.js';
 import { compactBar } from '../large-title.js';
+import { formatDuration, formatDurationShort, headphonesIcon, hoursValue } from '../audio.js';
+import { minutesListenedByMonth, minutesListenedPerDay } from '../journal.js';
 
 export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
 const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
@@ -52,14 +54,30 @@ function kpis(state, s, year, today) {
     (x) => (x.dir === 'same' ? 'igual' : plural(abs(x.diff), 'dia', 'dias')),
     (x) => same(x, `${plural(abs(x.diff), 'dia', 'dias')} a ${x.dir === 'up' ? 'mais' : 'menos'} por livro que ${since}`));
   const hasDelta = [booksDelta, pagesDelta, ratingDelta, daysDelta].some(Boolean);
+  // Audiolivros (1.6): as horas ouvidas num bloco largo, só quando houver.
+  const heard = s.listened ? listenedTile(state, s, year, today) : '';
   return `
     <section class="kpis" aria-label="Indicadores de ${year}">
       ${kpiTile({ label: 'Livros lidos', value: s.count, of: `/ ${s.goal}`, delta: booksDelta, spark: sparkline(series.count), cls: 'is-lead' })}
       ${kpiTile({ label: 'Páginas', value: s.pages || null, delta: pagesDelta, spark: sparkline(series.pages), note: s.pagesKnown < s.count ? `${s.pagesKnown} de ${s.count} livros com nº de págs.` : '' })}
       ${kpiTile({ label: 'Nota média', value: s.avgRating, digits: 1, delta: ratingDelta, spark: sparkline(series.avgRating) })}
       ${kpiTile({ label: 'Dias por livro', value: s.avgDays === null ? null : Math.round(s.avgDays), delta: daysDelta, spark: sparkline(series.avgDays) })}
+      ${heard}
     </section>
     ${hasDelta ? `<p class="kpi-caption">Comparado a ${esc(since)}</p>` : ''}`;
+}
+
+/** Bloco "Horas ouvidas": total do ano em horas, o tempo exato e a curva do ano. */
+function listenedTile(state, s, year, today) {
+  const ty = yearOf(today);
+  const last = year < ty ? 11 : year > ty ? -1 : monthOf(today);
+  let acc = 0;
+  const series = minutesListenedByMonth(state.books, year).map((m) => { acc += m; return acc / 60; }).slice(0, last + 1);
+  const books = s.formats.audio || 0;
+  const note = [formatDuration(s.listened), books ? plural(books, 'audiolivro lido', 'audiolivros lidos') : ''].filter(Boolean).join(' · ');
+  return kpiTile({
+    label: 'Horas ouvidas', ...hoursValue(s.listened), of: 'h', note, spark: sparkline(series), cls: 'is-wide is-audio',
+  });
 }
 
 function favoriteCard(s) {
@@ -165,12 +183,38 @@ function pagesPerDayCard(state, s, year) {
     </section>`;
 }
 
+/** Audiolivros: tempo ouvido no ano, por dia ouvindo e o melhor dia. */
+function listenedCard(state, s, year) {
+  if (!s.listened) return '';
+  let days = 0;
+  let sum = 0;
+  let best = null;
+  for (const [date, minutes] of minutesListenedPerDay(state.books)) {
+    if (yearOf(date) !== year) continue;
+    days += 1;
+    sum += minutes;
+    if (!best || minutes > best.minutes || (minutes === best.minutes && date < best.date)) best = { date, minutes };
+  }
+  const cell = (value, label, sub = '') => `
+    <div class="ppd-cell"><span class="ppd-value">${esc(value)}</span><span class="ppd-label">${label}</span>${sub ? `<span class="ppd-sub">${sub}</span>` : ''}</div>`;
+  return `
+    <section class="card listen-card">
+      <h2 class="listen-head">${headphonesIcon(16, 'accent')}Horas ouvidas</h2>
+      <div class="ppd">
+        ${cell(formatDurationShort(s.listened), 'no ano')}
+        ${days ? cell(formatDurationShort(sum / days), 'por dia ouvindo') : ''}
+        ${best ? cell(formatDurationShort(best.minutes), 'melhor dia', formatShort(best.date)) : ''}
+      </div>
+    </section>`;
+}
+
 function rhythm({ state, ui, year, today, s }) {
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
   return `
     ${calendarSection({ state, ui: ui || {}, year, today })}
     ${monthsCard({ state, ui, s, today, year, streak })}
-    ${pagesPerDayCard(state, s, year)}`;
+    ${pagesPerDayCard(state, s, year)}
+    ${listenedCard(state, s, year)}`;
 }
 
 // ---------- Gostos ----------

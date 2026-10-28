@@ -1,8 +1,8 @@
 // Gera a imagem da retrospectiva para salvar ou compartilhar:
 // 'story' (1080×1920, stories) ou 'square' (1080×1080, feed).
 
-import { FORMATS } from './store.js';
-import { num, plural } from './ui.js';
+import { formatsText } from './stats.js';
+import { num } from './ui.js';
 import { SHARE_ACCENTS, shareAccent } from './accent.js';
 
 export const IMAGE_SIZES = { story: [1080, 1920], square: [1080, 1080] };
@@ -125,7 +125,7 @@ function facts(d) {
     genre: s.genres[0]?.label || '—',
     author: s.authors[0]?.label || '—',
     streak: d.streak >= 2 ? `${d.streak} dias seguidos` : '',
-    format: `${plural(s.formats[FORMATS.PHYSICAL], 'físico', 'físicos')} · ${s.formats[FORMATS.KINDLE]} no Kindle`,
+    format: formatsText(s.formats),
     profile: d.profile?.title || '',
   };
 }

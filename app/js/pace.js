@@ -1,7 +1,8 @@
 // Ritmo de leitura e previsão de término de um livro em andamento.
 // Funções puras: recebem o livro e a data de hoje ('AAAA-MM-DD').
-// Livro físico conta páginas; Kindle conta % (é o que o Kindle mostra).
+// Livro físico conta páginas; Kindle conta % (é o que o Kindle mostra); audiolivro, minutos.
 
+import { formatDuration } from './audio.js';
 import { daysInclusive, formatShort, isIsoDate, toIso } from './dates.js';
 import { FORMATS, STATUS } from './store.js';
 
@@ -24,15 +25,16 @@ export function addDays(iso, n) {
   return toIso(d);
 }
 
-/** 'percent' no Kindle, 'page' no físico. */
+/** 'percent' no Kindle, 'minute' no audiolivro, 'page' no físico. */
 export function paceUnit(book) {
-  return book.format === FORMATS.KINDLE ? 'percent' : 'page';
+  if (book.format === FORMATS.KINDLE) return 'percent';
+  return book.format === FORMATS.AUDIO ? 'minute' : 'page';
 }
 
 /** Posição atual: a informada no livro, senão o fim da última entrada do diário, senão 0. */
 export function currentPosition(book) {
   const unit = paceUnit(book);
-  const value = unit === 'percent' ? book.currentPercent : book.currentPage;
+  const value = unit === 'percent' ? book.currentPercent : unit === 'minute' ? book.currentMin : book.currentPage;
   if (isNum(value)) return Number(value);
   const journal = (book.journal || []).filter((e) => e.unit === unit);
   return journal.length ? journal[journal.length - 1].to : 0;
@@ -65,10 +67,11 @@ export function readingPace(book, today, windowDays = PACE_WINDOW_DAYS) {
   return { perDay: position / days, unit, source: 'start' };
 }
 
-/** Quanto falta: páginas (físico, precisa do total) ou % (Kindle). null se não dá para saber. */
+/** Quanto falta: páginas (físico), % (Kindle) ou minutos (audiolivro, precisa da duração). null se não dá para saber. */
 export function remainingAmount(book) {
-  if (paceUnit(book) === 'percent') return Math.max(0, 100 - currentPosition(book));
-  const pages = Number(book.pages) || 0;
+  const unit = paceUnit(book);
+  if (unit === 'percent') return Math.max(0, 100 - currentPosition(book));
+  const pages = Number(unit === 'minute' ? book.durationMin : book.pages) || 0;
   if (!pages) return null;
   return Math.max(0, pages - currentPosition(book));
 }
@@ -94,8 +97,9 @@ export function targetPace(book, today) {
   return { perDay: Math.ceil(remaining / daysInclusive(today, book.targetDate)), unit: paceUnit(book) };
 }
 
-/** "28 págs./dia", "1 pág./dia", "0,5 pág./dia", "6%/dia". */
+/** "28 págs./dia", "1 pág./dia", "0,5 pág./dia", "6%/dia", "45 min/dia", "1h 10min/dia". */
 export function formatPace(perDay, unit) {
+  if (unit === 'minute') return `${formatDuration(Math.max(1, Math.round(perDay)))}/dia`;
   // Abaixo de 1 por dia usa uma casa decimal (nunca mostra 0).
   const n = perDay >= 1 ? Math.round(perDay) : Math.max(0.1, Math.round(perDay * 10) / 10);
   const text = n.toLocaleString('pt-BR', { maximumFractionDigits: 1 });

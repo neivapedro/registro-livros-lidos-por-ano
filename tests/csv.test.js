@@ -30,7 +30,7 @@ test('linha do livro no padrão brasileiro', () => {
     isbn: '9788576573135', notes: 'Muito bom; "épico".',
   });
   assert.deepEqual(bookCsvRow(book), [
-    'Duna', 'Frank Herbert', 'Lido', 'Kindle', 'Ficção', 'clássico, presente', 'Duna', '1,5', 680,
+    'Duna', 'Frank Herbert', 'Lido', 'Kindle', 'Ficção', 'clássico, presente', 'Duna', '1,5', 680, '',
     '02/01/2026', '03/02/2026', '4,5', 'Sim', 'Sim', '', '9788576573135', 'Muito bom; "épico".',
   ]);
   const dropped = normalizeBook({ id: 'y', title: 'Chato', status: 'abandonado', endDate: '2026-03-01', dropReason: 'Não prendeu' });
@@ -38,9 +38,10 @@ test('linha do livro no padrão brasileiro', () => {
   assert.equal(row[2], 'Abandonei');
   assert.equal(row[3], 'Físico');
   assert.equal(row[8], '');
-  assert.equal(row[11], '');
+  assert.equal(row[9], '');
   assert.equal(row[12], '');
-  assert.equal(row[14], 'Não prendeu');
+  assert.equal(row[13], '');
+  assert.equal(row[15], 'Não prendeu');
 });
 
 test('planilha completa: cabeçalho e um livro por linha, do mais recente ao mais antigo', () => {
@@ -51,7 +52,7 @@ test('planilha completa: cabeçalho e um livro por linha, do mais recente ao mai
   const csv = booksToCsv(books);
   const lines = csv.slice(1).split('\r\n');
   assert.equal(lines[0], CSV_COLUMNS.join(';'));
-  assert.equal(CSV_COLUMNS.length, 17);
+  assert.equal(CSV_COLUMNS.length, 18);
   assert.match(lines[1], /^Recente;/);
   assert.match(lines[1], /"várias\nlinhas"$/);
   assert.match(lines[2], /^Antigo;/);

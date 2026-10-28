@@ -4,12 +4,13 @@
 import { yearOf } from '../dates.js';
 import { pagesReadInYear } from '../journal.js';
 import { countQuotes } from '../quotes.js';
-import { FORMATS } from '../store.js';
-import { allTimeStats, yearsWithData } from '../stats.js';
+import { FORMAT_LABELS } from '../store.js';
+import { allTimeStats, formatShares, yearsWithData } from '../stats.js';
 import { repeatedAuthors } from '../trend.js';
 import { esc, icon, plural } from '../ui.js';
+import { formatDuration, hoursValue } from '../audio.js';
 import { emptyScene } from '../empty-art.js';
-import { yearPairCompare } from './charts.js';
+import { FORMAT_SWATCH, formatBar, legendSide, yearPairCompare } from './charts.js';
 import { yearSelect } from './home.js';
 import { kpiTile, sparkline } from './kpi.js';
 import { milestonesSection } from './marcos.js';
@@ -37,22 +38,18 @@ function ranking(title, list) {
 }
 
 function formatCard(s) {
-  const phys = s.formats[FORMATS.PHYSICAL];
-  const kin = s.formats[FORMATS.KINDLE];
-  // Os dois % somam 100 (1 de 8 e 7 de 8 não viram 13% + 88%).
-  const pct = (n) => (n === kin && phys ? 100 - Math.round((phys / s.count) * 100) : Math.round((n / s.count) * 100));
-  const label = (side, name, n) => `
-    <span class="fmt-label fmt-${side}">
-      <span class="fmt-name"><span class="dot ${side === 'a' ? 'dot-a' : 'dot-b'}"></span>${name} <span class="fmt-pct">${pct(n)}%</span></span>
-      <span class="fmt-detail">${plural(n, 'livro', 'livros')}</span>
+  // Os % somam 100 (1 de 8 e 7 de 8 não viram 13% + 88%).
+  const shares = formatShares(s.formats);
+  const label = (f, i) => `
+    <span class="fmt-label fmt-${legendSide(i, shares.length)}">
+      <span class="fmt-name"><span class="dot dot-${FORMAT_SWATCH[f.format]}"></span>${FORMAT_LABELS[f.format]} <span class="fmt-pct">${f.pct}%</span></span>
+      <span class="fmt-detail">${plural(f.count, 'livro', 'livros')}</span>
     </span>`;
   return `
     <section class="card fmt-card">
       <h2>Formato</h2>
-      <div class="fmt-bar" role="img" aria-label="${phys} físicos e ${kin} no Kindle">
-        ${phys ? `<span class="split-a" style="flex:${phys}"></span>` : ''}${kin ? `<span class="split-b" style="flex:${kin}"></span>` : ''}
-      </div>
-      <div class="fmt-labels">${phys ? label('a', 'Físico', phys) : ''}${kin ? label('b', 'Kindle', kin) : ''}</div>
+      ${formatBar(shares, s.formats)}
+      <div class="fmt-labels${shares.length > 2 ? ' is-3' : ''}">${shares.map(label).join('')}</div>
     </section>`;
 }
 
@@ -96,6 +93,7 @@ export function allTimeView({ state, ui, today }) {
       ${kpiTile({ label: 'Páginas', value: s.pages || null, spark: yearSpark(chrono.map((y) => pagesReadInYear(state.books, y.year))) })}
       ${kpiTile({ label: s.years.length > 1 ? 'Livros por ano' : 'Livros no ano', value: s.avgPerYear, digits: 1, note: s.years.length > 1 ? 'média dos anos encerrados' : '' })}
       ${kpiTile({ label: 'Nota média', value: s.avgRating, digits: 1 })}
+      ${s.listened ? kpiTile({ label: 'Horas ouvidas', ...hoursValue(s.listened), of: 'h', note: `${formatDuration(s.listened)} de audiolivro`, cls: 'is-wide is-audio' }) : ''}
     </section>
     ${yearsCard(s)}
     ${milestonesSection(state.books)}

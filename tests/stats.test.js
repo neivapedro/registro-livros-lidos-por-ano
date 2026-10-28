@@ -50,7 +50,7 @@ test('yearStats calcula os indicadores do ano', () => {
   assert.equal(s.progress, 0.25);
   assert.equal(s.favorite.title, 'A Meta');
   assert.deepEqual(s.byMonth, [0, 0, 0, 0, 0, 2, 0, 0, 1, 0, 0, 0]);
-  assert.deepEqual(s.formats, { fisico: 2, kindle: 1 });
+  assert.deepEqual(s.formats, { fisico: 2, kindle: 1, audio: 0 });
   assert.deepEqual(s.genres[0], { label: 'Ficção', count: 2 });
   assert.deepEqual(s.authors[0], { label: 'George Orwell', count: 2 });
   assert.equal(s.books[0].title, 'A Meta');
@@ -159,7 +159,7 @@ test('allTimeStats soma todos os anos', () => {
   assert.deepEqual(s.bestYear, { year: 2024, count: 2 });
   assert.deepEqual(s.authors[0], { label: 'X', count: 2 });
   assert.deepEqual(s.genres[0], { label: 'Gestão', count: 2 });
-  assert.deepEqual(s.formats, { fisico: 3, kindle: 1 });
+  assert.deepEqual(s.formats, { fisico: 3, kindle: 1, audio: 0 });
   assert.equal(s.rereads, 1);
   assert.equal(s.dropped, 1);
 });
