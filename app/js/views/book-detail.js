@@ -130,7 +130,7 @@ function readingBlock(book, ui, today) {
         <span class="progress-track"><span class="progress-fill" style="width:${p.pct}%"></span></span>
       </div>`;
   } else if (p) {
-    progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · informe o total de páginas para ver o %</p>`;
+    progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · <a class="pages-ask" href="${editHref(book.id, 'campo=paginas')}">informe o total de páginas</a> para ver o %</p>`;
   } else {
     progress = `<p class="ficha-progress-label">${book.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</p>`;
   }

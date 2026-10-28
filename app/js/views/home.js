@@ -9,6 +9,9 @@ import {
 import { timerBanner } from './timer.js';
 import { compactBar } from '../large-title.js';
 import { firstUpNext } from '../upnext.js';
+import { currentDayStreak, greetingFor, longDate, streakText } from '../greeting.js';
+import { readingDays } from '../journal.js';
+import { editHref } from './book-detail.js';
 
 const RING_R = 50;
 const RING_C = 2 * Math.PI * RING_R;
@@ -93,7 +96,8 @@ function progressLine(b, today) {
   if (!p) return `<span class="rn-progress muted">${b.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</span>`;
   const where = b.format === FORMATS.KINDLE ? `${p.pct}% no Kindle` : p.label;
   // Sem o total de páginas não há % nem previsão.
-  if (p.pct === null) return `<span class="rn-progress">${esc(where)} <span class="muted">· informe o total de páginas para ver o %</span></span>`;
+  // O pedido é um link: abre a edição com o cursor no campo Páginas.
+  if (p.pct === null) return `<span class="rn-progress">${esc(where)} <span class="muted">· <a class="pages-ask" href="${editHref(b.id, 'campo=paginas')}">informe o total de páginas</a> para ver o %</span></span>`;
   const finish = forecastFinish(b, today);
   return `<span class="rn-progress">${esc(where)}${finish ? ` · <span class="nowrap">termina ~${esc(shortDate(finish, today))}</span>` : ''}</span>`;
 }
@@ -113,12 +117,14 @@ function timerButton(b, session) {
   return `<button type="button" class="rn-icon btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(b.id)}">${GLYPHS.play}<span class="sr-only">${running ? 'Ler agora: voltar ao cronômetro' : 'Ler agora'}</span></button>`;
 }
 
-function readingCard(b, session, today) {
+// Só o primeiro cartão tem o botão cheio; nos outros ele é tonal (mesmo tamanho, menos peso).
+function readingCard(b, session, today, primary = true) {
   const p = progressOf(b);
   const done = p?.pct === 100;
+  const cls = primary ? 'btn-primary rn-main' : 'btn-tonal rn-main';
   const main = done
-    ? `<a class="btn-primary rn-main" href="${finishHref(b.id)}">${icon('check', { size: 18, stroke: 2.2 })}Concluir</a>`
-    : `<button type="button" class="btn-primary rn-main" data-action="update-page" data-id="${esc(b.id)}">Registrar leitura</button>`;
+    ? `<a class="${cls}" href="${finishHref(b.id)}">${icon('check', { size: 18, stroke: 2.2 })}Concluir</a>`
+    : `<button type="button" class="${cls}" data-action="update-page" data-id="${esc(b.id)}">Registrar leitura</button>`;
   return `
     <article class="card reading" data-tint="${esc(b.cover || '')}" data-tint-title="${esc(b.title)}" data-longpress data-id="${esc(b.id)}">
       <div class="rn-top">
@@ -139,7 +145,7 @@ function readingNow(books, session, today) {
   return `
     <section class="section">
       <div class="section-head"><h2>Lendo agora</h2><span class="muted small">${plural(books.length, 'livro', 'livros')}</span></div>
-      ${books.map((b) => readingCard(b, session, today)).join('')}
+      ${books.map((b, i) => readingCard(b, session, today, i === 0)).join('')}
     </section>`;
 }
 
@@ -188,7 +194,31 @@ function wantTeaser(books) {
   return `<a class="card teaser" href="#/estante?aba=quero"><span class="stack">${stack}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">${plural(want.length, 'livro', 'livros')} na fila</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
 }
 
-export function homeView({ state, ui, year, today }) {
+// ---------- Saudação (v1.5) ----------
+
+/** "quarta, 28 de outubro": o dia da semana à parte (no iPhone SE a data fica em duas linhas). */
+function dateParts(text) {
+  const cut = text.indexOf(', ');
+  return cut < 0 ? esc(text) : `<span class="greet-wd">${esc(text.slice(0, cut + 1))}</span> ${esc(text.slice(cut + 2))}`;
+}
+
+/** "Boa noite, Pedro" + a data de hoje + a sequência de dias lendo. O nome é só deste aparelho. */
+function greetingHeader(state, ui, today, now, controls) {
+  const name = ui?.userName || '';
+  const hello = greetingFor(now.getHours());
+  const streak = streakText(currentDayStreak(readingDays(state.books), today));
+  return `
+    <header class="greet">
+      <div class="greet-row">
+        <span class="greet-date">${dateParts(longDate(today))}</span>
+        <div class="top-actions">${controls}</div>
+      </div>
+      <h1 class="greet-title" data-large-title>${esc(hello)}${name ? `, <em class="greet-name">${esc(name)}</em>` : ''}</h1>
+      ${streak ? `<p class="greet-streak"><span class="greet-dot" aria-hidden="true"></span>${esc(streak)}</p>` : ''}
+    </header>`;
+}
+
+export function homeView({ state, ui, year, today, now = new Date() }) {
   const currentYear = yearOf(today);
   const stats = yearStats(state.books, year, getGoal(state, year), today);
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
@@ -196,13 +226,7 @@ export function homeView({ state, ui, year, today }) {
   const counts = countByStatus(state.books);
   const settings = `<a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>`;
   return `
-    <header class="top">
-      <div class="brand"><span class="muted small">Seu ano em</span><span class="brand-name" data-large-title>Leituras</span></div>
-      <div class="top-actions">
-        ${yearSelect(yearsWithData(state.books, currentYear), year, 'home-year')}
-        ${settings}
-      </div>
-    </header>
+    ${greetingHeader(state, ui, today, now, `${yearSelect(yearsWithData(state.books, currentYear), year, 'home-year')}${settings}`)}
     ${compactBar({ title: year === currentYear ? 'Leituras' : `Leituras ${year}`, end: settings })}
     ${timerBanner(state.books, ui?.session)}
     ${bento(state, stats, streak, year === currentYear, today)}
