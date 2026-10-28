@@ -50,12 +50,13 @@ import { timerView } from './views/timer.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
-import { celebrateFinish, introMotion } from './motion.js';
+import { celebrateFinish, confettiColors, introMotion } from './motion.js';
 import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
 import { coverFallbackColor, finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initAccent, setAccentPref } from './accent.js';
 import { slideTabs } from './tab-slide.js';
+import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
@@ -841,7 +842,7 @@ document.addEventListener('input', (e) => {
   if (!('quotesQ' in e.target.dataset)) return;
   ui.quotesQuery = e.target.value;
   const el = document.getElementById('quotes-results');
-  if (el) el.innerHTML = allQuotesResults(state, ui.quotesQuery);
+  if (el) swapResults(el, allQuotesResults(state, ui.quotesQuery));
 });
 
 // ---------- Ações ----------
@@ -1301,7 +1302,7 @@ document.addEventListener('input', (e) => {
   if (t.dataset.filter === 'q') {
     ui.filters.q = t.value;
     const el = document.getElementById('search-results');
-    if (el) el.innerHTML = searchResults(state, ui.filters);
+    if (el) swapResults(el, searchResults(state, ui.filters));
   }
 });
 
@@ -2344,11 +2345,9 @@ function playFinishCelebration(tick) {
   const c = ui.celebration;
   ui.celebration = null;
   if (!c || Date.now() - c.at > CELEBRATION_TTL_MS) return;
-  const accent = getComputedStyle(root).getPropertyValue('--accent').trim() || 'currentColor';
+  const accent = getComputedStyle(root).getPropertyValue('--accent').trim();
   // A festa começa já (a capa fica escondida até "saltar"); as cores chegam antes do confete.
-  const colors = celebrationTint(c).then((tint) => [
-    accent, `color-mix(in srgb, rgb(${tint}) 82%, white)`, `color-mix(in srgb, ${accent} 50%, white)`, `color-mix(in srgb, rgb(${tint}) 45%, white)`,
-  ]);
+  const colors = celebrationTint(c).then((tint) => confettiColors(accent, tint));
   celebrateFinish(root, { id: c.id, colors, tick, big: c.big }).catch(() => {});
 }
 

@@ -89,3 +89,15 @@ export function emptyArt(name) {
 export function emptyScene(art, title, text, cta = '') {
   return `<div class="empty has-art" data-empty="${esc(art)}">${emptyArt(art)}<p class="empty-title">${esc(title)}</p><p class="empty-text">${esc(text)}</p>${cta}</div>`;
 }
+
+/**
+ * Troca o conteúdo de uma lista que é redesenhada a cada letra digitada (Buscar, Trechos
+ * salvos). Se a mesma tela vazia já estava ali, a nova não refaz a entrada: sem isso o desenho
+ * sumia e voltava a cada letra de uma busca sem resultado.
+ */
+export function swapResults(el, html) {
+  const before = el.querySelector('.empty.has-art')?.dataset.empty;
+  el.innerHTML = html;
+  const now = el.querySelector('.empty.has-art');
+  if (now && before && now.dataset.empty === before) now.classList.add('is-steady');
+}

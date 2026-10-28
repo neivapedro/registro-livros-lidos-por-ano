@@ -77,6 +77,36 @@ function tickRing(root) {
   ], { duration: 520, delay: 420, easing: 'ease-out' });
 }
 
+/** "#D08C4F" (ou "#abc") → [r, g, b]; null se não for hexadecimal. */
+function parseHex(value) {
+  const hex = String(value || '').trim().replace(/^#/, '');
+  const full = /^[0-9a-f]{3}$/i.test(hex) ? [...hex].map((c) => c + c).join('') : hex;
+  if (!/^[0-9a-f]{6}$/i.test(full)) return null;
+  const n = parseInt(full, 16);
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
+}
+
+/** [r, g, b] misturado com branco (p = quanto fica da cor, 0 a 1), como "rgb(r g b)". */
+function towardWhite(rgb, p) {
+  return `rgb(${rgb.map((v) => Math.round(v * p + 255 * (1 - p))).join(' ')})`;
+}
+
+/**
+ * Cores do confete: o destaque, a cor da capa clareada e versões claras dos dois. Calculadas
+ * aqui (rgb simples), não com color-mix(): no iOS 16.0/16.1 color-mix não existe e as peças
+ * ficariam sem cor. accent: "#RRGGBB" (o --accent); tint: "r g b" (cover-color.js tintFor).
+ */
+export function confettiColors(accent, tint) {
+  const acc = parseHex(accent);
+  const cover = String(tint || '').trim().split(/\s+/).map(Number);
+  const hasCover = cover.length === 3 && cover.every((v) => Number.isFinite(v) && v >= 0 && v <= 255);
+  const colors = [acc ? `rgb(${acc.join(' ')})` : 'currentColor'];
+  if (hasCover) colors.push(towardWhite(cover, 0.82));
+  if (acc) colors.push(towardWhite(acc, 0.5));
+  if (hasCover) colors.push(towardWhite(cover, 0.45));
+  return colors;
+}
+
 /** Confete saindo do ponto (x, y) da tela, nas cores dadas (CSS). Devolve a camada (some sozinha). */
 export function confettiBurst(x, y, colors, { pieces = 22 } = {}) {
   const layer = document.createElement('div');

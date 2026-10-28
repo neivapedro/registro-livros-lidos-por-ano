@@ -1833,9 +1833,8 @@ body.sheet-open { overflow: hidden; }
   margin: calc(-16px - var(--safe-t)) -18px 0;
   padding: calc(4px + var(--safe-t)) 18px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
-  background:
-    radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, var(--tint-default)) / var(--hero-tint-a)), rgb(var(--tint, var(--tint-default)) / var(--hero-tint-b)) 50%, transparent 88%),
-    linear-gradient(to bottom, transparent 70%, var(--bg));
+  /* O pé fica transparente (o grão de papel da 1.5 continua por baixo, sem emenda). */
+  background: radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, var(--tint-default)) / var(--hero-tint-a)), rgb(var(--tint, var(--tint-default)) / var(--hero-tint-b)) 50%, transparent 88%);
 }
 .ficha-top { align-self: stretch; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -8px; }
 .ficha-top .btn-text { color: var(--text); gap: 2px; }
@@ -2308,6 +2307,8 @@ body [data-theme] { color: var(--text); }
 /* iPhone SE: o ativo fica só com o nome, os outros só com o ícone (cabe ao lado do Sortear). */
 @media (max-width: 359px) {
   .shelf-modes .mini-seg-btn:not(.is-on) .icon { display: inline-block; }
+  /* Com três modos, o Sortear fica só com o nome para caber na mesma linha (sem o dado). */
+  .shelf-tools .draw-open .icon { display: none; }
 }
 
 /* ---------- Modo Lombadas ---------- */
@@ -2392,6 +2393,14 @@ body [data-theme] { color: var(--text); }
   background-image: var(--grain); background-size: 180px 180px;
   opacity: var(--grain-a);
 }
+/* Cabeçalhos presos (ano/série na Estante, abas do Resumo) e a barra compacta do alto: o vidro
+   deles alisa o grão e, no claro, aparecia uma faixa lisa atravessando a tela. O mesmo grão por
+   cima do vidro (atrás do texto) deixa a faixa igual ao fundo. */
+.group-head::before, .rs-tabs::before, .cbar::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: var(--grain); background-size: 180px 180px;
+  opacity: var(--grain-a);
+}
 
 /* ===== 1.5 Ficha, trechos e busca ===== */
 /* Topo da ficha com a própria capa ampliada e desfocada (views/book-detail.js heroBackdrop),
@@ -2406,8 +2415,9 @@ body [data-theme] { color: var(--text); }
   --bd-scrim-low: 84%;
   --bd-saturate: 1.5;
   --bd-bright: 0.85;
-  --skel: color-mix(in srgb, var(--text) 9%, transparent);
-  --skel-sheen: color-mix(in srgb, var(--text) 7%, transparent);
+  /* Sem color-mix: os esqueletos aparecem também no iOS 16.0/16.1 (= --text a 9% e 7%). */
+  --skel: rgb(244 239 234 / 0.09);
+  --skel-sheen: rgb(244 239 234 / 0.07);
 }
 [data-theme="light"] {
   --bd-scrim-top: 44%;
@@ -2416,8 +2426,8 @@ body [data-theme] { color: var(--text); }
   --bd-scrim-low: 86%;
   --bd-saturate: 1.35;
   --bd-bright: 1.05;
-  --skel: color-mix(in srgb, var(--text) 8%, transparent);
-  --skel-sheen: color-mix(in srgb, var(--surface) 80%, transparent);
+  --skel: rgb(30 25 21 / 0.08);
+  --skel-sheen: rgb(255 253 250 / 0.8);
 }
 
 /* Fundo desfocado: um único elemento com filter (nada de backdrop-filter), recortado pelo topo.
@@ -2443,9 +2453,19 @@ body [data-theme] { color: var(--text); }
     color-mix(in srgb, var(--bg) var(--bd-scrim-low), transparent) 74%,
     var(--bg) 100%);
 }
+/* O pé se dissolve no fundo do app (com o grão de papel), sem a emenda de uma faixa lisa. */
+.ficha-backdrop {
+  -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent);
+  mask-image: linear-gradient(to bottom, #000 64%, transparent);
+}
 /* Tela larga (iPad, computador): as bordas laterais também se dissolvem. */
 @media (min-width: 540px) {
-  .ficha-backdrop { -webkit-mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); mask-image: linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent); }
+  .ficha-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to bottom, #000 64%, transparent), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    mask-composite: intersect;
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .ficha-backdrop { transition: none; }
@@ -2542,25 +2562,29 @@ body [data-theme] { color: var(--text); }
 [data-accent="petroleo"], [data-accent="petroleo"] [data-theme] { --accent: var(--acc-petroleo); --accent-hover: var(--acc-petroleo-hover); }
 [data-accent="vinho"], [data-accent="vinho"] [data-theme] { --accent: var(--acc-vinho); --accent-hover: var(--acc-vinho-hover); }
 [data-accent="grafite"], [data-accent="grafite"] [data-theme] { --accent: var(--acc-grafite); --accent-hover: var(--acc-grafite-hover); }
-/* Tons que eram caramelo fixo passam a sair da cor escolhida. */
-:is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]),
-:is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) [data-theme="dark"] {
-  --surface-warm: color-mix(in srgb, var(--accent) 12%, var(--surface));
-  --surface-sel: color-mix(in srgb, var(--accent) 7%, var(--surface));
-  --heat-1: color-mix(in srgb, var(--accent) 26%, var(--surface-2));
-  --heat-2: color-mix(in srgb, var(--accent) 50%, var(--surface-2));
-  --heat-3: color-mix(in srgb, var(--accent) 76%, var(--surface-2));
-  --bar-partial: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
-}
-[data-theme="light"]:is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) {
-  --surface-warm: color-mix(in srgb, var(--accent) 9%, var(--surface));
-  --surface-sel: color-mix(in srgb, var(--accent) 5%, var(--surface));
-  --heat-1: color-mix(in srgb, var(--accent) 16%, var(--surface));
-  --heat-2: color-mix(in srgb, var(--accent) 38%, var(--surface));
-  --heat-3: color-mix(in srgb, var(--accent) 68%, var(--surface));
-  --bar-partial: color-mix(in srgb, var(--accent) 42%, var(--surface));
-  --medal-hi: color-mix(in srgb, var(--accent) 66%, #FFFFFF);
-  --medal-lo: color-mix(in srgb, var(--accent) 72%, #000000);
+/* Tons que eram caramelo fixo passam a sair da cor escolhida. Só com color-mix() (Safari 16.2+):
+   sem ele, um token que usa color-mix vira "nada" onde é usado (o mapa de leitura sumiria);
+   assim, no iOS 16.0/16.1 esses tons continuam os caramelo de sempre. */
+@supports (color: color-mix(in srgb, red, red)) {
+  :is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]),
+  :is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) [data-theme="dark"] {
+    --surface-warm: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --surface-sel: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    --heat-1: color-mix(in srgb, var(--accent) 26%, var(--surface-2));
+    --heat-2: color-mix(in srgb, var(--accent) 50%, var(--surface-2));
+    --heat-3: color-mix(in srgb, var(--accent) 76%, var(--surface-2));
+    --bar-partial: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
+  }
+  [data-theme="light"]:is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) {
+    --surface-warm: color-mix(in srgb, var(--accent) 9%, var(--surface));
+    --surface-sel: color-mix(in srgb, var(--accent) 5%, var(--surface));
+    --heat-1: color-mix(in srgb, var(--accent) 16%, var(--surface));
+    --heat-2: color-mix(in srgb, var(--accent) 38%, var(--surface));
+    --heat-3: color-mix(in srgb, var(--accent) 68%, var(--surface));
+    --bar-partial: color-mix(in srgb, var(--accent) 42%, var(--surface));
+    --medal-hi: color-mix(in srgb, var(--accent) 66%, #FFFFFF);
+    --medal-lo: color-mix(in srgb, var(--accent) 72%, #000000);
+  }
 }
 
 /* Ajustes → Aparência: cinco bolinhas, o nome embaixo da escolhida. */
@@ -2648,6 +2672,8 @@ body [data-theme] { color: var(--text); }
 .empty.has-art .empty-text { font-size: 14px; line-height: 1.45; max-width: 290px; text-wrap: pretty; }
 .empty.has-art .btn-outline { margin-top: 12px; min-height: 44px; padding: 0 18px; border-radius: 999px; }
 @keyframes empty-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* A mesma tela vazia redesenhada a cada letra da busca não refaz a entrada (empty-art.js). */
+.empty.has-art.is-steady { animation: none; }
 
 /* ===== 1.5 Início ===== */
 /* Saudação no lugar do título "Leituras", botão tonal nos cartões "Lendo agora" depois do
@@ -2735,4 +2761,38 @@ body [data-theme] { color: var(--text); }
 @media (prefers-reduced-motion: reduce) {
   .card.reading::before { transition: none; }
   .grid-cover.is-celebrated::after, .confetti { display: none; }
+}
+
+/* ===== 1.5 Sem color-mix() (iOS 16.0 e 16.1) ===== */
+/* color-mix() só chegou no Safari 16.2. Antes dele, uma regra com color-mix() e var() não volta
+   para a declaração anterior: vira "unset" (fundo transparente, sem cor). Aqui, versões simples
+   do que a 1.5 trouxe, para nada sumir nesses iPhones (as bolinhas das cores ficariam vazias,
+   o topo da ficha ficaria sem o véu sobre a capa desfocada e o cartão claro, sem fundo). */
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Vidro e véus (desde a 1.4 em color-mix): a barra de baixo ficava transparente sobre o texto. */
+  :root:not([data-theme="light"]), [data-theme="dark"] {
+    --glass-bg: rgb(26 23 21 / 0.7); --glass-solid: rgb(35 32 30); --glass-line: rgb(244 239 234 / 0.11);
+    --glass-hi: rgb(244 239 234 / 0.09); --bar-bg: rgb(14 12 11 / 0.8); --scrim: rgb(14 12 11 / 0.62);
+    --fill-soft: rgb(244 239 234 / 0.09); --fill-press: rgb(244 239 234 / 0.14); --shadow-color: rgb(14 12 11 / 0.7);
+  }
+  [data-theme="light"] {
+    --glass-bg: rgb(255 253 250 / 0.74); --glass-line: rgb(30 25 21 / 0.09); --bar-bg: rgb(246 241 235 / 0.84);
+    --scrim: rgb(246 241 235 / 0.7); --fill-soft: rgb(30 25 21 / 0.06); --fill-press: rgb(30 25 21 / 0.11);
+  }
+  .accent-dot { background: var(--sw); box-shadow: 0 2px 6px var(--cover-shadow); }
+  .ficha-backdrop { display: none; }
+  .btn-tonal, [data-theme="light"] .btn-tonal,
+  .btn-tonal:active, [data-theme="light"] .btn-tonal:active { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+  [data-theme="light"] .card.reading { background: linear-gradient(135deg, rgb(var(--tint, var(--tint-default)) / var(--tint-a)), var(--surface) 72%); }
+  [data-theme="light"] .card.reading:not([data-tint=""]) { background: linear-gradient(135deg, rgb(var(--tint-default) / var(--tint-a)), var(--surface) 72%); }
+  [data-theme="light"] .card.reading::before {
+    background:
+      radial-gradient(130% 95% at 0% 0%, rgb(var(--tint, var(--tint-default)) / 0.3), transparent 66%),
+      linear-gradient(160deg, rgb(var(--tint, var(--tint-default)) / 0.13), var(--surface) 76%);
+  }
+  .quote-page { background: var(--surface-2); }
+  .empty-art { color: var(--muted); }
+  .empty-art :is(.l, .d, .dot) { stroke: var(--line-strong); }
+  .empty-art :is(.f, .p) { fill: var(--surface-2); }
+  .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
 }

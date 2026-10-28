@@ -187,13 +187,15 @@ export function decodeKeysParam(value) {
 export const NAME_STORAGE = 'leituras:nome';
 export const NAME_MAX = 30;
 
-// Controles, marcas de direção e caracteres invisíveis: não têm lugar num nome.
-const NAME_JUNK = /[\u0000-\u001F\u007F-\u009F\u200B-\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/g;
+// Controles, marcas de direção e caracteres invisíveis: não têm lugar num nome. O "juntor"
+// (U+200D, ZWJ) e o não-juntor (U+200C) ficam: formam emoji como 👩‍💻 e 👨‍👩‍👧 e algumas escritas.
+const NAME_JUNK = /[\u0000-\u001F\u007F-\u009F\u200B\u200E\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/g;
 
 /** Nome limpo: sem caracteres invisíveis, espaços juntados, no máximo 30 caracteres (sem partir emoji). */
 export function cleanName(value) {
   const text = String(value ?? '').replace(NAME_JUNK, '').replace(/\s+/g, ' ').trim();
-  return Array.from(text).slice(0, NAME_MAX).join('').trim();
+  // Cortado no limite, não termina num juntor solto.
+  return Array.from(text).slice(0, NAME_MAX).join('').replace(/[\u200C\u200D]+$/, '').trim();
 }
 
 export function readName(storage) {
