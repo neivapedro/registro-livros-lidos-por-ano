@@ -2,11 +2,12 @@
 // Mesmas cores e fontes da imagem da retrospectiva (share-image.js).
 
 import { quotePosition } from './quotes.js';
+import { SHARE_ACCENTS, shareAccent } from './accent.js';
 
 const S = 1080;
 const PAD = 96;
 const C = {
-  bg: '#140F0C', text: '#F4EFEA', muted: '#A39A92', soft: '#CFC8C1', accent: '#D08C4F', line: '#3A2E26',
+  bg: '#140F0C', text: '#F4EFEA', muted: '#A39A92', soft: '#CFC8C1', accent: SHARE_ACCENTS.terracota, line: '#3A2E26',
 };
 const SERIF = '"Instrument Serif", Georgia, serif';
 const SANS = 'Manrope, system-ui, sans-serif';
@@ -124,6 +125,7 @@ function clip(ctx, text, maxWidth) {
 
 export async function renderQuoteImage(quote, book) {
   await ensureFonts();
+  C.accent = shareAccent(); // a cor de destaque escolhida em Ajustes (sempre a versão do escuro)
   const canvas = document.createElement('canvas');
   canvas.width = S;
   canvas.height = S;

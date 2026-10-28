@@ -12,6 +12,21 @@ function segmented(options, current, action, label, cls = '') {
   return `<div class="segmented${cls ? ` ${cls}` : ''}" role="group" aria-label="${esc(label)}" style="--seg-count:${options.length}">${buttons}</div>`;
 }
 
+// ---------- Carregando: cartões "esqueleto" no formato dos resultados ----------
+
+/** Um cartão de resultado vazio, com capa e linhas de texto que brilham enquanto a busca roda. */
+export function resultSkeleton(i = 0) {
+  return `
+    <span class="result result-skel" style="--skel-i:${i}" aria-hidden="true">
+      <span class="skel skel-cover"></span>
+      <span class="result-text">
+        <span class="skel skel-line is-title"></span>
+        <span class="skel skel-line is-meta"></span>
+        ${i % 2 ? '' : '<span class="skel skel-line is-short"></span>'}
+      </span>
+    </span>`;
+}
+
 // ---------- Busca com IA (Gemini), abaixo dos resultados comuns ----------
 // Só aparece depois de uma busca comum, e só roda quando a pessoa toca no botão.
 // Carregando em duas etapas: "Procurando na internet…" e, se precisar, "Conferindo o ISBN…".
@@ -47,6 +62,7 @@ export function aiLookupBlock(lookup, aiEnabled, { limitReached = false } = {}) 
     <div class="ai-box" aria-busy="true">
       <p class="small ai-status" role="status">${icon('sparkle', { size: 16, stroke: 1.8, cls: 'accent' })}${ai.stage === 'confirm' ? 'Conferindo o ISBN…' : 'Procurando na internet…'}</p>
       <span class="ai-progress" style="--ai-ms:${Math.round(Number(ai.timeoutMs)) || 25000}ms;--ai-delay:${-Math.round(Math.max(0, Number(ai.elapsedMs) || 0))}ms" aria-hidden="true"><span></span></span>
+      ${resultSkeleton(0)}
       <button type="button" class="btn-text small ai-cancel" data-action="ai-cancel">Cancelar</button>
     </div>`;
   }
@@ -74,16 +90,32 @@ export function aiLookupBlock(lookup, aiEnabled, { limitReached = false } = {}) 
   return `<div class="ai-box">${button('Buscar com IA')}</div>`;
 }
 
+/**
+ * A busca com IA está rodando ou achou o livro? Então "Não encontrei" e a dica do ISBN
+ * saem de cima dela (diriam o contrário do que aparece logo abaixo). Voltam se a IA
+ * não achar nada ou der erro.
+ */
+export function aiCoversLookup(lookup, aiEnabled) {
+  const ai = lookup.ai;
+  if (!aiEnabled || !ai) return false;
+  return ai.status === 'loading' || (ai.status === 'done' && (ai.results || []).length > 0);
+}
+
 export function lookupResults(lookup, { aiEnabled = false, aiLimit = false } = {}) {
-  if (lookup.loading) return '<p class="muted small lookup-status">Buscando…</p>';
+  if (lookup.loading) {
+    // Três cartões vazios no formato dos resultados; o leitor de tela ouve "Buscando…".
+    return `<p class="sr-only" role="status">Buscando…</p>${[0, 1, 2].map(resultSkeleton).join('')}`;
+  }
+  const aiOn = aiCoversLookup(lookup, aiEnabled);
   // Sem resultado ou sem conexão, a mensagem é a mesma: o que importa é seguir pelo
   // cadastro manual logo abaixo. Se a busca era um ISBN, ele já fica guardado no livro.
   // Busca por texto: lembra que o ISBN acha quase todo livro brasileiro (cadastro nacional).
-  const isbnTip = lookup.searched && !lookup.isbn
+  const isbnTip = lookup.searched && !lookup.isbn && !aiOn
     ? '<p class="muted small lookup-tip">Não achou? Digite o ISBN: os 13 números perto do código de barras, no verso do livro.</p>'
     : '';
   const ai = aiLookupBlock(lookup, aiEnabled, { limitReached: aiLimit });
   if (lookup.query.trim().length >= 2 && lookup.searched && (lookup.failed || !lookup.results.length)) {
+    if (aiOn) return ai;
     const isbnNote = lookup.isbn ? `<br>O ISBN ${esc(lookup.isbn)} fica guardado no livro.` : '';
     return `<p class="muted small lookup-status">Não encontrei — preencha os dados abaixo.${isbnNote}</p>${isbnTip}${ai}`;
   }

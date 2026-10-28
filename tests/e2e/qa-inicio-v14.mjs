@@ -438,7 +438,8 @@ try {
   step('telas em 320, 375, 390 e 430px: títulos longos, séries, etiquetas, Capas, filtros e folhas');
   await seedAndOpen(seed());
   const smallTargets = (scope) => page.evaluate((sel) => [...document.querySelectorAll(`${sel} button, ${sel} a[href], ${sel} select`)]
-    .filter((el) => el.offsetParent && !el.closest('.swipe-actions') && !el.matches('.reading-link, .li-link, .cg-link, .fchip-pick select'))
+    // .pages-ask (1.5): link no meio do texto; a área de toque cresce com ::before (conferida em v15-inicio.mjs).
+    .filter((el) => el.offsetParent && !el.closest('.swipe-actions') && !el.matches('.reading-link, .li-link, .cg-link, .fchip-pick select, .pages-ask'))
     .map((el) => [el, (el.closest('.fchip') || el).getBoundingClientRect()])
     .filter(([, r]) => r.width && (r.height < 40 || r.width < 36))
     .map(([el, r]) => `${el.className || el.tagName} ${Math.round(r.width)}×${Math.round(r.height)}`), scope);

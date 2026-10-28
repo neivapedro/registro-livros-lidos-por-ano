@@ -4,8 +4,9 @@ import { monthlyTarget } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
+import { ACCENTS, validAccent } from '../accent.js';
 
-export const APP_VERSION = '1.4.4';
+export const APP_VERSION = '1.5.0';
 
 function stepper(label, value, action, hint) {
   return `
@@ -126,12 +127,38 @@ export function keyImportCard(keys, current = {}) {
 
 /** Aparência (V14): fica só neste aparelho, como a chave do Google (veja theme.js). */
 const THEME_OPTIONS = [['auto', 'Automático'], ['claro', 'Claro'], ['escuro', 'Escuro']];
-function appearanceCard(pref) {
+
+/** Cor de destaque (1.5): cinco bolinhas; o nome aparece embaixo da escolhida (veja accent.js). */
+export function accentPicker(accent) {
+  const current = validAccent(accent);
+  const swatches = ACCENTS.map(({ id, label }) => {
+    const on = id === current;
+    return `<button type="button" class="accent-sw${on ? ' is-on' : ''}" data-action="set-accent" data-value="${id}" aria-pressed="${on}" style="--sw: var(--acc-${id})">
+            <span class="accent-dot" aria-hidden="true">${on ? icon('check', { size: 16, stroke: 2.6 }) : ''}</span><span class="accent-name">${esc(label)}</span>
+          </button>`;
+  }).join('');
+  return `
+        <div class="accent-pick">
+          <p class="accent-head" id="accent-head">Cor de destaque</p>
+          <div class="accent-row" role="group" aria-labelledby="accent-head">${swatches}</div>
+        </div>`;
+}
+
+function appearanceCard(pref, accent) {
   const current = THEME_OPTIONS.some(([v]) => v === pref) ? pref : 'auto';
   const buttons = THEME_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-theme" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
   return group('aparencia', 'Aparência', `
-        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>`,
-  'Automático acompanha o iPhone: claro de dia, escuro à noite. Vale só para este aparelho (não vai para o backup).', 'theme-card');
+        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>${accentPicker(accent)}`,
+  'Automático acompanha o iPhone: claro de dia, escuro à noite. O tema e a cor valem só para este aparelho (não vão para o backup).', 'theme-card');
+}
+
+/** Nome da saudação do Início (v1.5): só neste aparelho, fora do backup (prefs.js). */
+function nameCard(name) {
+  return group('nome', 'Seu nome', `
+        <div class="field">
+          <label for="set-name">Nome na saudação do Início</label>
+          <input id="set-name" type="text" maxlength="30" autocomplete="given-name" autocapitalize="words" enterkeyhint="done" spellcheck="false" placeholder="Opcional" value="${esc(name)}" data-username>
+        </div>`, 'Aparece como “Boa noite, Nome”. Fica só neste aparelho e não vai para o backup.', 'name-card');
 }
 
 export function settingsView({ state, ui, today }) {
@@ -147,11 +174,12 @@ export function settingsView({ state, ui, today }) {
       <span class="icon-btn-spacer"></span>
     </header>
 ${keyImportCard(ui?.keyImport, { googleBooksKey: ui?.googleKey, geminiKey: ui?.geminiKey })}
+${nameCard(ui?.userName || '')}
 ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
         ${pageGoalSettings(state, year)}`)}
-${appearanceCard(ui?.themePref)}
+${appearanceCard(ui?.themePref, ui?.accent)}
 ${group('backup', 'Backup dos dados', `
         <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
         <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>

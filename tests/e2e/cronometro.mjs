@@ -81,6 +81,12 @@ await context.addInitScript(() => {
 });
 const page = await context.newPage();
 await page.clock.install({ time: new Date(`${TODAY}T09:00:00`) });
+// Relógio parado: só anda com fastForward. Com o relógio correndo em tempo real, o
+// fastForward do Playwright disputa com o laço de "tempo real" do relógio falso e, quando os
+// dois se cruzam, o laço termina com um _runTo antigo que faz Date.now() VOLTAR os minutos
+// adiantados: a pausa ficava com 0 min ("22 min" em vez de "12 min") ou a sessão inteira
+// sumia ("menos de 1 min" em vez de "10 min"). Parado, não há laço e o tempo é exato.
+await page.clock.pauseAt(new Date(`${TODAY}T09:00:01`));
 
 const STATE_KEY = 'state';
 const readState = (p = page) => p.evaluate(async (key) => (await import('/js/db.js')).getItem(key), STATE_KEY);

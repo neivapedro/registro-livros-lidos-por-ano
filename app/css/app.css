@@ -1833,9 +1833,8 @@ body.sheet-open { overflow: hidden; }
   margin: calc(-16px - var(--safe-t)) -18px 0;
   padding: calc(4px + var(--safe-t)) 18px 6px;
   display: flex; flex-direction: column; align-items: center; gap: 14px; text-align: center;
-  background:
-    radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, var(--tint-default)) / var(--hero-tint-a)), rgb(var(--tint, var(--tint-default)) / var(--hero-tint-b)) 50%, transparent 88%),
-    linear-gradient(to bottom, transparent 70%, var(--bg));
+  /* O pé fica transparente (o grão de papel da 1.5 continua por baixo, sem emenda). */
+  background: radial-gradient(140% 85% at 50% 0%, rgb(var(--tint, var(--tint-default)) / var(--hero-tint-a)), rgb(var(--tint, var(--tint-default)) / var(--hero-tint-b)) 50%, transparent 88%);
 }
 .ficha-top { align-self: stretch; display: flex; justify-content: space-between; align-items: center; min-height: 48px; margin: 0 -8px; }
 .ficha-top .btn-text { color: var(--text); gap: 2px; }
@@ -2170,3 +2169,630 @@ body [data-theme] { color: var(--text); }
 
 /* Ficha: "Voltar para Quero ler", discreto abaixo de Ler agora / Concluir. */
 .ficha-card .ficha-pause { display: flex; justify-content: center; width: 100%; margin-top: 4px; color: var(--muted); font-weight: 600; }
+
+/* ===== 1.5 Capas, lombadas e textura ===== */
+/* Capa desenhada com cara de capa de livro (cor funda, luz em diagonal, ornamento fixo por
+   título, título em serifa e autor em versalete; nas pequenas, as iniciais), lombada e borda
+   de páginas sobre qualquer capa (com ou sem imagem), o modo "Lombadas" da Estante e um
+   grão de papel no fundo do app. A capa é um objeto: a luz dela é a mesma nos dois temas. */
+
+:root, [data-theme] {
+  --cv-sheen: rgb(255 255 255 / 0.13);
+  --cv-shade: rgb(0 0 0 / 0.26);
+  --cv-crease: rgb(0 0 0 / 0.34);
+  --cv-crease-soft: rgb(0 0 0 / 0.14);
+  --cv-crease-hi: rgb(255 255 255 / 0.22);
+  --cv-edge-hi: rgb(255 255 255 / 0.2);
+  --cv-edge-lo: rgb(0 0 0 / 0.22);
+  --cv-panel: rgb(0 0 0 / 0.2);
+  /* Estante de lombadas: fundo do móvel, tábua (topo, frente, quina) e sombras. */
+  --case-bg: #15120F;
+  --case-line: #26201B;
+  --case-shade: rgb(0 0 0 / 0.42);
+  --plank-top: #5A4636;
+  --plank: #3A2D23;
+  --plank-lo: #1F1712;
+  --plank-cast: rgb(0 0 0 / 0.5);
+  --sp-shade: rgb(0 0 0 / 0.34);
+  --sp-hi: rgb(255 255 255 / 0.16);
+  --sp-gap: rgb(0 0 0 / 0.55);
+  /* Grão de papel: quase nada no escuro. */
+  --grain-a: 0.08;
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.8' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .38 0 0 0 0 .27 0 0 0 0 .17 0 0 0 1.3 -.5'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+}
+[data-theme="light"] {
+  --case-bg: #EFE5D8;
+  --case-line: #E2D5C5;
+  --case-shade: rgb(90 60 30 / 0.16);
+  --plank-top: #E6D4BD;
+  --plank: #CDB394;
+  --plank-lo: #A88B69;
+  --plank-cast: rgb(80 52 28 / 0.22);
+  --sp-gap: rgb(60 35 15 / 0.35);
+  --grain-a: 0.24;
+}
+
+/* ---------- Capa desenhada ---------- */
+/* container-type: o ornamento e as iniciais medem pela largura da própria capa (cqw).
+   A capa já tem largura definida em todos os tamanhos. */
+.cover {
+  container-type: inline-size; isolation: isolate;
+  background-color: var(--cover-bg);
+  background-image: linear-gradient(158deg, var(--cv-sheen), transparent 38%, transparent 62%, var(--cv-shade));
+}
+.cover-title { text-wrap: balance; letter-spacing: -0.1px; }
+.cover-author {
+  font-weight: 700; text-transform: none; letter-spacing: 0.07em; opacity: 0.88;
+  font-variant-caps: all-small-caps; font-size: 11px;
+  padding-top: 5px;
+  background: linear-gradient(var(--cover-acc), var(--cover-acc)) 0 0 / 14px 1px no-repeat;
+}
+.cover-sm .cover-author { display: none; }
+.cover-fill .cover-author, .cover-hero .cover-author { font-size: 12.5px; }
+.cover-xl .cover-author { font-size: 14px; }
+.cal-cover .cover-title, .retro-mosaic .cover-title { text-wrap: wrap; }
+/* Grade de capas: o autor em versalete também (uma linha, cortada se precisar). */
+.cg-link .cover-fill .cover-author { display: block; font-size: 10px; padding-top: 4px; }
+
+/* Ornamento (atrás do texto; a imagem, quando existe, cobre tudo). */
+.cover-deco { position: absolute; inset: 0; z-index: -1; pointer-events: none; color: var(--cover-acc); }
+/* 0 · moldura dupla de filetes */
+.cover-d0 .cover-deco { inset: clamp(3px, 6cqw, 11px); border: 1px solid; opacity: 0.55; border-radius: 1px; }
+.cover-d0 .cover-deco::after { content: ''; position: absolute; inset: 2px; border: 1px solid; opacity: 0.45; }
+/* 1 · dois filetes no alto e um no pé */
+.cover-d1 .cover-deco {
+  opacity: 0.7;
+  background:
+    linear-gradient(currentColor, currentColor) 0 clamp(3px, 6cqw, 12px) / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 calc(clamp(3px, 6cqw, 12px) + 3px) / 100% 1px no-repeat,
+    linear-gradient(currentColor, currentColor) 0 calc(100% - clamp(3px, 6cqw, 12px)) / 100% 1px no-repeat;
+}
+/* 2 · arcos concêntricos no canto */
+.cover-d2 .cover-deco {
+  opacity: 0.4;
+  background: repeating-radial-gradient(circle at 112% 108%, transparent 0 calc(9cqw - 1px), currentColor calc(9cqw - 1px) 9cqw);
+  -webkit-mask-image: radial-gradient(circle at 112% 108%, #000 34cqw, transparent 78cqw);
+  mask-image: radial-gradient(circle at 112% 108%, #000 34cqw, transparent 78cqw);
+}
+/* 3 · faixa hachurada no alto */
+.cover-d3 .cover-deco {
+  opacity: 0.55;
+  background:
+    linear-gradient(currentColor, currentColor) 0 clamp(4px, 9cqw, 18px) / 100% 1px no-repeat,
+    repeating-linear-gradient(-45deg, currentColor 0 1px, transparent 1px 4px) 0 0 / 100% clamp(4px, 9cqw, 18px) no-repeat;
+}
+/* 4 · rótulo escuro no pé, com filete */
+.cover-d4 .cover-deco {
+  top: auto; height: 28%;
+  background: var(--cv-panel);
+  border-top: 1px solid currentColor;
+}
+
+/* Iniciais (capas pequenas sem texto). */
+.cover-ini {
+  margin: auto; padding-left: max(1px, 4cqw);
+  font-family: var(--serif); font-size: 14px; font-size: 42cqw; line-height: 1; letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+/* ---------- Lombada e borda de páginas (toda capa, com ou sem imagem) ---------- */
+.cover::before {
+  content: ''; position: absolute; z-index: 2; top: 0; bottom: 0; left: 0; pointer-events: none;
+  width: 8px; width: clamp(3px, 10cqw, 17px);
+  background: linear-gradient(to right, var(--cv-crease) 0, var(--cv-crease-hi) 18%, var(--cv-crease-soft) 52%, var(--cv-crease-hi) 66%, transparent);
+}
+.cover::after {
+  content: ''; position: absolute; z-index: 2; inset: 0; pointer-events: none; border-radius: inherit;
+  background: linear-gradient(158deg, var(--cv-sheen), transparent 30%);
+  box-shadow: inset 0 1px 0 var(--cv-edge-hi), inset -1px 0 0 var(--cv-edge-hi), inset -2px 0 0 var(--cv-edge-lo), inset 0 -1px 0 var(--cv-edge-lo);
+}
+/* Miniaturas: só um sopro da lombada. */
+:is(.cover-xs, .cover-li)::before { opacity: 0.6; }
+:is(.cover-xs, .cover-li)::after { box-shadow: inset -1px 0 0 var(--cv-edge-lo); background: linear-gradient(158deg, var(--cv-sheen), transparent 40%); }
+/* Capa grande da ficha e do cronômetro: a dobra da capa dura aparece mais. */
+:is(.cover-hero, .cover-xl)::before {
+  width: clamp(8px, 9cqw, 17px);
+  background: linear-gradient(to right, var(--cv-crease) 0, var(--cv-crease-hi) 12%, var(--cv-crease-soft) 40%, var(--cv-crease) 54%, var(--cv-crease-hi) 66%, transparent);
+}
+:is(.cover-hero, .cover-xl)::after {
+  box-shadow: inset 0 1px 0 var(--cv-edge-hi), inset -1px 0 0 var(--cv-edge-hi), inset -3px 0 0 var(--cv-edge-lo), inset -4px 0 0 var(--cv-edge-hi), inset 0 -2px 0 var(--cv-edge-lo);
+}
+
+/* ---------- Estante: escolha de modo com três botões ---------- */
+/* Em telas de celular, os botões apagados ficam só com o ícone (o nome está no aria-label). */
+@media (max-width: 460px) {
+  .shelf-modes .mini-seg-btn { padding: 0 12px; }
+  .shelf-modes .mini-seg-btn:not(.is-on) .mini-seg-label { display: none; }
+}
+/* iPhone SE: o ativo fica só com o nome, os outros só com o ícone (cabe ao lado do Sortear). */
+@media (max-width: 359px) {
+  .shelf-modes .mini-seg-btn:not(.is-on) .icon { display: inline-block; }
+  /* Com três modos, o Sortear fica só com o nome para caber na mesma linha (sem o dado). */
+  .shelf-tools .draw-open .icon { display: none; }
+}
+
+/* ---------- Modo Lombadas ---------- */
+/* Cada fileira tem altura fixa (--row): o fundo repete uma tábua a cada fileira, de ponta a
+   ponta do móvel, com a sombra da tábua de cima no alto. As lombadas ficam de pé sobre ela. */
+.spine-shelf {
+  --row: 164px; --plank-h: 13px;
+  list-style: none; margin: 0; padding: 0 12px;
+  display: flex; flex-wrap: wrap; align-items: flex-end; align-content: flex-start;
+  border-radius: 18px; border: 1px solid var(--case-line); overflow: hidden;
+  background:
+    linear-gradient(to bottom, var(--case-shade), transparent 34px) 0 0 / 100% var(--row) repeat-y,
+    linear-gradient(to bottom,
+      transparent calc(var(--row) - var(--plank-h)),
+      var(--plank-top) calc(var(--row) - var(--plank-h)) calc(var(--row) - var(--plank-h) + 3px),
+      var(--plank) calc(var(--row) - var(--plank-h) + 3px) calc(var(--row) - 2px),
+      var(--plank-lo) calc(var(--row) - 2px)) 0 0 / 100% var(--row) repeat-y,
+    var(--case-bg);
+}
+.group-section > .spine-shelf { margin-top: 6px; }
+.sp-item {
+  position: relative; height: var(--row); padding: 0 1px var(--plank-h);
+  display: flex; align-items: flex-end;
+}
+.spine {
+  position: relative; flex-shrink: 0;
+  width: var(--sp-w); height: var(--sp-h);
+  display: flex; flex-direction: column; align-items: center; gap: 6px;
+  padding: 8px 0 7px; overflow: hidden;
+  border-radius: 2px 2px 1px 1px;
+  background-color: var(--sp-bg); color: var(--sp-fg);
+  background-image: linear-gradient(to right, var(--sp-shade), var(--sp-hi) 20%, transparent 46%, transparent 72%, var(--sp-shade));
+  box-shadow: inset 0 1px 0 var(--sp-hi), 1px 0 0 var(--sp-gap), 0 -1px 3px var(--plank-cast);
+  transition: transform .22s var(--ease-out);
+}
+.spine:active { transform: translateY(-5px); }
+.spine:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.sp-title {
+  order: 1; flex: 0 1 auto; min-height: 0; margin: auto 0;
+  writing-mode: vertical-rl; text-orientation: mixed;
+  /* Tamanho calculado para o título caber (js/spines.js); "inline" aqui é a altura. */
+  font-family: var(--serif); font-size: var(--sp-fs, 12px); line-height: 1.05;
+  max-inline-size: calc(var(--sp-h) - 46px);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sp-2l .sp-title { white-space: normal; text-align: center; max-block-size: 2.1em; text-wrap: balance; }
+.sp-foot {
+  order: 3; flex-shrink: 0;
+  font: 800 8px/1 var(--sans); letter-spacing: 0.04em;
+}
+/* Frisos da lombada (no alto e no pé), fixos por título. */
+.spine::before, .spine::after { content: ''; flex-shrink: 0; align-self: stretch; opacity: 0.5; }
+.spine::before { order: 0; }
+.spine::after { order: 2; }
+.sp-d0::before, .sp-d0::after { height: 5px; border-top: 1px solid; border-bottom: 1px solid; }
+.sp-d1::before { height: 15px; margin-top: -8px; background: currentColor; opacity: 0.16; }
+.sp-d1::after { height: 1px; background: currentColor; }
+.sp-d2::before, .sp-d2::after { height: 2px; background: currentColor; opacity: 0.38; }
+.sp-d3::before, .sp-d3::after { height: 0; }
+/* Favorito do ano: fitinha caramelo no alto da lombada. */
+.spine.is-fav {
+  background-image: linear-gradient(var(--accent), var(--accent)), linear-gradient(to right, var(--sp-shade), var(--sp-hi) 20%, transparent 46%, transparent 72%, var(--sp-shade));
+  background-size: 4px 14px, auto; background-position: right 3px top 0, 0 0; background-repeat: no-repeat;
+}
+/* Próximas da fila: a posição sobre o alto da lombada. */
+.sp-item .next-pos {
+  position: absolute; z-index: 1; left: 50%; bottom: calc(var(--plank-h) + var(--sp-h) - 9px); transform: translateX(-50%);
+  min-width: 18px; height: 18px; padding: 0 4px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent); box-shadow: 0 0 0 2px var(--case-bg);
+  font: 800 10px/18px var(--sans); text-align: center;
+}
+@media (prefers-reduced-motion: reduce) {
+  .spine { transition: none; }
+  .spine:active { transform: none; }
+}
+
+/* ---------- Grão de papel no fundo ---------- */
+/* Camada fixa atrás de tudo (z-index -1 no contexto da página): não repinta ao rolar, não
+   recebe toque e fica por baixo dos cartões, das barras de vidro e da navegação. */
+.app::before {
+  content: ''; position: fixed; inset: 0; z-index: -1; pointer-events: none;
+  background-image: var(--grain); background-size: 180px 180px;
+  opacity: var(--grain-a);
+}
+/* Cabeçalhos presos (ano/série na Estante, abas do Resumo) e a barra compacta do alto: o vidro
+   deles alisa o grão e, no claro, aparecia uma faixa lisa atravessando a tela. O mesmo grão por
+   cima do vidro (atrás do texto) deixa a faixa igual ao fundo. */
+.group-head::before, .rs-tabs::before, .cbar::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+  background-image: var(--grain); background-size: 180px 180px;
+  opacity: var(--grain-a);
+}
+
+/* ===== 1.5 Ficha, trechos e busca ===== */
+/* Topo da ficha com a própria capa ampliada e desfocada (views/book-detail.js heroBackdrop),
+   linha discreta do ritmo sem diário, trechos como citações tipográficas (book-tabs.js,
+   all-quotes.js) e cartões "esqueleto" enquanto a busca de livros roda (form.js). */
+
+:root, [data-theme="dark"] {
+  /* Véu sobre a capa desfocada: o texto do topo continua legível com qualquer capa. */
+  --bd-scrim-top: 46%;
+  --bd-scrim-cover: 28%;
+  --bd-scrim-mid: 56%;
+  --bd-scrim-low: 84%;
+  --bd-saturate: 1.5;
+  --bd-bright: 0.85;
+  /* Sem color-mix: os esqueletos aparecem também no iOS 16.0/16.1 (= --text a 9% e 7%). */
+  --skel: rgb(244 239 234 / 0.09);
+  --skel-sheen: rgb(244 239 234 / 0.07);
+}
+[data-theme="light"] {
+  --bd-scrim-top: 44%;
+  --bd-scrim-cover: 34%;
+  --bd-scrim-mid: 62%;
+  --bd-scrim-low: 86%;
+  --bd-saturate: 1.35;
+  --bd-bright: 1.05;
+  --skel: rgb(30 25 21 / 0.08);
+  --skel-sheen: rgb(255 253 250 / 0.8);
+}
+
+/* Fundo desfocado: um único elemento com filter (nada de backdrop-filter), recortado pelo topo.
+   Fica invisível até a imagem carregar; até lá (ou sem imagem) vale o degradê de --tint. */
+.ficha-hero { position: relative; isolation: isolate; overflow: hidden; }
+.ficha-backdrop {
+  position: absolute; inset: 0; z-index: -1; overflow: hidden; pointer-events: none;
+  background: var(--bg); opacity: 0; transition: opacity 0.45s ease;
+}
+.ficha-backdrop:has(> .is-loaded) { opacity: 1; }
+.ficha-backdrop-img {
+  position: absolute; top: -72px; left: -72px; width: calc(100% + 144px); height: calc(100% + 144px);
+  object-fit: cover; object-position: 50% 30%;
+  filter: blur(40px) saturate(var(--bd-saturate)) brightness(var(--bd-bright));
+  transform: translateZ(0);
+}
+.ficha-backdrop::after {
+  content: ''; position: absolute; inset: 0;
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-top), transparent) 0%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-cover), transparent) 24%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-mid), transparent) 46%,
+    color-mix(in srgb, var(--bg) var(--bd-scrim-low), transparent) 74%,
+    var(--bg) 100%);
+}
+/* O pé se dissolve no fundo do app (com o grão de papel), sem a emenda de uma faixa lisa. */
+.ficha-backdrop {
+  -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent);
+  mask-image: linear-gradient(to bottom, #000 64%, transparent);
+}
+/* Tela larga (iPad, computador): as bordas laterais também se dissolvem. */
+@media (min-width: 540px) {
+  .ficha-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, #000 64%, transparent), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    -webkit-mask-composite: source-in;
+    mask-image: linear-gradient(to bottom, #000 64%, transparent), linear-gradient(90deg, transparent, #000 14%, #000 86%, transparent);
+    mask-composite: intersect;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ficha-backdrop { transition: none; }
+}
+/* Selos sobre a capa desfocada: um pouco mais de corpo que sobre a cor lisa. */
+.ficha-hero.has-backdrop .ficha-status { background: color-mix(in srgb, var(--bg) 55%, transparent); color: var(--text); }
+.ficha-hero.has-backdrop .ficha-author { color: var(--text); opacity: 0.86; }
+.ficha-hero.has-backdrop .ficha-top .btn-text.accent { background: color-mix(in srgb, var(--bg) 40%, transparent); }
+[data-theme="light"] .ficha-hero.has-backdrop .ficha-top .btn-text.accent { background: color-mix(in srgb, var(--surface) 66%, transparent); }
+[data-theme="light"] .ficha-hero.has-backdrop .ficha-status { background: color-mix(in srgb, var(--surface) 72%, transparent); }
+
+/* Ritmo sem diário: uma linha tracejada, como "Guardar um trecho". */
+.ficha-rhythm-empty {
+  justify-content: flex-start; gap: 12px; padding: 12px 18px;
+  font-size: 13px; font-weight: 600; line-height: 1.35; color: var(--muted);
+}
+.ficha-rhythm-empty strong { color: var(--text-soft); font-weight: 800; }
+.ficha-row.ficha-rhythm-empty .icon { flex-shrink: 0; color: var(--muted); }
+
+/* Trechos como citação impressa: aspa grande em caramelo, texto serifado, página num selo. */
+.quote-card, .ficha-quote { gap: 10px; padding: 16px 18px 14px; }
+.quote-link, .ficha-quote { padding-bottom: 16px; }
+.quote-card::before, .ficha-quote::before { content: none; }
+.quote-mark {
+  display: block; height: 24px; margin: 0 0 -8px -3px;
+  font-family: var(--serif); font-size: 76px; line-height: 0.9; color: var(--accent);
+  user-select: none; -webkit-user-select: none; pointer-events: none;
+}
+.quote-text, .ficha-quote blockquote {
+  font-family: var(--serif); font-style: normal; font-size: 22px; line-height: 1.36; letter-spacing: 0.05px;
+  color: var(--text); text-wrap: pretty;
+}
+.quote-meta, .ficha-quote-meta {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.2px; color: var(--muted);
+}
+.quote-page {
+  display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; flex-shrink: 0;
+  font-size: 10.5px; font-weight: 800; letter-spacing: 1px; text-transform: uppercase; font-variant-numeric: tabular-nums;
+  color: var(--accent); background: color-mix(in srgb, var(--accent) 14%, transparent);
+}
+.quote-date { color: var(--muted); }
+.quote-note { padding-left: 12px; border-left: 2px solid var(--line-strong); }
+/* Tela "Trechos salvos": o livro como assinatura, com travessão. */
+.quote-source { flex-direction: row; justify-content: space-between; align-items: flex-start; gap: 12px; padding-top: 2px; }
+.quote-source-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.quote-book::before { content: '— '; color: var(--accent); }
+.quote-author { padding-left: 1.1em; font-size: 12px; font-weight: 600; color: var(--muted); overflow-wrap: anywhere; }
+.quote-source .quote-page { margin-top: 1px; }
+
+/* Buscando: três cartões vazios no formato do resultado, com um brilho que passa. */
+.result-skel { position: relative; overflow: hidden; pointer-events: none; }
+.skel { display: block; background: var(--skel); }
+.skel-cover { width: 34px; height: 50px; border-radius: 4px; flex-shrink: 0; }
+.result-skel .result-text { flex: 1; gap: 8px; }
+.skel-line { height: 10px; border-radius: 999px; }
+.skel-line.is-title { height: 14px; width: 68%; }
+.skel-line.is-meta { width: 46%; }
+.skel-line.is-short { width: 28%; }
+.result-skel::after {
+  content: ''; position: absolute; inset: 0; transform: translateX(-100%);
+  background: linear-gradient(100deg, transparent 20%, var(--skel-sheen) 50%, transparent 80%);
+  animation: skel-sheen 1.5s ease-in-out infinite; animation-delay: calc(var(--skel-i, 0) * 0.12s);
+}
+@keyframes skel-sheen { to { transform: translateX(100%); } }
+.ai-box .result-skel { margin-top: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .result-skel::after { content: none; animation: none; }
+}
+
+/* ===== 1.5 Cores, abas e telas vazias ===== */
+/* Cor de destaque (Ajustes → Aparência; js/accent.js): data-accent no <html>, posto pelo
+   index.html antes do CSS. Terracota é o padrão e usa os tokens de sempre; as outras trocam o
+   destaque e os tons derivados dele (fundos "quentes", mapa de leitura, barras parciais,
+   medalhas) no claro e no escuro. Cada destaque passa de 4,5:1 como texto sobre o cartão e
+   com o texto --on-accent por cima (tests/cores.test.js). Trechos com tema próprio
+   (retrospectiva, capa ampliada: data-theme="dark") recebem a versão escura da mesma cor. */
+
+:root:not([data-theme="light"]), [data-theme="dark"] {
+  --acc-terracota: #D08C4F; --acc-terracota-hover: #E3A876;
+  --acc-oliva: #A9B26A; --acc-oliva-hover: #C2CA8A;
+  --acc-petroleo: #5FAFBA; --acc-petroleo-hover: #86C6CE;
+  --acc-vinho: #DB8597; --acc-vinho-hover: #E8A7B4;
+  --acc-grafite: #B4BAC2; --acc-grafite-hover: #CDD2D8;
+}
+[data-theme="light"] {
+  --acc-terracota: #97531E; --acc-terracota-hover: #7E4416;
+  --acc-oliva: #5C6A26; --acc-oliva-hover: #4A561D;
+  --acc-petroleo: #1D6273; --acc-petroleo-hover: #164F5E;
+  --acc-vinho: #9A2F48; --acc-vinho-hover: #7E2339;
+  --acc-grafite: #454B54; --acc-grafite-hover: #353A41;
+}
+[data-accent="oliva"], [data-accent="oliva"] [data-theme] { --accent: var(--acc-oliva); --accent-hover: var(--acc-oliva-hover); }
+[data-accent="petroleo"], [data-accent="petroleo"] [data-theme] { --accent: var(--acc-petroleo); --accent-hover: var(--acc-petroleo-hover); }
+[data-accent="vinho"], [data-accent="vinho"] [data-theme] { --accent: var(--acc-vinho); --accent-hover: var(--acc-vinho-hover); }
+[data-accent="grafite"], [data-accent="grafite"] [data-theme] { --accent: var(--acc-grafite); --accent-hover: var(--acc-grafite-hover); }
+/* Tons que eram caramelo fixo passam a sair da cor escolhida. Só com color-mix() (Safari 16.2+):
+   sem ele, um token que usa color-mix vira "nada" onde é usado (o mapa de leitura sumiria);
+   assim, no iOS 16.0/16.1 esses tons continuam os caramelo de sempre. */
+@supports (color: color-mix(in srgb, red, red)) {
+  :is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]),
+  :is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) [data-theme="dark"] {
+    --surface-warm: color-mix(in srgb, var(--accent) 12%, var(--surface));
+    --surface-sel: color-mix(in srgb, var(--accent) 7%, var(--surface));
+    --heat-1: color-mix(in srgb, var(--accent) 26%, var(--surface-2));
+    --heat-2: color-mix(in srgb, var(--accent) 50%, var(--surface-2));
+    --heat-3: color-mix(in srgb, var(--accent) 76%, var(--surface-2));
+    --bar-partial: color-mix(in srgb, var(--accent) 55%, var(--surface-2));
+  }
+  [data-theme="light"]:is([data-accent="oliva"], [data-accent="petroleo"], [data-accent="vinho"], [data-accent="grafite"]) {
+    --surface-warm: color-mix(in srgb, var(--accent) 9%, var(--surface));
+    --surface-sel: color-mix(in srgb, var(--accent) 5%, var(--surface));
+    --heat-1: color-mix(in srgb, var(--accent) 16%, var(--surface));
+    --heat-2: color-mix(in srgb, var(--accent) 38%, var(--surface));
+    --heat-3: color-mix(in srgb, var(--accent) 68%, var(--surface));
+    --bar-partial: color-mix(in srgb, var(--accent) 42%, var(--surface));
+    --medal-hi: color-mix(in srgb, var(--accent) 66%, #FFFFFF);
+    --medal-lo: color-mix(in srgb, var(--accent) 72%, #000000);
+  }
+}
+
+/* Ajustes → Aparência: cinco bolinhas, o nome embaixo da escolhida. */
+.theme-card { gap: 0; }
+.accent-pick { display: flex; flex-direction: column; gap: 6px; margin: 6px -6px -6px; padding: 14px 6px 8px; border-top: 1px solid var(--line); }
+.accent-head { padding: 0 10px; font-size: 14px; font-weight: 700; color: var(--text-soft); }
+.accent-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.accent-sw {
+  min-width: 0; min-height: 72px; padding: 6px 0 0; border: 0; border-radius: 16px; background: transparent;
+  display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--text);
+}
+.accent-dot {
+  width: 38px; height: 38px; flex-shrink: 0; border-radius: 999px;
+  background: radial-gradient(circle at 32% 28%, color-mix(in srgb, var(--sw) 72%, #FFFFFF), var(--sw) 62%);
+  color: var(--on-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 10%, transparent), 0 2px 6px var(--shadow-color);
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: transform .25s var(--ease-out), box-shadow .25s var(--ease-out);
+}
+.accent-sw:active .accent-dot { transform: scale(.9); }
+.accent-sw.is-on .accent-dot { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--sw), 0 4px 12px var(--shadow-color); }
+.accent-name {
+  font-size: 12px; font-weight: 700; line-height: 1.2; white-space: nowrap; color: var(--text);
+  opacity: 0; transform: translateY(-3px); transition: opacity .2s, transform .25s var(--ease-out);
+}
+.accent-sw.is-on .accent-name { opacity: 1; transform: none; }
+.accent-sw:focus-visible { outline-offset: -2px; }
+
+/* ---------- Abas com a marca que desliza (js/tab-slide.js) ---------- */
+/* Com .has-ind o botão marcado deixa de pintar o próprio fundo e uma marca (.tab-ind) faz isso,
+   deslizando entre as opções. Posição e tamanho vêm em --ind-x/-y/-w/-h, medidos no botão. */
+:is(.segmented, .mini-seg, .book-tabs).has-ind { position: relative; }
+.has-ind > :not(.tab-ind) { position: relative; z-index: 1; }
+.tab-ind {
+  position: absolute; left: 0; top: 0; z-index: 0; pointer-events: none;
+  width: var(--ind-w, 0); height: var(--ind-h, 0);
+  transform: translate(var(--ind-x, 0), var(--ind-y, 0));
+  border-radius: 12px; background: var(--accent);
+  transition: transform .34s cubic-bezier(.3, .8, .25, 1), width .34s cubic-bezier(.3, .8, .25, 1), height .34s cubic-bezier(.3, .8, .25, 1);
+}
+.tab-ind.is-instant { transition: none; }
+.has-ind > :is(.seg-btn, .mini-seg-btn, .rs-tab, .book-tab) { transition: color .28s ease; }
+.segmented.has-ind > .seg-btn.is-on { background: transparent; }
+.segmented.has-ind > .tab-was-on { color: var(--on-accent); }
+.segmented.has-ind > .is-on.tab-not-yet { color: var(--text-soft); }
+.seg-mini > .tab-ind { border-radius: 11px; }
+[data-theme="light"] .segmented:not(.shelf-tabs) > .tab-ind { background-image: linear-gradient(to bottom, rgb(255 255 255 / 0.1), transparent); }
+/* Estante (status) e Lista/Capas: cápsula clara sobre o trilho, texto em vez de destaque. */
+:is(.shelf-tabs, .mini-seg) > .tab-ind { border-radius: 999px; background: var(--surface-2); box-shadow: 0 1px 3px var(--shadow-color); }
+[data-theme="light"] :is(.shelf-tabs, .mini-seg) > .tab-ind { background: var(--surface); box-shadow: 0 1px 2px rgb(80 52 28 / 0.12), 0 2px 8px rgb(80 52 28 / 0.1); }
+.shelf-tabs.has-ind > .seg-btn.is-on, .mini-seg.has-ind > .mini-seg-btn.is-on { background: transparent; box-shadow: none; }
+:is(.shelf-tabs, .mini-seg).has-ind > .tab-was-on { color: var(--text); }
+:is(.shelf-tabs, .mini-seg).has-ind > .is-on.tab-not-yet { color: var(--muted); }
+/* Resumo e livro: sublinhado que desliza (a marca é a faixa toda; o traço fica embaixo). */
+:is(.rs-tabs, .book-tabs) > .tab-ind { top: auto; bottom: -1px; height: 2px; transform: translateX(var(--ind-x, 0)); background: transparent; border-radius: 0; }
+:is(.rs-tabs, .book-tabs) > .tab-ind::before { content: ''; position: absolute; inset: 0; border-radius: 2px; background: var(--accent); }
+.book-tabs > .tab-ind::before { left: 14%; right: 14%; }
+.rs-tabs > .tab-ind::before { left: 12%; right: 12%; }
+.rs-tabs.has-ind > .rs-tab.is-on { box-shadow: none; }
+.book-tabs.has-ind > .book-tab.is-on::after { content: none; }
+:is(.rs-tabs, .book-tabs).has-ind > .tab-was-on { color: var(--text); }
+:is(.rs-tabs, .book-tabs).has-ind > .is-on.tab-not-yet { color: var(--muted); }
+@media (prefers-reduced-motion: reduce) {
+  .tab-ind, .has-ind > *, .accent-dot, .accent-name { transition: none !important; }
+}
+
+/* ---------- Telas vazias ilustradas (js/empty-art.js) ---------- */
+.empty.has-art {
+  border: 0; padding: 22px 20px 26px; gap: 6px;
+  background: radial-gradient(ellipse 44% 34% at 50% 36%, color-mix(in srgb, var(--accent) 9%, transparent), transparent);
+  animation: empty-in .45s cubic-bezier(.2, .8, .2, 1) both;
+}
+.empty-art { width: 168px; height: auto; max-width: 72%; margin-bottom: 6px; color: color-mix(in srgb, var(--text) 48%, transparent); overflow: visible; }
+.empty-art .l { stroke: color-mix(in srgb, var(--text) 26%, transparent); }
+.empty-art .d { stroke: color-mix(in srgb, var(--text) 34%, transparent); stroke-dasharray: 3 4; }
+.empty-art .a { stroke: var(--accent); }
+/* Preenchimentos opacos: o que fica atrás (a página sob a lupa) não aparece através. */
+.empty-art .f { fill: color-mix(in srgb, var(--accent) 14%, var(--bg)); }
+.empty-art .af { fill: var(--accent); stroke: none; }
+.empty-art .p { fill: color-mix(in srgb, var(--accent) 6%, var(--bg)); stroke: none; }
+.empty-art .dot { stroke-width: 3.4; stroke: color-mix(in srgb, var(--text) 30%, transparent); }
+.empty-art .s { fill: var(--fill-soft); stroke: none; }
+.empty-art .w { stroke-width: 3; }
+.empty.has-art .empty-title { font-family: var(--serif); font-weight: 400; font-size: 24px; line-height: 1.1; letter-spacing: -0.1px; }
+.empty.has-art .empty-text { font-size: 14px; line-height: 1.45; max-width: 290px; text-wrap: pretty; }
+.empty.has-art .btn-outline { margin-top: 12px; min-height: 44px; padding: 0 18px; border-radius: 999px; }
+@keyframes empty-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+/* A mesma tela vazia redesenhada a cada letra da busca não refaz a entrada (empty-art.js). */
+.empty.has-art.is-steady { animation: none; }
+
+/* ===== 1.5 Início ===== */
+/* Saudação no lugar do título "Leituras", botão tonal nos cartões "Lendo agora" depois do
+   primeiro, o pedido do total de páginas como link, o véu da cor da capa e a festa ao
+   concluir um livro (motion.js: celebrateFinish). Só tokens, nos dois temas. */
+
+/* Saudação: data em cima (com o ano e Ajustes à direita), "Boa noite, Nome" grande e a sequência. */
+.greet { display: flex; flex-direction: column; gap: 4px; }
+.greet-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; min-height: 48px; }
+.greet-date {
+  min-width: 0; font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--muted); overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+}
+.greet-title {
+  font-family: var(--serif); font-weight: 400; font-size: clamp(34px, 10vw, 42px); line-height: 1.02;
+  letter-spacing: -0.6px; overflow-wrap: anywhere; margin-top: 2px;
+}
+.greet-name { font-style: italic; color: var(--accent); padding-right: 0.06em; }
+.greet-streak { display: inline-flex; align-items: center; gap: 8px; margin-top: 6px; font-size: 13px; font-weight: 700; color: var(--text-soft); }
+@media (max-width: 359px) {
+  .greet-date { white-space: normal; line-height: 1.35; }
+  .greet-wd { display: block; }
+}
+.greet-dot { flex-shrink: 0; width: 7px; height: 7px; border-radius: 999px; background: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
+
+/* Botão tonal: mesmo tamanho do principal, sem o peso do caramelo cheio. */
+.btn-tonal {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 0 18px; border: 0; border-radius: 999px;
+  font-size: 15px; font-weight: 800; color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 15%, color-mix(in srgb, var(--surface) 55%, transparent));
+  box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.btn-tonal:active { background: color-mix(in srgb, var(--accent) 24%, var(--surface)); }
+[data-theme="light"] .btn-tonal { background: color-mix(in srgb, var(--accent) 9%, var(--surface)); }
+[data-theme="light"] .btn-tonal:active { background: color-mix(in srgb, var(--accent) 16%, var(--surface)); }
+
+/* "informe o total de páginas": link acima do link do cartão, com área de toque maior. */
+.pages-ask {
+  position: relative; z-index: 1; color: var(--accent); font-weight: 700;
+  text-decoration: underline; text-decoration-color: var(--accent-line); text-decoration-thickness: 1.5px; text-underline-offset: 3px;
+}
+.pages-ask::before { content: ''; position: absolute; inset: -13px -6px; }
+.pages-ask:active { opacity: 0.7; }
+
+/* Véu da cor da capa: capa desenhada mantém a cor dela (regra de antes); capa de imagem
+   começa neutra e, quando a cor da imagem chega (data-tint-src="capa"), o véu entra suave. */
+.card.reading { isolation: isolate; }
+.card.reading:not([data-tint=""]) {
+  background: linear-gradient(135deg, rgb(var(--tint-default) / var(--tint-a)), var(--surface) 72%);
+  border-color: rgb(var(--tint-default) / var(--tint-line));
+}
+[data-theme="light"] .card.reading:not([data-tint=""]) {
+  background: linear-gradient(135deg, color-mix(in srgb, rgb(var(--tint-default)) 24%, var(--surface-warm)), var(--surface) 74%);
+}
+.card.reading::before {
+  content: ''; position: absolute; inset: 0; z-index: -1; border-radius: inherit; pointer-events: none;
+  opacity: 0; transition: opacity .6s ease;
+  background:
+    radial-gradient(130% 95% at 0% 0%, rgb(var(--tint, var(--tint-default)) / 0.78), transparent 66%),
+    linear-gradient(160deg, rgb(var(--tint, var(--tint-default)) / 0.36), var(--surface) 78%);
+}
+[data-theme="light"] .card.reading::before {
+  background:
+    radial-gradient(130% 95% at 0% 0%, color-mix(in srgb, rgb(var(--tint, var(--tint-default))) 30%, transparent), transparent 66%),
+    linear-gradient(160deg, color-mix(in srgb, rgb(var(--tint, var(--tint-default))) 13%, var(--surface-warm)), var(--surface) 76%);
+}
+.card.reading[data-tint-src="capa"]::before { opacity: 1; }
+.card.reading[data-tint-src="capa"] { border-color: rgb(var(--tint) / var(--tint-line)); }
+
+/* Livro concluído: brilho em volta da capa que "salta" para a grade e o confete por cima. */
+.grid-cover.is-celebrated { z-index: 2; }
+.grid-cover.is-celebrated::after {
+  content: ''; position: absolute; inset: -5px; border-radius: 12px; pointer-events: none;
+  box-shadow: 0 0 0 2px var(--accent), 0 0 26px var(--accent-line);
+  animation: cel-glow 1.3s var(--cel-delay, 0ms) var(--ease-out) both;
+}
+@keyframes cel-glow {
+  0% { opacity: 0; transform: scale(.9); }
+  30% { opacity: 1; transform: scale(1); }
+  100% { opacity: 0; transform: scale(1.04); }
+}
+.confetti { position: fixed; inset: 0; z-index: 60; pointer-events: none; overflow: hidden; }
+.confetti i { position: absolute; display: block; border-radius: 2px; will-change: transform, opacity; }
+@media (prefers-reduced-motion: reduce) {
+  .card.reading::before { transition: none; }
+  .grid-cover.is-celebrated::after, .confetti { display: none; }
+}
+
+/* ===== 1.5 Sem color-mix() (iOS 16.0 e 16.1) ===== */
+/* color-mix() só chegou no Safari 16.2. Antes dele, uma regra com color-mix() e var() não volta
+   para a declaração anterior: vira "unset" (fundo transparente, sem cor). Aqui, versões simples
+   do que a 1.5 trouxe, para nada sumir nesses iPhones (as bolinhas das cores ficariam vazias,
+   o topo da ficha ficaria sem o véu sobre a capa desfocada e o cartão claro, sem fundo). */
+@supports not (color: color-mix(in srgb, red, red)) {
+  /* Vidro e véus (desde a 1.4 em color-mix): a barra de baixo ficava transparente sobre o texto. */
+  :root:not([data-theme="light"]), [data-theme="dark"] {
+    --glass-bg: rgb(26 23 21 / 0.7); --glass-solid: rgb(35 32 30); --glass-line: rgb(244 239 234 / 0.11);
+    --glass-hi: rgb(244 239 234 / 0.09); --bar-bg: rgb(14 12 11 / 0.8); --scrim: rgb(14 12 11 / 0.62);
+    --fill-soft: rgb(244 239 234 / 0.09); --fill-press: rgb(244 239 234 / 0.14); --shadow-color: rgb(14 12 11 / 0.7);
+  }
+  [data-theme="light"] {
+    --glass-bg: rgb(255 253 250 / 0.74); --glass-line: rgb(30 25 21 / 0.09); --bar-bg: rgb(246 241 235 / 0.84);
+    --scrim: rgb(246 241 235 / 0.7); --fill-soft: rgb(30 25 21 / 0.06); --fill-press: rgb(30 25 21 / 0.11);
+  }
+  .accent-dot { background: var(--sw); box-shadow: 0 2px 6px var(--cover-shadow); }
+  .ficha-backdrop { display: none; }
+  .btn-tonal, [data-theme="light"] .btn-tonal,
+  .btn-tonal:active, [data-theme="light"] .btn-tonal:active { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+  [data-theme="light"] .card.reading { background: linear-gradient(135deg, rgb(var(--tint, var(--tint-default)) / var(--tint-a)), var(--surface) 72%); }
+  [data-theme="light"] .card.reading:not([data-tint=""]) { background: linear-gradient(135deg, rgb(var(--tint-default) / var(--tint-a)), var(--surface) 72%); }
+  [data-theme="light"] .card.reading::before {
+    background:
+      radial-gradient(130% 95% at 0% 0%, rgb(var(--tint, var(--tint-default)) / 0.3), transparent 66%),
+      linear-gradient(160deg, rgb(var(--tint, var(--tint-default)) / 0.13), var(--surface) 76%);
+  }
+  .quote-page { background: var(--surface-2); }
+  .empty-art { color: var(--muted); }
+  .empty-art :is(.l, .d, .dot) { stroke: var(--line-strong); }
+  .empty-art :is(.f, .p) { fill: var(--surface-2); }
+  .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
+}

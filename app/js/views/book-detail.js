@@ -19,7 +19,8 @@ export function editHref(id, query = '') {
   return `#/livro/${encodeURIComponent(id)}/editar${query ? `?${query}` : ''}`;
 }
 
-// Capas em alta já baixadas nesta sessão: aparecem direto, sem o esmaecer de novo a cada redesenho.
+// Capas em alta (e fundos desfocados do topo) já carregados nesta sessão: aparecem direto,
+// sem o esmaecer de novo a cada redesenho.
 export const loadedHdCovers = new Set();
 
 /** '3 nov 2026' (sempre com o ano: a ficha mostra livros de qualquer época). */
@@ -44,6 +45,18 @@ function heroCover(book) {
   }
   if (!book.cover) return `<span class="ficha-cover">${html}</span>`;
   return `<button type="button" class="ficha-cover" data-action="zoom-book-cover" data-id="${esc(book.id)}" aria-label="Ver capa ampliada">${html}</button>`;
+}
+
+/**
+ * Fundo do topo com a própria capa, ampliada e bem desfocada (como no Apple Music/Livros).
+ * Usa a mesma imagem da capa (já baixada ou guardada): nada a mais pela rede. Fica invisível
+ * até carregar (main.js põe is-loaded); sem imagem, ou se ela não abrir, fica a cor da capa (--tint).
+ */
+export function heroBackdrop(book) {
+  const src = normalizeCoverUrl(book.cover);
+  if (!src) return '';
+  const ready = loadedHdCovers.has(src) ? ' is-loaded' : '';
+  return `<span class="ficha-backdrop" aria-hidden="true"><img class="ficha-backdrop-img${ready}" src="${esc(src)}" alt="" decoding="async" referrerpolicy="no-referrer"></span>`;
 }
 
 function ratingRow(book) {
@@ -117,7 +130,7 @@ function readingBlock(book, ui, today) {
         <span class="progress-track"><span class="progress-fill" style="width:${p.pct}%"></span></span>
       </div>`;
   } else if (p) {
-    progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · informe o total de páginas para ver o %</p>`;
+    progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · <a class="pages-ask" href="${editHref(book.id, 'campo=paginas')}">informe o total de páginas</a> para ver o %</p>`;
   } else {
     progress = `<p class="ficha-progress-label">${book.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</p>`;
   }
@@ -178,14 +191,12 @@ function rhythmSection(book, today) {
   const chart = rhythmChart(book, today, { footer });
   if (chart) return chart;
   if (book.status === STATUS.WANT || book.status === STATUS.DROPPED) return '';
+  // Sem diário: uma linha discreta (como "Guardar um trecho"), não um cartão vazio.
   const text = book.status === STATUS.READING
-    ? 'Cada vez que você registra a leitura, o dia entra aqui.'
-    : 'Sem diário: este livro foi registrado sem a leitura dia a dia.';
+    ? 'aparece quando você registrar a leitura'
+    : 'este livro foi registrado sem o diário';
   return `
-    <section class="rchart is-empty">
-      <div class="rchart-head"><h2 class="rchart-title">Ritmo da leitura</h2></div>
-      <p class="rchart-readout">${esc(text)}</p>
-    </section>`;
+    <p class="ficha-row ficha-rhythm-empty">${icon('chart', { size: 18, stroke: 2.2 })}<span><strong>Ritmo da leitura</strong> · ${esc(text)}</span></p>`;
 }
 
 function quotesSection(book) {
@@ -201,8 +212,9 @@ function quotesSection(book) {
     <section class="ficha-section">
       <div class="section-head"><h2>Trechos</h2><a class="link" href="${href}">Ver todos (${quotes.length})</a></div>
       <a class="ficha-quote" href="${href}">
+        <span class="quote-mark" aria-hidden="true">“</span>
         <blockquote>${esc(q.text)}</blockquote>
-        ${position || quotes.length > 1 ? `<span class="ficha-quote-meta">${[position ? esc(position) : '', quotes.length > 1 ? `o mais recente de ${quotes.length}` : ''].filter(Boolean).join(' · ')}</span>` : ''}
+        ${position || quotes.length > 1 ? `<span class="ficha-quote-meta">${position ? `<span class="quote-page">${esc(position)}</span>` : ''}${quotes.length > 1 ? `<span>o mais recente de ${quotes.length}</span>` : ''}</span>` : ''}
       </a>
     </section>`;
 }
@@ -241,8 +253,10 @@ export function bookDetailView({ state, ui, today, book }) {
     [STATUS.DROPPED]: () => droppedBlock(book),
   }[book.status]?.() || '';
   const heroStats = book.status === STATUS.READ ? statusBlock : '';
+  const backdrop = heroBackdrop(book);
   return `
-    <section class="ficha-hero" data-id="${esc(book.id)}" data-tint="${esc(book.cover || '')}" data-tint-title="${esc(book.title)}">
+    <section class="ficha-hero${backdrop ? ' has-backdrop' : ''}" data-id="${esc(book.id)}" data-tint="${esc(book.cover || '')}" data-tint-title="${esc(book.title)}">
+      ${backdrop}
       <header class="ficha-top">
         <a class="btn-text ficha-back" href="${esc(ui.detailBack || '#/inicio')}">${icon('chevronLeft', { size: 20, stroke: 2.2 })}Voltar</a>
         <a class="btn-text accent strong" href="${editHref(book.id)}">Editar</a>

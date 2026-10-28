@@ -150,6 +150,18 @@ const legacy = {
   lastBackupAt: '2026-08-01T22:10:00.000Z',
 };
 
+// Adiantar o relógio da página. Não use page.clock.fastForward/runFor com clock.install: no
+// Playwright eles correm em paralelo com o laço de "tempo real" do relógio falso e, quando os
+// dois se cruzam, o laço termina com um _runTo antigo que faz o relógio da página VOLTAR o
+// tempo adiantado (Date.now() recua minutos). Era a falha intermitente "22 min" em vez de
+// "12 min" (a pausa ficava com 0 min) e "menos de 1 min" em vez de "10 min". setSystemTime só
+// troca a hora, sem mexer nos "ticks" dos timers, e não tem essa corrida.
+async function advanceClock(p, mmss) {
+  const [m, s] = mmss.split(':').map(Number);
+  const now = await p.evaluate(() => Date.now());
+  await p.clock.setSystemTime(now + (m * 60 + s) * 1000);
+}
+
 try {
   step('primeira abertura da 1.3 com os dados da 1.2.4');
   await p.clock.install({ time: new Date('2026-09-28T21:30:00') });
@@ -177,7 +189,7 @@ try {
   await day('2026-10-06', '20:00');
   await p.click('.reading:has-text("1984") .btn-timer');
   await onPage('ler');
-  await p.clock.fastForward('25:00');
+  await advanceClock(p, '25:00');
   await p.click('[data-action="timer-stop"]');
   await p.fill('#timer-input', '372');
   await p.click('.timer-stop button[type="submit"]');

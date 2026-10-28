@@ -82,6 +82,18 @@ const context = await browser.newContext({
 const page = await context.newPage();
 await page.clock.install({ time: new Date(`${TODAY}T09:00:00`) });
 
+// Adiantar o relógio da página. Não use page.clock.fastForward/runFor com clock.install: no
+// Playwright eles correm em paralelo com o laço de "tempo real" do relógio falso e, quando os
+// dois se cruzam, o laço termina com um _runTo antigo que faz o relógio da página VOLTAR o
+// tempo adiantado (Date.now() recua minutos). Era a falha intermitente "22 min" em vez de
+// "12 min" (a pausa ficava com 0 min) e "menos de 1 min" em vez de "10 min". setSystemTime só
+// troca a hora, sem mexer nos "ticks" dos timers, e não tem essa corrida.
+async function advanceClock(p, mmss) {
+  const [m, s] = mmss.split(':').map(Number);
+  const now = await p.evaluate(() => Date.now());
+  await p.clock.setSystemTime(now + (m * 60 + s) * 1000);
+}
+
 const STATE_KEY = 'state';
 const readState = (p = page) => p.evaluate(async (key) => (await import('/js/db.js')).getItem(key), STATE_KEY);
 const writeState = (data, p = page) => p.evaluate(async ([key, d]) => (await import('/js/db.js')).setItem(key, d), [STATE_KEY, data]);
@@ -207,7 +219,7 @@ try {
   step('cronômetro: 25 min de leitura somam aos minutos do dia');
   await page.click('.reading:has-text("Guerra dos Tronos") .btn-timer');
   await onPage('ler');
-  await page.clock.fastForward('25:00');
+  await advanceClock(page, '25:00');
   await page.click('[data-action="timer-stop"]');
   await page.fill('#timer-input', '150');
   await page.click('.timer-stop button[type="submit"]');

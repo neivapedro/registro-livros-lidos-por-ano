@@ -116,7 +116,10 @@ export function applyTints(root) {
     const src = el.dataset.tint;
     if (!src) continue;
     loadCoverColor(src).then((rgb) => {
-      if (rgb && el.isConnected) el.style.setProperty('--tint', tintFor(rgb));
+      if (!rgb || !el.isConnected) return;
+      el.style.setProperty('--tint', tintFor(rgb));
+      // Marca que a cor é a da imagem (o Início usa um véu mais rico só nesse caso).
+      el.dataset.tintSrc = 'capa';
     });
   }
 }

@@ -7,7 +7,8 @@ import { countQuotes } from '../quotes.js';
 import { FORMATS } from '../store.js';
 import { allTimeStats, yearsWithData } from '../stats.js';
 import { repeatedAuthors } from '../trend.js';
-import { emptyState, esc, icon, plural } from '../ui.js';
+import { esc, icon, plural } from '../ui.js';
+import { emptyScene } from '../empty-art.js';
 import { yearPairCompare } from './charts.js';
 import { yearSelect } from './home.js';
 import { kpiTile, sparkline } from './kpi.js';
@@ -76,7 +77,7 @@ export function allTimeView({ state, ui, today }) {
       <h1 class="display" data-large-title>Sua história <em>de leitor</em></h1>
     </div>`;
   if (!s.count) {
-    return `${header}${emptyState('Nenhum livro concluído ainda', 'Seus números de todos os anos aparecem aqui.')}${nQuotes ? quotesLink(nQuotes) : ''}`;
+    return `${header}${emptyScene('resumo', 'Nenhum livro concluído ainda', 'Seus números de todos os anos aparecem aqui.', '<a class="btn-outline" href="#/novo">Registrar um livro lido</a>')}${nQuotes ? quotesLink(nQuotes) : ''}`;
   }
   const extras = [
     s.rereads ? plural(s.rereads, 'releitura', 'releituras') : '',

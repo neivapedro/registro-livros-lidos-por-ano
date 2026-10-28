@@ -1,12 +1,13 @@
 import { searchBooks } from './books-api.js';
 import { booksToCsv, csvFileName } from './csv.js';
-import { readGoogleKey, removeGoogleKey, saveGoogleKey } from './prefs.js';
+import { readGoogleKey, readName, removeGoogleKey, saveGoogleKey, saveName } from './prefs.js';
 import { addTags, removeTag } from './tags.js';
 import { MAX_UP_NEXT } from './store.js';
 import { drawBook, moveUpNext, toggleUpNext } from './upnext.js';
 import { formatShort, todayIso, yearOf } from './dates.js';
 import { chartFilters } from './charts.js';
-import { applyTints } from './cover-color.js';
+import { applyTints, hexToRgb, loadCoverColor, tintFor } from './cover-color.js';
+import { applySpineColors } from './spines.js';
 import { initCoverRetry, warmCovers } from './cover-cache.js';
 import { normalizeCoverUrl } from './cover-url.js';
 import { photoToCover } from './cover-photo.js';
@@ -36,7 +37,7 @@ import { homeView } from './views/home.js';
 import { retroData, retroView } from './views/retro.js';
 import { searchResults, searchView } from './views/search.js';
 import { APP_VERSION, settingsView, storageLine } from './views/settings.js';
-import { shelfView } from './views/shelf.js';
+import { SHELF_MODES, shelfView } from './views/shelf.js';
 import { SUMMARY_TABS, summaryView } from './views/summary.js';
 import { playIntro } from './views/kpi.js';
 import { curveMonthAt } from './views/scurve.js';
@@ -49,10 +50,13 @@ import { timerView } from './views/timer.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
-import { introMotion } from './motion.js';
+import { celebrateFinish, confettiColors, introMotion } from './motion.js';
 import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
-import { finishHref } from './ui.js';
+import { coverFallbackColor, finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
+import { initAccent, setAccentPref } from './accent.js';
+import { slideTabs } from './tab-slide.js';
+import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
@@ -332,13 +336,19 @@ function render() {
   if (scrollY) window.scrollTo(0, scrollY);
   if (route.name === 'buscar') syncFilterChips(chipsScroll);
   applyTints(root);
+  applySpineColors(root);
   revealFinishFields();
+  // Abas e seletores: a marca desliza da opção anterior até a nova (js/tab-slide.js).
+  slideTabs(root, [route.name, ...route.params].join('/'));
   if (route.name === 'resumo') summaryIntro(route);
   // Primeira vez no Início nesta sessão: o anel enche e os números contam.
-  if (route.name === 'inicio' && !introShown) {
+  const intro = route.name === 'inicio' && !introShown;
+  if (intro) {
     introShown = true;
     introMotion(root);
   }
+  if (route.name === 'inicio') playFinishCelebration(!intro);
+  focusAskedField(route);
   document.body.classList.toggle('no-nav', !showNav);
   // Trechos salvos se abre a partir do Resumo (Todos os anos).
   const navName = route.name === 'trechos' ? 'resumo' : route.name;
@@ -832,7 +842,7 @@ document.addEventListener('input', (e) => {
   if (!('quotesQ' in e.target.dataset)) return;
   ui.quotesQuery = e.target.value;
   const el = document.getElementById('quotes-results');
-  if (el) el.innerHTML = allQuotesResults(state, ui.quotesQuery);
+  if (el) swapResults(el, allQuotesResults(state, ui.quotesQuery));
 });
 
 // ---------- Ações ----------
@@ -858,7 +868,11 @@ function saveBook() {
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
-  if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) celebrateMilestones(booksBefore, next.books);
+  if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) {
+    const milestone = celebrateMilestones(booksBefore, next.books);
+    // Livro que estava em leitura (ou na fila) e foi concluído: festa ao voltar ao Início.
+    if (ui.finishing || ui.original) queueFinishCelebration(book, milestone);
+  }
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   leaveForm(ui.backHref);
 }
@@ -1251,10 +1265,11 @@ actions['retro-format'] = (el) => {
   render();
 };
 
-/** Livro concluído: se um marco novo apareceu, avisa com o toast (sem pop-up, sem pontos). */
+/** Livro concluído: se um marco novo apareceu, avisa com o toast (sem pop-up, sem pontos). Devolve se houve. */
 function celebrateMilestones(booksBefore, booksAfter) {
   const message = milestoneMessage(newMilestones(booksBefore, booksAfter));
   if (message) toast(message, { duration: 5000 });
+  return Boolean(message);
 }
 
 document.addEventListener('click', (e) => {
@@ -1287,7 +1302,7 @@ document.addEventListener('input', (e) => {
   if (t.dataset.filter === 'q') {
     ui.filters.q = t.value;
     const el = document.getElementById('search-results');
-    if (el) el.innerHTML = searchResults(state, ui.filters);
+    if (el) swapResults(el, searchResults(state, ui.filters));
   }
 });
 
@@ -1789,7 +1804,8 @@ const SHELF_MODE_KEY = 'leituras:estante-modo';
 
 function readShelfMode() {
   try {
-    return sessionStorage.getItem(SHELF_MODE_KEY) === 'capas' ? 'capas' : 'lista';
+    const saved = sessionStorage.getItem(SHELF_MODE_KEY);
+    return SHELF_MODES.includes(saved) ? saved : 'lista';
   } catch {
     return 'lista';
   }
@@ -1855,7 +1871,7 @@ Object.assign(actions, {
     go(finishHref(el.dataset.id));
   },
   'shelf-mode'(el) {
-    ui.shelfMode = el.dataset.value === 'capas' ? 'capas' : 'lista';
+    ui.shelfMode = SHELF_MODES.includes(el.dataset.value) ? el.dataset.value : 'lista';
     try {
       sessionStorage.setItem(SHELF_MODE_KEY, ui.shelfMode);
     } catch {
@@ -1911,10 +1927,11 @@ Object.assign(actions, {
   },
 });
 
-// Capa em alta resolução da ficha: aparece ao terminar de carregar (e não esmaece de novo).
+// Capa em alta resolução e fundo desfocado da ficha: aparecem ao terminar de carregar
+// (e não esmaecem de novo).
 document.addEventListener('load', (e) => {
   const img = e.target;
-  if (!img.classList?.contains('cover-hd')) return;
+  if (!img.classList?.contains('cover-hd') && !img.classList?.contains('ficha-backdrop-img')) return;
   loadedHdCovers.add(img.getAttribute('src'));
   img.classList.add('is-loaded');
 }, true);
@@ -2253,6 +2270,7 @@ window.addEventListener('hashchange', () => {
 // acompanhamento do iPhone. A escolha é do aparelho, fora dos dados e do backup.
 
 ui.themePref = initTheme();
+ui.accent = initAccent();
 initLargeTitles();
 
 actions['set-theme'] = (el) => {
@@ -2261,6 +2279,77 @@ actions['set-theme'] = (el) => {
   ui.themePref = pref;
   render();
 };
+
+// Cor de destaque (1.5): também só deste aparelho (js/accent.js).
+actions['set-accent'] = (el) => {
+  const id = el.dataset.value;
+  if (!setAccentPref(id)) toast('Não foi possível guardar a cor neste aparelho; vale até fechar o app.');
+  ui.accent = id;
+  render();
+};
+
+// ---------- Início 1.5: saudação, nome, "informe o total de páginas" e festa ao concluir ----------
+
+// Nome da saudação: só deste aparelho (localStorage), fora dos dados e do backup (prefs.js).
+ui.userName = readName(localStorage);
+
+document.addEventListener('input', (e) => {
+  if (!('username' in e.target.dataset)) return;
+  // Grava enquanto digita (o app pode ser fechado sem sair do campo); o aviso vem no change.
+  ui.userName = saveName(localStorage, e.target.value).name;
+});
+
+document.addEventListener('change', (e) => {
+  if (!('username' in e.target.dataset)) return;
+  const result = saveName(localStorage, e.target.value);
+  ui.userName = result.name;
+  e.target.value = result.name;
+  if (!result.ok) toast('Não foi possível guardar o nome neste aparelho; vale até fechar o app.');
+  else toast(result.name ? 'Nome salvo.' : 'Nome removido.');
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && 'username' in e.target.dataset) {
+    e.preventDefault();
+    e.target.blur();
+  }
+});
+
+// "informe o total de páginas" (Início e ficha) abre a edição com ?campo=paginas:
+// o campo Páginas recebe o foco uma vez por rascunho.
+let askedDraft = null;
+function focusAskedField(route) {
+  if (!isBookEdit(route) || route.query.get('campo') !== 'paginas' || !ui.draft || askedDraft === ui.draft) return;
+  const input = document.getElementById('f-pages');
+  if (!input) return;
+  askedDraft = ui.draft;
+  input.focus({ preventScroll: true });
+  input.scrollIntoView({ block: 'center' });
+}
+
+// Livro concluído: a festa espera a volta ao Início (vale por 3 minutos).
+const CELEBRATION_TTL_MS = 3 * 60 * 1000;
+function queueFinishCelebration(book, milestone) {
+  ui.celebration = { id: book.id, title: book.title, cover: book.cover || '', big: milestone, at: Date.now() };
+}
+
+/** Cor da capa ("r g b"): a da imagem se já estiver na memória (em até 250 ms), senão a da capa desenhada. */
+async function celebrationTint(c) {
+  const fallback = tintFor(hexToRgb(coverFallbackColor(c.title || '')));
+  if (!c.cover) return fallback;
+  const rgb = await Promise.race([loadCoverColor(c.cover), new Promise((r) => { setTimeout(() => r(null), 250); })]);
+  return rgb ? tintFor(rgb) : fallback;
+}
+
+function playFinishCelebration(tick) {
+  const c = ui.celebration;
+  ui.celebration = null;
+  if (!c || Date.now() - c.at > CELEBRATION_TTL_MS) return;
+  const accent = getComputedStyle(root).getPropertyValue('--accent').trim();
+  // A festa começa já (a capa fica escondida até "saltar"); as cores chegam antes do confete.
+  const colors = celebrationTint(c).then((tint) => confettiColors(accent, tint));
+  celebrateFinish(root, { id: c.id, colors, tick, big: c.big }).catch(() => {});
+}
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
 async function boot() {

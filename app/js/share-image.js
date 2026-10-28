@@ -3,11 +3,12 @@
 
 import { FORMATS } from './store.js';
 import { num, plural } from './ui.js';
+import { SHARE_ACCENTS, shareAccent } from './accent.js';
 
 export const IMAGE_SIZES = { story: [1080, 1920], square: [1080, 1080] };
 
 const C = {
-  bg: '#140F0C', card: '#241B16', text: '#F4EFEA', muted: '#A39A92', soft: '#CFC8C1', accent: '#D08C4F', line: '#3A2E26',
+  bg: '#140F0C', card: '#241B16', text: '#F4EFEA', muted: '#A39A92', soft: '#CFC8C1', accent: SHARE_ACCENTS.terracota, line: '#3A2E26',
 };
 const SERIF = '"Instrument Serif", Georgia, serif';
 const SANS = 'Manrope, system-ui, sans-serif';
@@ -225,6 +226,7 @@ function drawSquare(ctx, d, year, W) {
 /** format: 'story' (padrão) ou 'square'. */
 export async function renderRetroImage(d, year, format = 'story') {
   await ensureFonts();
+  C.accent = shareAccent(); // a cor de destaque escolhida em Ajustes (sempre a versão do escuro)
   const [W, H] = IMAGE_SIZES[format] || IMAGE_SIZES.story;
   const canvas = document.createElement('canvas');
   canvas.width = W;

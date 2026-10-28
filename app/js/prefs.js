@@ -179,3 +179,41 @@ export function decodeKeysParam(value) {
   if (typeof data.geminiKey === 'string' && KEY_CHARS.test(data.geminiKey)) out.geminiKey = data.geminiKey;
   return Object.keys(out).length ? out : null;
 }
+
+// ---------- Nome para a saudação do Início (v1.5) ----------
+// Cada celular é de uma pessoa: o nome fica só no localStorage deste aparelho, fora do backup
+// (um backup importado no celular de outra pessoa não troca o nome dela).
+
+export const NAME_STORAGE = 'leituras:nome';
+export const NAME_MAX = 30;
+
+// Controles, marcas de direção e caracteres invisíveis: não têm lugar num nome. O "juntor"
+// (U+200D, ZWJ) e o não-juntor (U+200C) ficam: formam emoji como 👩‍💻 e 👨‍👩‍👧 e algumas escritas.
+const NAME_JUNK = /[\u0000-\u001F\u007F-\u009F\u200B\u200E\u200F\u2028-\u202E\u2066-\u2069\uFEFF]/g;
+
+/** Nome limpo: sem caracteres invisíveis, espaços juntados, no máximo 30 caracteres (sem partir emoji). */
+export function cleanName(value) {
+  const text = String(value ?? '').replace(NAME_JUNK, '').replace(/\s+/g, ' ').trim();
+  // Cortado no limite, não termina num juntor solto.
+  return Array.from(text).slice(0, NAME_MAX).join('').replace(/[\u200C\u200D]+$/, '').trim();
+}
+
+export function readName(storage) {
+  try {
+    return cleanName(storage.getItem(NAME_STORAGE) || '');
+  } catch {
+    return '';
+  }
+}
+
+/** Salva (ou apaga, se vazio) e devolve { ok, name }; ok = false se o navegador recusar gravar. */
+export function saveName(storage, value) {
+  const name = cleanName(value);
+  try {
+    if (name) storage.setItem(NAME_STORAGE, name);
+    else storage.removeItem(NAME_STORAGE);
+  } catch {
+    return { ok: false, name };
+  }
+  return { ok: true, name };
+}

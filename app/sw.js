@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.4.4';
+const VERSION = 'v1.5.0';
 const CACHE = `leituras-${VERSION}`;
 
 // Capas dos livros (Google Books, Open Library, BrasilAPI...): ficam num cache próprio, que
@@ -42,6 +42,9 @@ const SHELL = [
   './manifest.webmanifest',
   './css/app.css',
   './js/main.js',
+  './js/accent.js',
+  './js/tab-slide.js',
+  './js/empty-art.js',
   './js/csv.js',
   './js/pace.js',
   './js/prefs.js',
@@ -53,10 +56,12 @@ const SHELL = [
   './js/cover-color.js',
   './js/cover-cache.js',
   './js/cover-url.js',
+  './js/spines.js',
   './js/sheet.js',
   './js/longpress.js',
   './js/swipe.js',
   './js/motion.js',
+  './js/greeting.js',
   './js/calendar.js',
   './js/charts.js',
   './js/cover-photo.js',
