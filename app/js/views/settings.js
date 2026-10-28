@@ -6,7 +6,7 @@ import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 import { ACCENTS, validAccent } from '../accent.js';
 
-export const APP_VERSION = '1.4.4';
+export const APP_VERSION = '1.5.0';
 
 function stepper(label, value, action, hint) {
   return `

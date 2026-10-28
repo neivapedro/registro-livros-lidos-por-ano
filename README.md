@@ -29,6 +29,7 @@ App para celular para registrar os livros lidos em cada ano: meta anual, sequên
 
 - **Capas guardadas no aparelho (1.4.2):** cada capa fica no cache do app depois da primeira vez (funciona sem internet), as de todos os livros são baixadas em segundo plano, a que falhar é tentada de novo e a guardada há mais de 14 dias é conferida em segundo plano.
 - **Busca com IA (opcional e gratuita):** botão "Buscar com IA" faz o Gemini ler os resultados de uma busca na internet (DuckDuckGo, pela ferramenta *URL context*) e, se faltar páginas ou ano, os resultados da busca pelo ISBN; depois os dados ainda são conferidos pelo ISBN nas bases de sempre. Usa a cota gratuita do Google, sem cartão nem faturamento, com chave própria em *Ajustes → Busca com IA* (só no aparelho); o app limita a 30 buscas por mês por aparelho. Diagnóstico com a API de verdade: `GEMINI_KEY=... node tools/testar-busca-ia.mjs "título autor"`. *Ajustes → Enviar chaves para outro celular* leva as chaves de busca (nunca os livros) para outra pessoa.
+- **Visual 1.5:** capas desenhadas com cara de livro (lombada e páginas), Estante em modo *Lombadas*, textura de papel, capa desfocada no topo da ficha, trechos como citação, cor de destaque à escolha (Terracota, Oliva, Petróleo, Vinho, Grafite), abas com pílula deslizante, telas vazias ilustradas, saudação com o seu nome no Início, cor da capa no cartão "Lendo agora" e comemoração ao concluir um livro. Nome e cor ficam só no aparelho (fora do backup).
 
 ## Estrutura
 
