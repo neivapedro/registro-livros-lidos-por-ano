@@ -10,6 +10,8 @@ import { dayLabel, formatMinutes, weekGroups } from '../reading-days.js';
 import { esc, icon, num, plural } from '../ui.js';
 import { emptyScene } from '../empty-art.js';
 import { amountText, rhythmChart } from './rhythm.js';
+import { aiLimitReached } from '../prefs.js';
+import { quotePhotoBlock } from './ai-views.js';
 
 export const BOOK_TABS = ['dados', 'diario', 'trechos'];
 
@@ -165,7 +167,7 @@ function diaryWeek(book, week, index, ui, today) {
 
 // ---------- Trechos ----------
 
-function quoteForm(book, quote) {
+function quoteForm(book, quote, ui = {}, today = '') {
   const percent = quoteUsesPercent(book);
   const position = percent ? quote?.percent : quote?.page;
   const posLabel = percent ? 'Posição no Kindle (%)' : `Página${book.pages ? ` (de ${book.pages})` : ''}`;
@@ -173,9 +175,9 @@ function quoteForm(book, quote) {
     <form class="card notes-form quote-form" data-quote-form data-id="${esc(quote?.id || '')}" novalidate>
       <span class="label">${quote ? 'Corrigir trecho' : 'Novo trecho'}</span>
       <label class="sr-only" for="q-text">Trecho</label>
-      <textarea id="q-text" name="text" rows="5" maxlength="5000" placeholder="Copie ou digite o trecho…">${esc(quote?.text || '')}</textarea>
-      ${percent ? '' : '<p class="quote-hint">Dica: no livro físico, use o Texto ao Vivo da Câmera do iPhone para copiar o trecho e cole aqui.</p>'}
-      <div class="field"><label for="q-pos">${posLabel}</label><input id="q-pos" name="position" type="number" inputmode="numeric" min="0" max="${percent ? 100 : book.pages || 20000}" value="${esc(position ?? '')}"></div>
+      <textarea id="q-text" name="text" rows="5" maxlength="5000" placeholder="Copie ou digite o trecho…">${esc(ui.quoteForm?.prefill?.text ?? quote?.text ?? '')}</textarea>
+      ${percent ? '' : quotePhotoBlock(ui.quoteForm?.ocr, { hasKey: Boolean(ui.geminiKey), limitReached: aiLimitReached(ui.aiUsage, today) })}
+      <div class="field"><label for="q-pos">${posLabel}</label><input id="q-pos" name="position" type="number" inputmode="numeric" min="0" max="${percent ? 100 : book.pages || 20000}" value="${esc(ui.quoteForm?.prefill?.position ?? position ?? '')}"></div>
       <div class="field"><label for="q-note">Nota (opcional)</label><input id="q-note" name="note" type="text" maxlength="500" placeholder="Por que esse trecho marcou" value="${esc(quote?.note || '')}"></div>
       <div class="notes-form-actions">
         <span class="notes-form-gap"></span>
@@ -206,15 +208,15 @@ function quoteCard(book, quote) {
     </article>`;
 }
 
-function quotesTab(book, ui) {
+function quotesTab(book, ui, today) {
   const quotes = quotesNewestFirst(book);
   const form = ui.quoteForm;
   const adding = form && !form.id;
   const addButton = '<button type="button" class="btn-outline sm" data-action="quote-new">+ Trecho</button>';
-  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q) : quoteCard(book, q))).join('');
+  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q, ui, today) : quoteCard(book, q))).join('');
   const body = !quotes.length && !adding
     ? emptyScene('trechos', 'Nenhum trecho salvo', 'Guarde aqui as frases que marcaram você neste livro.', addButton)
-    : `${adding ? quoteForm(book, null) : ''}<div class="quote-list">${list}</div>`;
+    : `${adding ? quoteForm(book, null, ui, today) : ''}<div class="quote-list">${list}</div>`;
   return `
     <section class="book-tab-panel" role="tabpanel">
       ${quotes.length && !adding ? `<div class="quotes-head"><span class="muted small">${plural(quotes.length, 'trecho salvo', 'trechos salvos')}</span>${addButton}</div>` : ''}

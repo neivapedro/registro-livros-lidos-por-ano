@@ -12,6 +12,7 @@ import { firstUpNext } from '../upnext.js';
 import { currentDayStreak, greetingFor, longDate, streakText } from '../greeting.js';
 import { readingDays } from '../journal.js';
 import { editHref } from './book-detail.js';
+import { suggestTeaser } from './ai-views.js';
 
 const RING_R = 50;
 const RING_C = 2 * Math.PI * RING_R;
@@ -233,5 +234,6 @@ export function homeView({ state, ui, year, today, now = new Date() }) {
     ${year === currentYear ? readingNow(reading, ui?.session, today) : ''}
     ${year === currentYear && !reading.length ? nextUpCard(state) : ''}
     ${readGrid(stats)}
-    ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}`;
+    ${counts[STATUS.WANT] || year === currentYear ? wantTeaser(state.books) : ''}
+    ${year === currentYear ? suggestTeaser() : ''}`;
 }
