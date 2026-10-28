@@ -6,6 +6,7 @@ import { droppedInYear, goalStreak, monthsMetInYear, yearStats, yearsWithData } 
 import { topTagsInYear } from '../tags.js';
 import { dailyPages, kpiDelta, kpiSeries, previousYearBaseline, repeatedAuthors } from '../trend.js';
 import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
+import { emptyScene } from '../empty-art.js';
 import { calendarSection } from './calendar.js';
 import { formatCard, lengthChart, monthChartToggle, pagesMonthChart, pagesMonthLegend, ratingChart } from './charts.js';
 import { yearSelect } from './home.js';
@@ -216,7 +217,7 @@ function tagsCard(state, year) {
 
 function tastes({ state, year, s }) {
   const body = [genreBars(s), ratingChart(s), lengthChart(s), formatCard(state, s), authorRank(s), tagsCard(state, year), droppedCard(state, year)].join('');
-  return body.trim() || `<p class="rs-hint muted small">Os gostos de ${year} aparecem quando houver livros lidos no ano.</p>`;
+  return body.trim() || emptyScene('resumo', `Nenhum livro lido em ${year}`, `Os gostos de ${year} (gêneros, notas, autores) aparecem quando houver livros lidos no ano.`);
 }
 
 // ---------- Página ----------

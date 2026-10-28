@@ -1,7 +1,8 @@
 import { yearOf } from '../dates.js';
 import { FORMAT_LABELS, STATUS_LABELS, allGenres, allTags } from '../store.js';
 import { filterBooks, yearsWithData } from '../stats.js';
-import { bookItem, emptyState, esc, icon, itemGroup, plural } from '../ui.js';
+import { bookItem, esc, icon, itemGroup, plural } from '../ui.js';
+import { emptyScene } from '../empty-art.js';
 import { applyChartFilters } from '../charts.js';
 import { chartFilterChip } from './charts.js';
 import { compactBar } from '../large-title.js';
@@ -28,10 +29,17 @@ function chipSelect(name, label, options, value) {
 
 export function searchResults(state, filters) {
   const active = Object.values(filters).some(Boolean);
-  if (!state.books.length) return emptyState('Nada para buscar ainda', 'Os livros que você registrar poderão ser encontrados aqui.');
+  if (!state.books.length) {
+    return emptyScene('busca', 'Nada para buscar ainda', 'Registre seus livros e busque aqui por título, autor ou anotação.',
+      '<a class="btn-outline" href="#/novo">Adicionar livro</a>');
+  }
   // Filtros extras vindos de um toque nos gráficos do resumo (nota exata, tamanho, mês).
   const found = applyChartFilters(filterBooks(state.books, filters), filters);
-  if (!found.length) return emptyState('Nenhum livro encontrado', 'Tente outro termo ou tire um filtro.');
+  if (!found.length) {
+    const filtered = filters.status || filters.year || filters.genre || filters.format || filters.minRating || filters.tag;
+    return emptyScene('nada', 'Nenhum livro encontrado', 'Busque por título, autor ou anotação; tente outro termo ou tire um filtro.',
+      filtered ? '<button type="button" class="btn-outline" data-action="clear-filters">Limpar filtros</button>' : '');
+  }
   const head = active
     ? plural(found.length, 'livro encontrado', 'livros encontrados')
     : `Todos os ${plural(found.length, 'livro', 'livros')} · mais recentes primeiro`;

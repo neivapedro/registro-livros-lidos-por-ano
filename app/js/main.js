@@ -53,6 +53,8 @@ import { introMotion } from './motion.js';
 import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
 import { finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
+import { initAccent, setAccentPref } from './accent.js';
+import { slideTabs } from './tab-slide.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
@@ -333,6 +335,8 @@ function render() {
   if (route.name === 'buscar') syncFilterChips(chipsScroll);
   applyTints(root);
   revealFinishFields();
+  // Abas e seletores: a marca desliza da opção anterior até a nova (js/tab-slide.js).
+  slideTabs(root, [route.name, ...route.params].join('/'));
   if (route.name === 'resumo') summaryIntro(route);
   // Primeira vez no Início nesta sessão: o anel enche e os números contam.
   if (route.name === 'inicio' && !introShown) {
@@ -2253,12 +2257,21 @@ window.addEventListener('hashchange', () => {
 // acompanhamento do iPhone. A escolha é do aparelho, fora dos dados e do backup.
 
 ui.themePref = initTheme();
+ui.accent = initAccent();
 initLargeTitles();
 
 actions['set-theme'] = (el) => {
   const pref = el.dataset.value;
   if (!setThemePref(pref)) toast('Não foi possível guardar a aparência neste aparelho; vale até fechar o app.');
   ui.themePref = pref;
+  render();
+};
+
+// Cor de destaque (1.5): também só deste aparelho (js/accent.js).
+actions['set-accent'] = (el) => {
+  const id = el.dataset.value;
+  if (!setAccentPref(id)) toast('Não foi possível guardar a cor neste aparelho; vale até fechar o app.');
+  ui.accent = id;
   render();
 };
 
