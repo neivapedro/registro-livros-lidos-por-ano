@@ -223,7 +223,8 @@ try {
   assert.equal(await page.locator('.quote-card').count(), 2);
   assert.match(await page.textContent('.quote-card >> nth=0'), /p\. 120/);
   assert.match(await page.textContent('.quote-card >> nth=1'), /Capitu, sempre\./);
-  assert.equal(await page.evaluate(() => getComputedStyle(document.querySelector('.quote-text')).fontStyle), 'italic');
+  assert.match(await page.evaluate(() => getComputedStyle(document.querySelector('.quote-text')).fontFamily), /Instrument Serif/);
+  assert.equal(await page.locator('.quote-card .quote-mark').count(), 2, 'aspa decorativa (1.5)');
   await shot('04-trechos');
   await noOverflow('aba Trechos');
   await page.setViewportSize({ width: 320, height: 700 });

@@ -1914,10 +1914,11 @@ Object.assign(actions, {
   },
 });
 
-// Capa em alta resolução da ficha: aparece ao terminar de carregar (e não esmaece de novo).
+// Capa em alta resolução e fundo desfocado da ficha: aparecem ao terminar de carregar
+// (e não esmaecem de novo).
 document.addEventListener('load', (e) => {
   const img = e.target;
-  if (!img.classList?.contains('cover-hd')) return;
+  if (!img.classList?.contains('cover-hd') && !img.classList?.contains('ficha-backdrop-img')) return;
   loadedHdCovers.add(img.getAttribute('src'));
   img.classList.add('is-loaded');
 }, true);

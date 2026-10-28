@@ -188,9 +188,11 @@ function quoteCard(book, quote) {
   const position = quotePosition(quote, book);
   const day = quoteSavedDay(quote);
   const saved = day ? `salvo em ${formatShort(day)} ${day.slice(0, 4)}` : '';
-  const meta = [position ? `<span class="accent">${esc(position)}</span>` : '', saved ? esc(saved) : ''].filter(Boolean).join(' · ');
+  // Página como selo em versalete ("p. 61"), data apagada ao lado.
+  const meta = [position ? `<span class="quote-page">${esc(position)}</span>` : '', saved ? `<span class="quote-date">${esc(saved)}</span>` : ''].filter(Boolean).join(' ');
   return `
     <article class="quote-card">
+      <span class="quote-mark" aria-hidden="true">“</span>
       <blockquote class="quote-text">${esc(quote.text)}</blockquote>
       ${meta ? `<p class="quote-meta">${meta}</p>` : ''}
       ${quote.note ? `<p class="quote-note">${esc(quote.note)}</p>` : ''}
