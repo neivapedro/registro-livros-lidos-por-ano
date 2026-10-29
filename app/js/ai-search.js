@@ -661,6 +661,8 @@ export async function enrichAiResults(results, lookupIsbn, { queryIsbn = '' } = 
       pages: official.pages || r.pages,
       year: official.year || r.year,
       cover: official.cover || r.cover || openLibraryCoverByIsbn(r.isbn),
+      // Sinopse só das bases (a IA não escreve sinopse: inventaria).
+      description: official.description || '',
       checkedBy: official.source || '',
     };
   }));

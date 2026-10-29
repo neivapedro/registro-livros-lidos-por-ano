@@ -13,6 +13,7 @@ import { normalizeCoverUrl } from '../cover-url.js';
 import { cover, decimal, esc, formatRating, icon, largeCoverUrl, num, plural, progressOf, starIcon } from '../ui.js';
 import { rhythmChart } from './rhythm.js';
 import { timerButton } from './timer.js';
+import { criteriaList, loanBadge, loanSection, moodChips, shopSection, synopsisSection } from './meta-ui.js';
 
 /** Endereço da edição: #/livro/:id/editar, com ?concluir=1 ou ?aba=diario|trechos. */
 export function editHref(id, query = '') {
@@ -268,12 +269,18 @@ export function bookDetailView({ state, ui, today, book }) {
         <p class="ficha-author">${esc(authorLine)}</p>
       </div>
       ${seriesChip(state, book)}
+      ${loanBadge(book, today)}
+      ${moodChips(book)}
       ${ratingRow(book)}
+      ${criteriaList(book)}
       ${heroStats}
     </section>
     ${book.status === STATUS.READ ? '' : statusBlock}
+    ${synopsisSection(book, ui)}
+    ${shopSection(book)}
     ${rhythmSection(book, today)}
     ${quotesSection(book)}
     ${notesSection(book)}
+    ${loanSection(book, today)}
     ${detailsSection(book)}`;
 }

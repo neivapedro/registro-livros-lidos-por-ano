@@ -224,7 +224,7 @@ try {
   await page.click('[data-action="quick-menu"][data-id="r1"]');
   await page.waitForSelector(`${openSheet} .qm`);
   assert.deepEqual((await page.locator(`${openSheet} .qm-item`).allTextContents()).map((t) => t.trim()),
-    ['Abrir livro', 'Começar a ler', 'Marcar como próxima']);
+    ['Abrir livro', 'Começar a ler', 'Marcar como próxima', 'Emprestei para…']);
   await page.click(`${openSheet} [data-action="toggle-next"]`);
   await waitState((st) => st.upNext.join() === 'w1,r1');
   await sheetGone();

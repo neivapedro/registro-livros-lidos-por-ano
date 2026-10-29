@@ -2796,3 +2796,172 @@ body [data-theme] { color: var(--text); }
   .empty-art :is(.f, .p) { fill: var(--surface-2); }
   .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
 }
+
+/* ===== 1.6 Humor, critérios, sinopse e empréstimo ===== */
+/* Humor e ritmo (chips em "Mais detalhes" e na ficha), avaliação por critérios (formulário e
+   ficha), sinopse recolhida, empréstimo (selo, cartão, folha e linha da lista), "Onde comprar"
+   e o perfil de leitor do Resumo. Só tokens; o que usa color-mix() tem a versão simples no fim. */
+
+/* Formulário: humor (vários) e ritmo (um). */
+.mood-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.mood-chip {
+  min-height: 44px; padding: 0 14px; border-radius: 999px; max-width: 100%;
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line-strong); background: transparent; color: var(--text-soft);
+  font-size: 13px; font-weight: 700; transition: background .15s, border-color .15s, color .15s;
+}
+.mood-chip .icon { flex-shrink: 0; margin-left: -3px; }
+.mood-chip.is-on { background: var(--surface-warm); border-color: var(--accent); color: var(--accent); }
+.mood-chip:active { background: var(--fill-press); }
+.mood-pace-label { margin-top: 6px; }
+.pace-pick {
+  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 3px; padding: 3px;
+  border-radius: 15px; background: var(--surface); border: 1px solid var(--line);
+}
+.pace-btn {
+  min-height: 44px; border: 0; border-radius: 12px; background: transparent; color: var(--muted);
+  font-size: 14px; font-weight: 700; transition: background .15s, color .15s;
+}
+.pace-btn.is-on { background: var(--accent); color: var(--on-accent); }
+
+/* Formulário: "Avaliar por critérios", recolhido abaixo das estrelas. */
+.crit { display: flex; flex-direction: column; gap: 10px; }
+.crit-toggle {
+  display: flex; align-items: center; gap: 10px; width: 100%; min-height: 52px; padding: 8px 14px;
+  border: 1px dashed var(--line-strong); border-radius: 16px; background: transparent; color: var(--text); text-align: left;
+}
+.crit.is-open .crit-toggle { border-style: solid; border-color: var(--line); }
+.crit-toggle-text { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.crit-title { font-size: 14px; font-weight: 700; }
+.crit-title .faint { font-weight: 600; }
+.crit-summary { font-size: 12.5px; color: var(--muted); overflow-wrap: anywhere; }
+.crit-chevron { flex-shrink: 0; color: var(--muted); transition: transform .25s ease; }
+.crit.is-open .crit-chevron { transform: rotate(180deg); }
+.crit-list {
+  display: flex; flex-direction: column; gap: 2px; padding: 6px 10px 10px;
+  border-radius: 18px; background: var(--surface); border: 1px solid var(--line);
+}
+.crit-row { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 8px; }
+.crit-row + .crit-row { border-top: 1px solid var(--line); }
+.crit-name { display: flex; flex-direction: column; gap: 1px; min-width: 0; padding-left: 4px; font-size: 13px; font-weight: 700; color: var(--text-soft); }
+.crit-val { font-size: 12px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+.crit-stars { display: flex; justify-content: flex-end; min-width: 0; }
+.star-slot.crit-slot { flex: 0 1 40px; min-width: 30px; height: 46px; background: transparent; border-radius: 10px; }
+.crit-slot .star-hit.left { border-radius: 10px 0 0 10px; }
+.crit-slot .star-hit.right { border-radius: 0 10px 10px 0; }
+.crit-hint { padding: 8px 2px 0; border-top: 1px solid var(--line); }
+@media (prefers-reduced-motion: reduce) {
+  .mood-chip, .pace-btn, .crit-chevron { transition: none; }
+}
+
+/* Ficha: humor e ritmo, notas por critério e selo do empréstimo, no topo. */
+.ficha-moods { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; max-width: 100%; }
+.ficha-chip.is-pace { display: inline-flex; align-items: center; gap: 5px; }
+.ficha-chip.is-pace .icon { flex-shrink: 0; color: var(--accent); }
+.ficha-crit { margin: 0; align-self: center; width: min(100%, 300px); display: flex; flex-direction: column; gap: 7px; }
+.ficha-crit-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); align-items: center; gap: 10px; }
+.ficha-crit dt { font-size: 12.5px; font-weight: 700; color: var(--text-soft); text-align: right; overflow-wrap: anywhere; }
+.ficha-crit dd { margin: 0; display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ficha-crit-bar { flex: 1; min-width: 0; height: 6px; border-radius: 999px; background: var(--fill-press); overflow: hidden; }
+.ficha-crit-bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.ficha-crit-n { min-width: 24px; font-size: 13px; font-weight: 800; color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+.ficha-loan {
+  display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 6px 12px 6px 10px; border-radius: 16px;
+  font-size: 12.5px; font-weight: 700; color: var(--text);
+  background: var(--accent-soft); box-shadow: inset 0 0 0 1px var(--accent-line);
+}
+.ficha-loan .icon { flex-shrink: 0; color: var(--accent); }
+.ficha-loan > span { min-width: 0; overflow-wrap: anywhere; text-wrap: balance; text-align: center; }
+
+/* Ficha: sinopse (4 linhas e "Ler mais"). */
+.ficha-syn-card {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
+  padding: 16px 16px 6px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line);
+}
+.ficha-syn-text {
+  font-size: 15px; line-height: 1.55; color: var(--text-soft); white-space: pre-line; overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden;
+}
+.ficha-syn.is-open .ficha-syn-text { display: block; -webkit-line-clamp: unset; overflow: visible; }
+.ficha-syn-more {
+  min-height: 44px; padding: 0; border: 0; background: transparent;
+  color: var(--accent); font-size: 14px; font-weight: 800;
+}
+.ficha-syn.is-short .ficha-syn-more { display: none; }
+.ficha-syn.is-short .ficha-syn-card { padding-bottom: 16px; }
+
+/* Ficha: "Onde comprar" (Quero ler). */
+.ficha-shop { display: flex; flex-direction: column; border-radius: 18px; background: var(--surface); border: 1px solid var(--line); overflow: hidden; }
+.ficha-shop-link {
+  position: relative; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  min-height: 58px; padding: 8px 16px; color: var(--text);
+}
+.ficha-shop-link + .ficha-shop-link::before { content: ''; position: absolute; top: 0; left: 16px; right: 0; height: 1px; background: var(--line); }
+.ficha-shop-link:active { background: var(--fill-soft); }
+.ficha-shop-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ficha-shop-name { font-size: 15px; font-weight: 700; }
+.ficha-shop-host { font-size: 12px; color: var(--muted); }
+.ficha-shop-link .icon { flex-shrink: 0; color: var(--accent); }
+
+/* Ficha: empréstimo (cartão com "Devolvido", ou a linha para emprestar). */
+button.ficha-row { width: 100%; background: transparent; text-align: left; }
+.ficha-loan-card {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 12px 12px 14px;
+  border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line);
+}
+.ficha-loan-info {
+  flex: 999 1 180px; min-width: 0; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--text);
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.ficha-loan-icon {
+  flex-shrink: 0; width: 42px; height: 42px; border-radius: 14px;
+  display: inline-flex; align-items: center; justify-content: center; background: var(--surface-warm); color: var(--accent);
+}
+.ficha-loan-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.ficha-loan-text strong {
+  font-family: var(--serif); font-weight: 400; font-size: 22px; line-height: 1.1;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ficha-loan-when { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ficha-loan-back { flex: 1 0 auto; min-height: 44px; padding: 0 14px; border-radius: 999px; gap: 4px; font-size: 13px; }
+
+/* Folha do empréstimo. */
+.loan-sheet { display: flex; flex-direction: column; gap: 14px; }
+.loan-sheet .psheet-actions .btn-ghost .icon { color: var(--accent); }
+
+/* Listas: "com Ana desde 3 out" embaixo do autor. */
+.li-loan {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  font-size: 11.5px; font-weight: 700; color: var(--accent);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.li-loan::before { content: ''; flex-shrink: 0; width: 6px; height: 6px; border-radius: 999px; background: currentColor; }
+
+/* Resumo → Gostos: perfil de leitor. */
+.profile-card { gap: 14px; }
+.profile-lead { font-family: var(--serif); font-size: 21px; line-height: 1.22; color: var(--text); text-wrap: pretty; }
+.profile-lead strong { font-weight: 400; font-style: italic; color: var(--accent); }
+.profile-bars { gap: 10px; }
+.profile-bar .hbar-track, .profile-bar .hbar-fill { display: block; }
+.profile-pace { display: flex; flex-direction: column; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.profile-sub { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); }
+.pace-split { display: flex; height: 14px; gap: 3px; border-radius: 999px; overflow: hidden; }
+.pace-seg, .pace-dot { background: var(--accent); }
+.pace-seg.is-lento, .pace-dot.is-lento { opacity: .32; }
+.pace-seg.is-medio, .pace-dot.is-medio { opacity: .62; }
+.pace-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; font-size: 13px; color: var(--text-soft); }
+.pace-key { display: inline-flex; align-items: center; gap: 6px; }
+.pace-key strong { font-weight: 800; color: var(--text); font-variant-numeric: tabular-nums; }
+.pace-key.is-zero, .pace-key.is-zero strong { color: var(--faint); }
+.pace-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; }
+.profile-empty { display: flex; flex-direction: column; gap: 10px; }
+.profile-empty-dots { display: flex; flex-wrap: wrap; gap: 6px; }
+.profile-empty-dots > span {
+  padding: 5px 11px; border-radius: 999px; border: 1px dashed var(--line-strong);
+  font-size: 12px; font-weight: 700; color: var(--muted);
+}
+
+/* Sem color-mix() (iOS 16.0 e 16.1): o selo do empréstimo com fundo e contorno simples. */
+@supports not (color: color-mix(in srgb, red, red)) {
+  .ficha-loan { background: var(--surface-2); box-shadow: inset 0 0 0 1px var(--line-strong); }
+}

@@ -32,6 +32,7 @@ test('linha do livro no padrão brasileiro', () => {
   assert.deepEqual(bookCsvRow(book), [
     'Duna', 'Frank Herbert', 'Lido', 'Kindle', 'Ficção', 'clássico, presente', 'Duna', '1,5', 680,
     '02/01/2026', '03/02/2026', '4,5', 'Sim', 'Sim', '', '9788576573135', 'Muito bom; "épico".',
+    '', '', '', '', '', '', '', '', '',
   ]);
   const dropped = normalizeBook({ id: 'y', title: 'Chato', status: 'abandonado', endDate: '2026-03-01', dropReason: 'Não prendeu' });
   const row = bookCsvRow(dropped);
@@ -51,9 +52,9 @@ test('planilha completa: cabeçalho e um livro por linha, do mais recente ao mai
   const csv = booksToCsv(books);
   const lines = csv.slice(1).split('\r\n');
   assert.equal(lines[0], CSV_COLUMNS.join(';'));
-  assert.equal(CSV_COLUMNS.length, 17);
+  assert.equal(CSV_COLUMNS.length, 26);
   assert.match(lines[1], /^Recente;/);
-  assert.match(lines[1], /"várias\nlinhas"$/);
+  assert.match(lines[1], /;"várias\nlinhas";;;;;;;;;$/, 'anotações e, depois, as colunas da 1.6 vazias');
   assert.match(lines[2], /^Antigo;/);
   assert.equal(lines[3], '');
   assert.equal(csvFileName('2026-10-16'), 'leituras-planilha-2026-10-16.csv');

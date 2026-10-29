@@ -154,7 +154,7 @@ try {
   for (const sel of ['#f-genre', '#f-series', '#f-tag', '#f-notes', '[data-action="toggle-fav"]']) {
     assert.equal(await page.isVisible(sel), false, `${sel} recolhido`);
   }
-  assert.match(await page.textContent('.more-summary'), /Gênero, série, etiquetas, favorito e anotações/);
+  assert.match(await page.textContent('.more-summary'), /Gênero, série, etiquetas, humor, sinopse, favorito e anotações/);
   assert.equal(await page.getAttribute('.more-toggle', 'aria-controls'), 'more-details');
   await tapTargets('novo');
   await shots('novo');

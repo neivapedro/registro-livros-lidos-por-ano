@@ -4,6 +4,7 @@
 
 import { formatBR } from './dates.js';
 import { FORMAT_LABELS, STATUS_LABELS } from './store.js';
+import { CRITERIA, MOOD_LABELS, PACE_LABELS } from './book-meta.js';
 
 export const CSV_SEPARATOR = ';';
 const BOM = '﻿';
@@ -11,6 +12,8 @@ const BOM = '﻿';
 export const CSV_COLUMNS = [
   'Título', 'Autor(es)', 'Status', 'Formato', 'Gênero', 'Etiquetas', 'Série', 'Nº', 'Páginas',
   'Início', 'Término', 'Nota', 'Favorito', 'Releitura', 'Abandonado por', 'ISBN', 'Anotações',
+  // 1.6: humor e ritmo, critérios, sinopse e empréstimo (no fim, para não mudar as colunas de antes).
+  'Humor', 'Ritmo', ...CRITERIA.map((c) => c.label), 'Sinopse', 'Emprestado para', 'Emprestado desde',
 ];
 
 /** Campo entre aspas quando tem separador, aspas, quebra de linha ou espaço nas pontas. */
@@ -49,6 +52,12 @@ export function bookCsvRow(book) {
     book.dropReason || '',
     book.isbn || '',
     book.notes || '',
+    (book.moods || []).map((m) => MOOD_LABELS[m]).filter(Boolean).join(', '),
+    PACE_LABELS[book.pace] || '',
+    ...CRITERIA.map((c) => decimalBR(book.criteria?.[c.id] ?? '')),
+    book.description || '',
+    book.loan?.to || '',
+    formatBR(book.loan?.since),
   ];
 }
 

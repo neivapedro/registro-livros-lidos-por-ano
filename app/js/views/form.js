@@ -5,6 +5,8 @@ import { hasTag } from '../tags.js';
 import { AI_MONTHLY_LIMIT, aiLimitReached } from '../prefs.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
+import { criteriaBlock, descriptionField, moodFields } from './meta-ui.js';
+import { PACE_LABELS } from '../book-meta.js';
 
 function segmented(options, current, action, label, cls = '') {
   const buttons = options.map(([value, text]) => `
@@ -231,7 +233,8 @@ const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
 /** Algum campo de "Mais detalhes" (dos que aparecem neste status) está preenchido? */
 export function detailsFilled(d) {
   return filled(d.genre) || filled(d.series) || filled(d.seriesNumber) || (d.tags || []).length > 0
-    || filled(d.notes)
+    || filled(d.notes) || filled(d.description)
+    || (d.status !== STATUS.WANT && ((d.moods || []).length > 0 || filled(d.pace)))
     || (d.status === STATUS.READING && filled(d.targetDate))
     || (d.status === STATUS.READ && d.favorite === true);
 }
@@ -261,11 +264,17 @@ export function detailsSummary(d) {
   if (filled(d.series)) parts.push(filled(d.seriesNumber) ? `${d.series} nº ${formatSeriesNumber(d.seriesNumber)}` : d.series);
   const tags = (d.tags || []).length;
   if (tags) parts.push(plural(tags, 'etiqueta', 'etiquetas'));
+  const moods = d.status === STATUS.WANT ? 0 : (d.moods || []).length;
+  if (moods) parts.push(plural(moods, 'humor', 'humores'));
+  if (d.status !== STATUS.WANT && PACE_LABELS[d.pace]) parts.push(`ritmo ${PACE_LABELS[d.pace].toLowerCase()}`);
   if (d.status === STATUS.READING && isIsoDate(d.targetDate)) parts.push(`terminar até ${formatShort(d.targetDate)}`);
   if (d.status === STATUS.READ && d.favorite) parts.push('favorito');
+  if (filled(d.description)) parts.push('com sinopse');
   if (filled(d.notes)) parts.push(d.status === STATUS.DROPPED ? 'com observações' : 'com anotações');
   if (parts.length) return parts.map(esc).join(' · ');
   const hints = ['Gênero', 'série', 'etiquetas'];
+  if (d.status !== STATUS.WANT) hints.push('humor');
+  hints.push('sinopse');
   if (d.status === STATUS.READING) hints.push('data alvo');
   if (d.status === STATUS.READ) hints.push('favorito');
   hints.push(d.status === STATUS.DROPPED ? 'observações' : 'anotações');
@@ -320,8 +329,10 @@ function moreDetails(state, ui, d, isEdit) {
             ${genreField(state, ui, d)}
             ${seriesFields(state, d, isEdit)}
             ${tagsField(state, ui, d)}
+            ${d.status === STATUS.WANT ? '' : moodFields(d)}
             ${d.status === STATUS.READING ? `<section class="field-group">${targetDateField(d)}</section>` : ''}
             ${d.status === STATUS.READ ? favoriteToggle(d) : ''}
+            ${descriptionField(d)}
             <section class="field-group">
               <label class="label" for="f-notes">${d.status === STATUS.DROPPED ? 'Observações' : 'Anotações'}</label>
               <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
@@ -418,6 +429,7 @@ export function formView({ state, ui, isEdit, today }) {
       <section class="field-group">
         <span class="label">Sua nota</span>
         <div class="star-row" role="group" aria-label="Nota">${starButtons}<span class="star-value" aria-hidden="true">${d.rating ? formatRating(d.rating) : ''}</span></div>
+        ${criteriaBlock(ui)}
       </section>` : ''}
 
       ${d.status === STATUS.DROPPED ? `

@@ -1,6 +1,7 @@
 // Peças de interface reutilizadas pelas telas. Todo texto vindo de dados passa por esc().
 
-import { formatShort } from './dates.js';
+import { formatShort, todayIso } from './dates.js';
+import { loanLabel } from './book-meta.js';
 import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 import { isGoogleCoverHost, normalizeCoverUrl } from './cover-url.js';
@@ -313,7 +314,7 @@ export function bookItem(book, { withYear = false, tools = '', swipe = '', badge
           <span class="li-text">
             <span class="book-row-title li-title">${esc(book.title)}${fav}</span>
             <span class="li-sub">${esc(author)}${when ? ` · ${esc(when)}` : ''}</span>
-            ${second ? `<span class="li-extra">${esc(second)}</span>` : ''}${extra}
+            ${second ? `<span class="li-extra">${esc(second)}</span>` : ''}${extra}${book.loan?.to ? `<span class="li-loan">${esc(loanLabel(book.loan, todayIso()))}</span>` : ''}
           </span>
           ${ratingBadge(book.rating)}
         </a>

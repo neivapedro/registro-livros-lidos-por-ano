@@ -13,6 +13,7 @@ import { yearSelect } from './home.js';
 import { deltaLine, kpiTile, sparkline } from './kpi.js';
 import { sCurveCard } from './scurve.js';
 import { compactBar } from '../large-title.js';
+import { readerProfileCard } from './meta-ui.js';
 
 export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
 const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
@@ -216,7 +217,7 @@ function tagsCard(state, year) {
 }
 
 function tastes({ state, year, s }) {
-  const body = [genreBars(s), ratingChart(s), lengthChart(s), formatCard(state, s), authorRank(s), tagsCard(state, year), droppedCard(state, year)].join('');
+  const body = [genreBars(s), readerProfileCard(state.books, year), ratingChart(s), lengthChart(s), formatCard(state, s), authorRank(s), tagsCard(state, year), droppedCard(state, year)].join('');
   return body.trim() || emptyScene('resumo', `Nenhum livro lido em ${year}`, `Os gostos de ${year} (gêneros, notas, autores) aparecem quando houver livros lidos no ano.`);
 }
 

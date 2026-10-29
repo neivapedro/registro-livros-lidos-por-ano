@@ -4,6 +4,7 @@
 import { paceLines } from '../pace.js';
 import { FORMATS, STATUS } from '../store.js';
 import { GLYPHS, cover, esc, finishHref, icon, progressOf } from '../ui.js';
+import { META_GLYPHS } from './meta-ui.js';
 
 /** Total da régua: 100 no Kindle, nº de páginas no físico (null se não informado). */
 export function progressTotal(book) {
@@ -75,6 +76,13 @@ export function quickMenu(book, state) {
       menuItem({ label: 'Começar a ler', glyph: `<span class="qm-play">${GLYPHS.play}</span>`, action: 'start-reading', id }),
       menuItem({ label: isNext ? 'Desmarcar como próxima' : 'Marcar como próxima', glyph: GLYPHS.queue, action: 'toggle-next', id, extra: ` aria-pressed="${isNext}"` }),
     );
+  }
+  // 1.6: empréstimo. "Emprestei para…" nos livros da fila (em leitura, o livro está com a
+  // pessoa); "Devolvido" em qualquer livro emprestado.
+  if (book.loan?.to) {
+    items.push(menuItem({ label: `Devolvido (estava com ${esc(book.loan.to)})`, glyph: META_GLYPHS.loan(20), action: 'loan-return', id }));
+  } else if (book.status === STATUS.WANT) {
+    items.push(menuItem({ label: 'Emprestei para…', glyph: META_GLYPHS.loan(20), action: 'loan-open', id, close: false }));
   }
   const author = (book.authors || '').split(',')[0].trim();
   return `

@@ -1,4 +1,6 @@
-import { searchBooks } from './books-api.js';
+import { fetchWorkDescription, searchBooks } from './books-api.js';
+import { loanNames, normalizeCriteria, normalizeLoan, normalizePace, toggleMood } from './book-meta.js';
+import { loanSheet } from './views/meta-ui.js';
 import { booksToCsv, csvFileName } from './csv.js';
 import { readGoogleKey, readName, removeGoogleKey, saveGoogleKey, saveName } from './prefs.js';
 import { addTags, removeTag } from './tags.js';
@@ -338,6 +340,7 @@ function render() {
   applyTints(root);
   applySpineColors(root);
   revealFinishFields();
+  fitSynopsis();
   // Abas e seletores: a marca desliza da opção anterior até a nova (js/tab-slide.js).
   slideTabs(root, [route.name, ...route.params].join('/'));
   if (route.name === 'resumo') summaryIntro(route);
@@ -893,9 +896,11 @@ const actions = {
   'pick-result'(el) {
     const r = ui.lookup.results[Number(el.dataset.index)];
     if (!r) return;
-    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn });
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn, description: r.description || '' });
     ui.picked = true;
     render();
+    // Open Library: a sinopse fica na obra; vem depois, sem segurar a tela.
+    if (!r.description && r.workKey) loadWorkDescription(ui.draft, r.workKey);
   },
   unpick() {
     ui.picked = false;
@@ -2211,7 +2216,7 @@ Object.assign(actions, {
     const r = ui.lookup.ai?.results?.[Number(el.dataset.index)];
     if (!r || !ui.draft) return;
     // Sem ISBN conferido da IA, fica o ISBN que a pessoa digitou na busca (se digitou).
-    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn || ui.lookup.isbn || '' });
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn || ui.lookup.isbn || '', description: r.description || '' });
     ui.picked = true;
     render();
   },
@@ -2350,6 +2355,127 @@ function playFinishCelebration(tick) {
   const colors = celebrationTint(c).then((tint) => confettiColors(accent, tint));
   celebrateFinish(root, { id: c.id, colors, tick, big: c.big }).catch(() => {});
 }
+
+// ---------- 1.6: humor e ritmo, critérios, sinopse e empréstimo (book-meta.js, views/meta-ui.js) ----------
+
+/** Sinopse da obra (Open Library) chegando depois de escolher o livro: só preenche se ainda estiver vazia. */
+async function loadWorkDescription(draft, workKey) {
+  const text = await fetchWorkDescription(workKey);
+  if (!text || ui.draft !== draft || String(draft.description || '').trim()) return;
+  draft.description = text;
+  const typing = document.activeElement?.closest?.('#app') && document.activeElement.matches('input, textarea, select');
+  if (!typing) {
+    render();
+    return;
+  }
+  // Digitando em outro campo: não redesenha (o foco sairia); atualiza só a sinopse e o resumo.
+  const area = document.getElementById('f-description');
+  if (area && !area.value.trim()) area.value = text;
+  const summary = document.querySelector('.more-summary');
+  if (summary) summary.innerHTML = detailsSummary(draft);
+}
+
+/** "Ler mais" só quando a sinopse passa das ~4 linhas. */
+function fitSynopsis() {
+  const box = root.querySelector('.ficha-syn');
+  const text = box?.querySelector('.ficha-syn-text');
+  if (!text || box.classList.contains('is-open')) return;
+  box.classList.toggle('is-short', text.scrollHeight <= text.clientHeight + 2);
+}
+
+let lastLoan = null;
+
+function openLoanSheet(id, opener) {
+  const book = state.books.find((b) => b.id === id);
+  if (!book) return;
+  openSheet({
+    id: 'loan', cls: 'sheet-loan', label: esc(`Empréstimo: ${book.title}`),
+    html: loanSheet(book, loanNames(state.books), todayIso()), focus: '#loan-to', opener,
+  });
+}
+
+function saveLoan(form) {
+  const book = state.books.find((b) => b.id === form.dataset.id);
+  if (!book) return;
+  const to = form.querySelector('#loan-to')?.value || '';
+  const since = form.querySelector('#loan-since')?.value || '';
+  const loan = normalizeLoan({ to, since });
+  if (!loan) {
+    toast('Escreva o nome de quem pegou o livro.');
+    form.querySelector('#loan-to')?.focus();
+    return;
+  }
+  if (loan.since && loan.since > todayIso()) {
+    toast('A data do empréstimo não pode estar no futuro.');
+    return;
+  }
+  persist(upsertBook(state, { ...book, loan }).state, `Emprestado para ${loan.to}.`);
+  closeSheet();
+  render();
+}
+
+Object.assign(actions, {
+  'toggle-mood'(el) {
+    if (!ui.draft) return;
+    ui.draft.moods = toggleMood(ui.draft.moods, el.dataset.value);
+    render();
+  },
+  'set-pace'(el) {
+    if (!ui.draft) return;
+    const pace = normalizePace(el.dataset.value);
+    ui.draft.pace = ui.draft.pace === pace ? null : pace;
+    render();
+  },
+  'toggle-criteria'(el) {
+    if (!ui.draft) return;
+    ui.criteriaOpen = { draft: ui.draft, open: el.getAttribute('aria-expanded') !== 'true' };
+    render();
+  },
+  'set-criterion'(el) {
+    if (!ui.draft) return;
+    const id = el.dataset.crit;
+    const n = Number(el.dataset.value);
+    const current = { ...(ui.draft.criteria || {}) };
+    if (current[id] === n) delete current[id];
+    else current[id] = n;
+    ui.draft.criteria = normalizeCriteria(current);
+    ui.criteriaOpen = { draft: ui.draft, open: true };
+    render();
+  },
+  'synopsis-more'(el) {
+    const box = el.closest('.ficha-syn');
+    if (!box) return;
+    const open = !box.classList.contains('is-open');
+    box.classList.toggle('is-open', open);
+    el.setAttribute('aria-expanded', String(open));
+    el.textContent = open ? 'Ler menos' : 'Ler mais';
+    ui.synopsisOpen = open ? el.dataset.id : null;
+  },
+  'loan-open'(el) { openLoanSheet(el.dataset.id, el); },
+  'loan-return'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (!book?.loan) return;
+    lastLoan = { id: book.id, loan: book.loan };
+    persist(upsertBook(state, { ...book, loan: null }).state);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    toast(`Devolvido: "${book.title}".`, { actionLabel: 'Desfazer', action: 'undo-loan-return', duration: 7000 });
+  },
+  'undo-loan-return'() {
+    const book = lastLoan && state.books.find((b) => b.id === lastLoan.id);
+    if (!book || book.loan) return;
+    persist(upsertBook(state, { ...book, loan: lastLoan.loan }).state, `De volta com ${lastLoan.loan.to}.`);
+    lastLoan = null;
+    render();
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest?.('[data-loan-form]');
+  if (!form) return;
+  e.preventDefault();
+  saveLoan(form);
+});
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
 async function boot() {

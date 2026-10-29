@@ -2,6 +2,7 @@
 // Tudo fica no IndexedDB do celular (veja db.js); o backup em arquivo é a cópia de segurança.
 
 import { isIsoDate, yearOf } from './dates.js';
+import { normalizeCriteria, normalizeDescription, normalizeLoan, normalizeMoods, normalizePace } from './book-meta.js';
 
 // Chave usada até a versão 1.2 (localStorage). Os dados são migrados dela na primeira abertura.
 export const STORAGE_KEY = 'leituras:v1';
@@ -219,6 +220,12 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
     targetDate: status === STATUS.READING && isIsoDate(raw.targetDate) ? raw.targetDate : null,
     quotes: normalizeQuotes(raw.quotes, nowTs),
     journal: normalizeJournal(raw.journal),
+    // 1.6 (book-meta.js): humor e ritmo, critérios (só Lido, como a nota), sinopse e empréstimo.
+    moods: normalizeMoods(raw.moods),
+    pace: normalizePace(raw.pace),
+    criteria: status === STATUS.READ ? normalizeCriteria(raw.criteria) : {},
+    description: normalizeDescription(raw.description),
+    loan: normalizeLoan(raw.loan),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : nowTs,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowTs,
   };
@@ -381,6 +388,7 @@ export function startReread(state, id, today, nowTs = new Date().toISOString()) 
     series: original.series,
     seriesNumber: original.seriesNumber,
     tags: original.tags,
+    description: original.description,
     status: STATUS.READING,
     startDate: today,
     reread: true,
