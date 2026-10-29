@@ -935,7 +935,8 @@ button.bar-col:active { background: var(--surface-2); }
 .hbar-btn > span { display: flex; }
 .hbar-btn .hbar-track { display: block; }
 .hbar-btn .hbar-fill { display: block; }
-.hbar-btn.is-empty { opacity: 0.55; }
+.hbar-btn.is-empty .hbar-track { opacity: 0.55; }
+.hbar-btn.is-empty .strong-ish { color: var(--muted); font-weight: 500; }
 .hbar-btn:active .hbar-track { background: var(--line-strong); }
 
 .split-rows { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px 10px; align-items: center; }
@@ -3761,3 +3762,6 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
 :is([data-text-size="grande"], [data-text-size="enorme"]) .ppd { flex-wrap: wrap; }
 :is([data-text-size="grande"], [data-text-size="enorme"]) .ppd-cell { flex: 1 1 7.5em; }
 :is([data-text-size="grande"], [data-text-size="enorme"]) .retro-actions { grid-template-columns: minmax(0, 1fr); }
+
+.chs-foot { display: flex; flex-direction: column; gap: 10px; }
+.chs-foot .chs-error[hidden] { display: none; }

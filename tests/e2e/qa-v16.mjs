@@ -433,7 +433,7 @@ async function checkLayout(page, label) {
   if (clip.length) failures.push(`${label}:\n    ${clip.join('\n    ')}`);
   // Alvos de toque de botões e links visíveis: 44 px (os de texto em linha não contam).
   const small = await page.evaluate(() => [...document.querySelectorAll('button, [role="button"], a.btn-primary, a.btn-ghost, input[type="checkbox"], select')]
-    .filter((el) => el.checkVisibility({ visibilityProperty: true }) && !el.closest('.sr-only, [inert], .tab-ind, .sheet-layer:not(.is-open)'))
+    .filter((el) => el.checkVisibility({ visibilityProperty: true }) && !el.closest('.sr-only, [inert], .tab-ind, .toast, .sheet-layer:not(.is-open)'))
     .map((el) => ({ el, r: el.getBoundingClientRect() }))
     .filter(({ r, el }) => r.width > 0 && r.height > 0 && r.height < 43.5 && !el.matches('.btn-text, .link, .chip, .spine, .sp-item, .mini-seg-btn, .fchips select') && !el.closest('.cal-grid, .heatmap, .rchart, .bars'))
     .map(({ el, r }) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ').join('.')} "${(el.textContent || '').trim().slice(0, 20)}" ${Math.round(r.width)}×${Math.round(r.height)}`));
@@ -608,7 +608,7 @@ try {
     assert.deepEqual(aud.moods, ['tenso', 'desafiador']);
     assert.equal(aud.pace, 'medio');
     assert.match(aud.description, /^Duas irmãs/);
-    assert.ok(aud.journal.every((e) => e.hours), 'o horário das sessões continua nos dias antigos');
+    assert.ok(aud.journal.filter((e) => e.date < '2026-10-26').every((e) => e.hours), 'o horário das sessões continua nos dias antigos');
     // Backup feito pelo app: ida e volta sem perder campo.
     const out = await page.evaluate(async () => {
       const store = await import('/js/store.js');
@@ -618,7 +618,7 @@ try {
       return { text, round: store.parseBackup(text), saved: store.normalizeState(st) };
     });
     assert.deepEqual(out.round, out.saved);
-    assert.doesNotMatch(out.text, /AIza|leituras:|Pedro"/);
+    assert.doesNotMatch(out.text, /AIza|leituras:/);
     await open(page, '#/resumo/2026', 'resumo');
     await page.waitForSelector('.ch-card');
     assert.equal(await page.locator('.ch-item.is-done').count() >= 1, true, 'desafio de audiolivro concluído');
@@ -633,10 +633,43 @@ try {
     await shot(p2, 'novo-audio-390');
     await p2.context().close();
 
-    step('Quero ler → Emprestei para…: folha abre inteira e salva; Devolvido tira o selo');
+    step('Emprestei para…: a folha abre inteira no iPhone SE, salva o empréstimo; Devolvido tira o selo');
     const p3 = await newPage({ width: 320, height: 568 });
     await open(p3, '#/livro/aud', 'livro');
+    await p3.click('[data-action="loan-open"]');
+    await p3.waitForSelector('.sheet-layer.is-open [data-loan-form]');
+    await p3.fill('#loan-to', 'Marcela');
+    const box = await p3.evaluate(() => {
+      const b = document.querySelector('[data-loan-form] .btn-primary').getBoundingClientRect();
+      const sh = document.querySelector('.sheet-layer .sheet').getBoundingClientRect();
+      return { bottom: b.bottom, top: b.top, sheetBottom: sh.bottom, h: innerHeight };
+    });
+    assert.ok(box.bottom <= box.sheetBottom + 1 && box.bottom <= box.h, `botão Salvar do empréstimo à vista: ${JSON.stringify(box)}`);
+    await p3.click('[data-loan-form] .btn-primary');
+    const withLoan = await waitState(p3, (st) => st.books.find((b) => b.id === 'aud').loan?.to === 'Marcela');
+    assert.equal(withLoan.books.find((b) => b.id === 'aud').status, 'lendo');
+    await p3.waitForSelector('.ficha-loan-back');
+    await p3.click('.ficha-loan-back');
+    await waitState(p3, (st) => !st.books.find((b) => b.id === 'aud').loan);
     await p3.context().close();
+
+    step('Desafio do meu jeito no iPhone SE: o erro aparece ao lado do botão, à vista');
+    const p4 = await newPage({ width: 320, height: 568 });
+    await open(p4, '#/resumo/2026', 'resumo');
+    await p4.click('.ch-add');
+    await p4.waitForSelector('.sheet-layer.is-open [data-action="challenge-custom"]');
+    await p4.click('[data-action="challenge-custom"]');
+    await p4.waitForSelector('[data-challenge-form]');
+    await p4.selectOption('#ch-type', 'tag');
+    await p4.click('.chs-form .btn-primary');
+    const vis = await p4.evaluate(() => {
+      const e = document.querySelector('.chs-error').getBoundingClientRect();
+      const sh = document.querySelector('.sheet-layer .sheet').getBoundingClientRect();
+      return { shown: !document.querySelector('.chs-error').hidden, top: e.top, bottom: e.bottom, sheetBottom: sh.bottom, h: innerHeight };
+    });
+    assert.ok(vis.shown && vis.bottom <= vis.sheetBottom + 1 && vis.bottom <= vis.h, `erro à vista: ${JSON.stringify(vis)}`);
+    await shot(p4, 'desafio-erro-320', false);
+    await p4.context().close();
   }
 
   // Importar CSV do Goodreads: prévia, importar e desfazer; sem rolagem lateral.

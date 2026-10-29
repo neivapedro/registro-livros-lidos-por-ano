@@ -184,10 +184,12 @@ export function challengeFormSheet(state, draft, error = '') {
       </div>
       <label class="chs-label" for="ch-title">Nome <span class="chs-optional">(opcional)</span></label>
       <input class="chs-input" id="ch-title" name="title" type="text" maxlength="80" value="${esc(draft.title || '')}" placeholder="${esc(autoTitle({ type: draft.type, value: draft.value || (draft.type === 'pages' ? 500 : '…') }, Number(draft.target) || 1))}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
+      <div class="chs-foot" data-sheet-footer>
       <p class="chs-error" role="alert"${error ? '' : ' hidden'}>${esc(error)}</p>
-      <div class="chs-actions" data-sheet-footer>
+      <div class="chs-actions">
         <button type="button" class="btn-ghost" data-sheet-close>Cancelar</button>
         <button type="submit" class="btn-primary">${isEdit ? 'Salvar' : 'Criar desafio'}</button>
+      </div>
       </div>
       ${isEdit ? `<button type="button" class="btn-text danger chs-delete" data-action="challenge-delete" data-id="${esc(draft.id)}">${icon('trash', { size: 18 })}Excluir desafio</button>` : ''}
     </form>`;
