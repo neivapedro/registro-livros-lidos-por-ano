@@ -459,21 +459,172 @@ const ROUTES = [
   ['inicio', '#/inicio', 'inicio'],
   ['estante-lido', '#/estante?aba=lido', 'estante'],
   ['estante-quero', '#/estante?aba=quero', 'estante'],
-  ['ficha-audio', '#/livro/aud', 'livro'],
-  ['ficha-lido', '#/livro/lido', 'livro'],
-  ['ficha-quero', '#/livro/quero', 'livro'],
-  ['form-audio', '#/livro/aud/editar', 'livro'],
-  ['form-lido', '#/livro/lido/editar', 'livro'],
-  ['novo', '#/novo', 'novo'],
   ['resumo', '#/resumo/2026', 'resumo'],
   ['resumo-ritmo', '#/resumo/2026?aba=ritmo', 'resumo'],
   ['resumo-gostos', '#/resumo/2026?aba=gostos', 'resumo'],
-  ['resumo-todos', '#/resumo/todos', 'resumo'],
-  ['buscar', '#/buscar', 'buscar'],
-  ['trechos', '#/trechos', 'trechos'],
-  ['sugestoes', '#/sugestoes', 'sugestoes'],
-  ['comparar', '#/comparar', 'comparar'],
-  ['ajustes', '#/ajustes', 'ajustes'],
+  ['ficha-lido', '#/livro/lido', 'livro'],
+  ['ficha-lendo', '#/livro/kindle', 'livro'],
+  ['ficha-quero', '#/livro/quero', 'livro'],
   ['cronometro', '#/ler/aud', 'ler'],
-  ['retro', '#/retro/2026', 'retro'],
+  ['ajustes', '#/ajustes', 'ajustes'],
 ];
+const ONLY = process.env.QA_ONLY || '';
+const want = (name) => !ONLY || ONLY === name;
+
+/** Nada atrás da barra de baixo: com a tela rolada até o fim, o último elemento termina acima dela;
+ *  summaries (<details>) com pelo menos 44 px. */
+async function checkEnd(page, label) {
+  await page.evaluate(() => window.scrollTo(0, document.scrollingElement.scrollHeight));
+  await page.waitForTimeout(40);
+  const r = await page.evaluate(() => {
+    const nav = document.getElementById('nav');
+    const navBox = nav && getComputedStyle(nav).display !== 'none' ? nav.getBoundingClientRect() : null;
+    const side = navBox && navBox.width < innerWidth * 0.5; // trilho lateral
+    const app = document.getElementById('app');
+    let bottom = 0;
+    for (const el of app.querySelectorAll(':scope > *')) {
+      const b = el.getBoundingClientRect();
+      if (b.height > 0 && getComputedStyle(el).position !== 'fixed') bottom = Math.max(bottom, b.bottom);
+    }
+    const sums = [...document.querySelectorAll('summary')].filter((s) => s.checkVisibility()).map((s) => Math.round(s.getBoundingClientRect().height));
+    return { navTop: navBox && !side ? navBox.top : null, bottom, h: innerHeight, sums };
+  });
+  if (r.navTop !== null && r.bottom > r.navTop + 1) failures.push(`${label}: conteúdo (${Math.round(r.bottom)}) atrás da barra (${Math.round(r.navTop)})`);
+  if (r.sums.some((h) => h < 44)) failures.push(`${label}: summary < 44px (${r.sums.join(',')})`);
+  await page.evaluate(() => window.scrollTo(0, 0));
+}
+
+try {
+  // Matriz: larguras x temas x cores x escala de texto, todas as telas do polimento.
+  if (want('matriz')) {
+    for (const scale of [1, 1.3]) {
+      for (const scheme of ['light', 'dark']) {
+        for (const accent of ['terracota', 'vinho']) {
+          for (const width of [320, 390, 430]) {
+            const tag = `${scheme}-${accent}-${width}-${scale}`;
+            step(`matriz ${tag}`);
+            const page = await newPage({ width, height: width === 320 ? 640 : 900, scheme, accent, scale });
+            for (const [label, hash, name] of ROUTES) {
+              await open(page, hash, name);
+              await checkLayout(page, `${label} ${tag}`);
+              await checkContrast(page, `${label} ${tag}`, { small: 4.5, large: 3 });
+              await checkEnd(page, `${label} ${tag}`);
+              if (scale === 1 && accent === 'terracota' && width === 390) await shot(page, `${label}-${scheme}-390`);
+              if (scale === 1.3 && accent === 'vinho' && width === 320 && scheme === 'light') await shot(page, `${label}-1.3-320-claro`);
+            }
+            // Resumo com "Ver todos" aberto: ainda sem corte.
+            await open(page, '#/resumo/2026?aba=gostos', 'resumo');
+            await page.evaluate(() => document.querySelectorAll('.rb-more').forEach((d) => { d.open = true; }));
+            await checkLayout(page, `gostos aberto ${tag}`);
+            await page.context().close();
+          }
+        }
+      }
+    }
+    for (const scheme of ['light', 'dark']) {
+      for (const accent of ['oliva', 'petroleo', 'grafite']) {
+        step(`contraste 5 cores: ${scheme} ${accent}`);
+        const page = await newPage({ scheme, accent });
+        for (const [label, hash, name] of ROUTES) {
+          await open(page, hash, name);
+          await checkContrast(page, `${label} ${scheme} ${accent}`, { small: 4.5, large: 3 });
+        }
+        await page.context().close();
+      }
+      step(`contraste aumentado: ${scheme}`);
+      const page = await newPage({ scheme, contrast: 'more' });
+      for (const [label, hash, name] of ROUTES) {
+        await open(page, hash, name);
+        await checkContrast(page, `${label} ${scheme} AAA`, { small: 7, large: 4.5 });
+      }
+      await page.context().close();
+    }
+  }
+
+  if (want('largas')) {
+    for (const [label, width, height] of [['ipad', 820, 1180], ['ipad-deitado', 1180, 820], ['celular-deitado', 844, 390]]) {
+      step(`telas largas: ${label}`);
+      const page = await newPage({ width, height });
+      for (const [rl, hash, name] of ROUTES) {
+        await open(page, hash, name);
+        await checkLayout(page, `${rl} ${label}`);
+        await checkEnd(page, `${rl} ${label}`);
+        if (['inicio', 'resumo-gostos', 'ficha-lido', 'cronometro'].includes(rl)) await shot(page, `${label}-${rl}`, false);
+      }
+      await page.context().close();
+    }
+  }
+
+  if (want('interacoes')) {
+    step('ficha: critérios continuam abertos ao redesenhar (favorito) e o toggle funciona');
+    let page = await newPage();
+    await open(page, '#/livro/lido', 'livro');
+    assert.equal(await page.locator('.ficha-crit').isVisible(), false);
+    await page.click('.ficha-crit-toggle');
+    assert.equal(await page.locator('.ficha-crit').isVisible(), true);
+    await page.click('[data-action="detail-fav"]');
+    await waitState(page, (s) => s.books.find((b) => b.id === 'lido').favorite === false);
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.ficha-crit-wrap').getAttribute('open') !== null, true, 'critérios fecharam ao redesenhar');
+    await page.click('.ficha-crit-toggle');
+    assert.equal(await page.locator('.ficha-crit').isVisible(), false);
+    await page.click('[data-action="detail-fav"]');
+    await page.waitForTimeout(150);
+    assert.equal(await page.locator('.ficha-crit-wrap').getAttribute('open'), null, 'fechado continua fechado');
+    await page.context().close();
+
+    step('Resumo > Gostos: "Ver todos" abre, fecha, e o toque numa linha abre a busca filtrada');
+    page = await newPage();
+    await open(page, '#/resumo/2026?aba=gostos', 'resumo');
+    const more = page.locator('.rb-more').first();
+    assert.equal(await more.getAttribute('open'), null);
+    await more.locator('summary').click();
+    assert.notEqual(await more.getAttribute('open'), null);
+    assert.ok((await more.locator('.rb-row').count()) >= 1);
+    await more.locator('summary').click();
+    assert.equal(await more.getAttribute('open'), null);
+    await page.locator('.rb-list .rb-row[data-action="chart-filter"]').first().click();
+    await onPage(page, 'buscar');
+    await page.context().close();
+
+    step('Cronômetro: volume preenche a trilha ao arrastar; a fileira de sons rola sem quebrar linha');
+    page = await newPage({ width: 320, height: 640 });
+    await open(page, '#/ler/aud', 'ler');
+    const range = page.locator('[data-ambient-volume]');
+    await range.evaluate((el) => { el.value = '20'; el.dispatchEvent(new Event('input', { bubbles: true })); });
+    assert.equal(await range.evaluate((el) => el.style.getPropertyValue('--p')), '0.2');
+    const ox = await page.locator('.amb-chips').evaluate((el) => getComputedStyle(el).overflowX);
+    assert.equal(ox, 'auto');
+    await shot(page, 'cronometro-320-som', false);
+    await page.context().close();
+
+    step('Engrenagem abre Ajustes (cabeçalho e barra compacta)');
+    page = await newPage();
+    await open(page, '#/inicio', 'inicio');
+    await page.locator('#app a[href="#/ajustes"]:visible').first().click();
+    await onPage(page, 'ajustes');
+    await open(page, '#/inicio', 'inicio');
+    await page.evaluate(() => window.scrollTo(0, 600));
+    await page.waitForTimeout(250);
+    const vis = page.locator('#app a[href="#/ajustes"]:visible');
+    assert.ok(await vis.count() >= 1);
+    await vis.first().click();
+    await onPage(page, 'ajustes');
+    await page.context().close();
+  }
+
+  if (failures.length) {
+    console.error(`\n${failures.length} problema(s):`);
+    for (const f of failures) console.error(`- ${f}`);
+    process.exitCode = 1;
+  }
+  assert.deepEqual(errors, [], 'sem erros no console');
+  if (!failures.length) console.log('\nOK: QA 1.6.1');
+} catch (err) {
+  console.error('\nFALHOU:', err.message);
+  if (errors.length) console.error(errors.join('\n'));
+  process.exitCode = 1;
+} finally {
+  await browser.close();
+  server.close();
+}
