@@ -15,7 +15,8 @@ import { normalizeCoverUrl } from './cover-url.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
-import { journalOnSave, recordProgress, unitOf, UNITS } from './journal.js';
+import { journalOnSave, positionField, recordProgress, unitOf } from './journal.js';
+import { fitTimeInput, formatDuration, parseDuration, readTimeInputs, writeTimeInputs } from './audio.js';
 import { renderQuoteImage } from './quote-image.js';
 import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
 import { yearsWithData } from './stats.js';
@@ -196,7 +197,7 @@ function blankDraft(status) {
     startDate: status === STATUS.READING ? today : null,
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
-    currentPage: null, currentPercent: null, dropReason: '', reread: false,
+    currentPage: null, currentPercent: null, currentMin: null, durationMin: null, dropReason: '', reread: false,
     series: '', seriesNumber: null, tags: [], targetDate: null, quotes: [], journal: [],
   };
 }
@@ -697,13 +698,37 @@ function openCoverViewer(src, title) {
 function withProgress(book, value) {
   const unit = unitOf(book);
   const journal = recordProgress(book, value, unit, todayIso());
-  return unit === UNITS.PERCENT ? { ...book, currentPercent: value, journal } : { ...book, currentPage: value, journal };
+  return { ...book, [positionField(unit)]: value, journal };
+}
+
+/** Audiolivro: minutos ouvidos (dos campos h e min, ou texto "5h30"). Chegar ao fim abre o Concluir. */
+function saveAudioProgress(book, raw) {
+  const value = typeof raw === 'number' || raw === null || raw === undefined ? raw ?? null : parseDuration(raw);
+  if (value === null) {
+    toast('Informe quanto já ouviu.');
+    return;
+  }
+  const total = Number(book.durationMin) || 0;
+  if (!Number.isFinite(value) || value < 0 || (total && value > total)) {
+    toast(total ? `Informe um tempo entre 0 e ${formatDuration(total)}.` : 'Informe um tempo válido, em horas e minutos.');
+    return;
+  }
+  ui.editingProgress = null;
+  if (total && value === total) {
+    go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
+    return value;
+  }
+  persist(upsertBook(state, withProgress(book, value)).state, 'Progresso atualizado.');
+  render();
+  closeSheet();
+  return value;
 }
 
 /** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. Devolve o valor aceito (nada se inválido). */
 function saveProgress(bookId, raw) {
   const book = state.books.find((b) => b.id === bookId);
   if (!book) return;
+  if (book.format === FORMATS.AUDIO) return saveAudioProgress(book, raw);
   const text = String(raw ?? '').trim().replace('%', '').replace(',', '.');
   if (text === '') {
     toast(book.format === FORMATS.KINDLE ? 'Informe a porcentagem.' : 'Informe a página.');
@@ -1295,6 +1320,15 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('input', (e) => {
   const t = e.target;
+  // Duração e posição do audiolivro: dois campos (h e min) que viram um total de minutos.
+  if (t.dataset.timePart) fitTimeInput(t);
+  const timeGroup = t.dataset.timePart && ui.draft ? t.closest('[data-time-field]') : null;
+  if (timeGroup) {
+    const minutes = readTimeInputs(timeGroup);
+    ui.draft[timeGroup.dataset.timeField] = Number.isFinite(minutes) ? minutes : null;
+    const summary = document.getElementById('reading-summary');
+    if (summary) summary.innerHTML = readingSummary(ui.draft);
+  }
   if (t.dataset.field && ui.draft) {
     ui.draft[t.dataset.field] = t.type === 'number' ? (t.value === '' ? null : Number(t.value)) : t.value;
     // Atualiza só o resumo (dias, %): redesenhar o formulário tiraria o foco do campo.
@@ -1346,7 +1380,7 @@ document.addEventListener('keydown', (e) => {
     // Livro novo: o Return do teclado não salva (sairia "Lido" com a data de hoje sem querer).
     // Título → Autor → Páginas; nos outros campos só fecha o teclado. Salvar é só pelo botão.
     e.preventDefault();
-    const order = ['f-title', 'f-authors', 'f-pages'];
+    const order = ['f-title', 'f-authors', 'f-pages', 'f-duration', 'f-duration-min'];
     const at = order.indexOf(e.target.id);
     const next = at >= 0 ? document.getElementById(order[at + 1]) : null;
     if (next) next.focus();
@@ -1362,7 +1396,8 @@ document.addEventListener('submit', (e) => {
   const progressForm = e.target.closest('[data-progress-form]');
   if (progressForm) {
     e.preventDefault();
-    saveProgress(progressForm.dataset.id, progressForm.querySelector('input')?.value);
+    const time = progressForm.querySelector('[data-time]');
+    saveProgress(progressForm.dataset.id, time ? readTimeInputs(time) : progressForm.querySelector('#progress-input')?.value);
   }
 });
 
@@ -1717,7 +1752,7 @@ function saveTimerSession(raw) {
   if (!book) return;
   const minutes = sessionMinutes(elapsedMs(ui.session, Date.now()));
   const unit = unitOf(book);
-  const before = (unit === UNITS.PERCENT ? book.currentPercent : book.currentPage) ?? 0;
+  const before = book[positionField(unit)] ?? 0;
   const value = saveProgress(book.id, raw);
   if (value === undefined) return;
   ui.timerStop = null;
@@ -1760,7 +1795,7 @@ Object.assign(actions, {
     ui.timerStop = { resume: !isPaused(ui.session) };
     setSession(pauseSession(ui.session, Date.now()));
     render();
-    const input = document.getElementById('timer-input');
+    const input = document.querySelector('[data-timer-form] [data-time-part="h"]') || document.getElementById('timer-input');
     input?.focus();
     input?.select();
   },
@@ -1781,7 +1816,8 @@ Object.assign(actions, {
 document.addEventListener('submit', (e) => {
   if (!e.target.closest('[data-timer-form]')) return;
   e.preventDefault();
-  saveTimerSession(document.getElementById('timer-input')?.value);
+  const time = e.target.closest('[data-timer-form]').querySelector('[data-time]');
+  saveTimerSession(time ? readTimeInputs(time) : document.getElementById('timer-input')?.value);
 });
 
 window.addEventListener('hashchange', syncWakeLock);
@@ -1828,7 +1864,7 @@ function openProgressSheet(id, opener) {
     cls: 'sheet-progress',
     label: esc(`Registrar leitura: ${book.title}`),
     html: progressSheet(book, todayIso()),
-    focus: '#progress-input',
+    focus: book.format === FORMATS.AUDIO ? '#progress-h' : '#progress-input',
     opener,
     onClose: () => {
       if (ui.progressSheet === id) ui.progressSheet = null;
@@ -1842,16 +1878,18 @@ function openQuickMenu(id, opener) {
   openSheet({ id: 'menu', cls: 'sheet-menu', label: esc(`Ações: ${book.title}`), html: quickMenu(book, state), opener });
 }
 
-/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. */
+/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. Audiolivro: campos h e min. */
 function syncProgressRange(form, fromRange) {
   const range = form.querySelector('#progress-range');
+  const time = form.querySelector('[data-time]');
   const input = form.querySelector('#progress-input');
-  if (!range || !input) return;
+  if (!range || (!input && !time)) return;
   if (fromRange) {
-    input.value = range.value;
+    if (time) writeTimeInputs(time, Number(range.value));
+    else input.value = range.value;
   } else {
-    const v = Number(String(input.value).replace(',', '.'));
-    if (input.value !== '' && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
+    const v = time ? readTimeInputs(time) : input.value === '' ? null : Number(String(input.value).replace(',', '.'));
+    if (v !== null && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
   }
   range.style.setProperty('--fill', `${((Number(range.value) / Number(range.max)) * 100).toFixed(1)}%`);
 }
@@ -1862,13 +1900,16 @@ Object.assign(actions, {
     const form = el.closest('[data-progress-form]');
     const book = state.books.find((b) => b.id === form?.dataset.id);
     const input = form?.querySelector('#progress-input');
-    if (!book || !input) return;
+    const time = form?.querySelector('[data-time]');
+    if (!book || (!input && !time)) return;
     const total = progressTotal(book);
-    const typed = Number(String(input.value).trim().replace(',', '.'));
-    const saved = Number(book.format === FORMATS.KINDLE ? book.currentPercent : book.currentPage) || 0;
-    let next = (input.value.trim() !== '' && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
+    const typed = time ? readTimeInputs(time) : input.value.trim() === '' ? null : Number(String(input.value).trim().replace(',', '.'));
+    const saved = Number(book[positionField(unitOf(book))]) || 0;
+    let next = (typed !== null && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
     if (total) next = Math.min(total, next);
-    input.value = String(Math.max(0, Math.round(next)));
+    next = Math.max(0, Math.round(next));
+    if (time) writeTimeInputs(time, next);
+    else input.value = String(next);
     syncProgressRange(form, false);
   },
   'progress-finish'(el) {
@@ -1893,7 +1934,9 @@ Object.assign(actions, {
 
 document.addEventListener('input', (e) => {
   const form = e.target.closest?.('[data-progress-form]');
-  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input')) syncProgressRange(form, e.target.id === 'progress-range');
+  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input' || e.target.dataset.timePart)) {
+    syncProgressRange(form, e.target.id === 'progress-range');
+  }
 });
 
 initLongPress((el) => {
@@ -2324,8 +2367,10 @@ document.addEventListener('keydown', (e) => {
 // o campo Páginas recebe o foco uma vez por rascunho.
 let askedDraft = null;
 function focusAskedField(route) {
-  if (!isBookEdit(route) || route.query.get('campo') !== 'paginas' || !ui.draft || askedDraft === ui.draft) return;
-  const input = document.getElementById('f-pages');
+  // ?campo=duracao (audiolivro sem duração): o campo de horas da duração.
+  const field = { paginas: 'f-pages', duracao: 'f-duration' }[route.query.get('campo')];
+  if (!isBookEdit(route) || !field || !ui.draft || askedDraft === ui.draft) return;
+  const input = document.getElementById(field);
   if (!input) return;
   askedDraft = ui.draft;
   input.focus({ preventScroll: true });

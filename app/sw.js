@@ -47,6 +47,7 @@ const SHELL = [
   './js/empty-art.js',
   './js/csv.js',
   './js/pace.js',
+  './js/audio.js',
   './js/prefs.js',
   './js/series.js',
   './js/tags.js',

@@ -1,3 +1,4 @@
+import { formatDuration, timeInputs } from '../audio.js';
 import { daysInclusive, formatShort, isIsoDate, yearOf } from '../dates.js';
 import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
 import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags, validateBook } from '../store.js';
@@ -346,7 +347,9 @@ function moreDetails(state, ui, d, isEdit) {
 function periodFields(d) {
   if (d.status === STATUS.WANT) return '';
   const tracksProgress = d.status === STATUS.READING || d.status === STATUS.DROPPED;
-  const progress = !tracksProgress ? '' : d.format === FORMATS.KINDLE
+  const progress = !tracksProgress ? '' : d.format === FORMATS.AUDIO
+    ? `<div class="field field-time"><label for="f-current">${d.status === STATUS.READING ? 'Tempo ouvido' : 'Parei em'}${d.durationMin ? ` (de ${esc(formatDuration(d.durationMin))})` : ''}</label>${timeInputs({ id: 'f-current', value: d.currentMin, attrs: 'data-time-field="currentMin"', label: 'Tempo ouvido' })}</div>`
+    : d.format === FORMATS.KINDLE
     ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
     : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`;
   const finished = d.status === STATUS.READ || d.status === STATUS.DROPPED;
@@ -401,7 +404,8 @@ export function formView({ state, ui, isEdit, today }) {
         <div class="field-stack">
           <div class="field"><label for="f-title">Título</label><input id="f-title"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
           <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
-          <div class="field"><label for="f-pages">Páginas</label><input id="f-pages"${isEdit ? '' : ' enterkeyhint="done"'} type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+          <div class="field"><label for="f-pages">Páginas${d.format === FORMATS.AUDIO ? ' <span class="faint">(do livro impresso, opcional)</span>' : ''}</label><input id="f-pages"${isEdit ? '' : ' enterkeyhint="done"'} type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+          ${d.format === FORMATS.AUDIO ? `<div class="field field-time"><label for="f-duration">Duração do audiolivro</label>${timeInputs({ id: 'f-duration', value: d.durationMin, attrs: 'data-time-field="durationMin"', label: 'Duração do audiolivro' })}</div>` : ''}
         </div>
         <div class="cover-edit">
           ${d.cover

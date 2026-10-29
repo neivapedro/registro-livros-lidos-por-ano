@@ -84,6 +84,10 @@ export function readerProfile({ count, bigBooks = 0, monthsMet = 0, genres = 0, 
   }
   const kindle = formats[FORMATS.KINDLE] || 0;
   const physical = formats[FORMATS.PHYSICAL] || 0;
+  const audio = formats[FORMATS.AUDIO] || 0;
+  if (count && audio / count >= 0.8) {
+    return { id: 'ouvinte', title: 'Bom de ouvido', reason: `${pct(audio / count)}% dos livros em audiolivro.`, rule: '80% ou mais dos livros em audiolivro' };
+  }
   if (count && kindle / count >= 0.8) {
     return { id: 'kindle', title: 'Fiel ao Kindle', reason: `${pct(kindle / count)}% dos livros no Kindle.`, rule: '80% ou mais dos livros no Kindle' };
   }

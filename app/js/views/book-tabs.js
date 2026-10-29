@@ -1,10 +1,11 @@
 // Abas da página do livro: Dados (o formulário de form.js), Diário e Trechos.
 // Diário e Trechos salvam na hora; o formulário de Dados continua com o Salvar do topo.
 
+import { formatDuration } from '../audio.js';
 import { formatShort } from '../dates.js';
 import { diarySummary, entriesNewestFirst, entryDate, entryParts } from '../diary.js';
 import { UNITS } from '../journal.js';
-import { STATUS } from '../store.js';
+import { FORMATS, STATUS } from '../store.js';
 import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
 import { dayLabel, formatMinutes, weekGroups } from '../reading-days.js';
 import { esc, icon, num, plural } from '../ui.js';
@@ -67,6 +68,14 @@ export function bookTabScreen({ state, ui, today }) {
 function diarySummaryTiles(book) {
   const s = diarySummary(book);
   if (!s.days) return '';
+  if (s.unit === UNITS.MINUTE) {
+    return `
+    <section class="tiles tiles-3 diary-summary" aria-label="Resumo do diário">
+      <div class="tile"><span class="tile-value">${num(s.days)}</span><span class="tile-label">${s.days === 1 ? 'dia ouvindo' : 'dias ouvindo'}</span></div>
+      <div class="tile"><span class="tile-value">${esc(formatDuration(s.minutes))}</span><span class="tile-label">ouvidos</span></div>
+      <div class="tile"><span class="tile-value">${esc(formatDuration(s.avg))}</span><span class="tile-label">por dia ouvindo</span></div>
+    </section>`;
+  }
   const percent = s.unit === UNITS.PERCENT;
   return `
     <section class="tiles tiles-3 diary-summary" aria-label="Resumo do diário">
@@ -95,6 +104,12 @@ function diaryRow(book, entry, today) {
     </li>`;
 }
 
+/** Correção de um dia do audiolivro: tempos em texto ("1h 20min", "1:20" ou "80"). */
+function audioTimeFields(book, entry) {
+  const field = (name, label, value) => `<div class="field"><label for="d-${name}">${label}</label><input id="d-${name}" name="${name}" type="text" inputmode="text" autocomplete="off" placeholder="1h 20min" value="${esc(formatDuration(value))}"></div>`;
+  return `<div class="two-cols">${field('from', 'De (tempo)', entry.from)}${field('to', 'Até (tempo)', entry.to)}</div>`;
+}
+
 function diaryForm(book, entry, today) {
   const percent = entry.unit === UNITS.PERCENT;
   const max = percent ? 100 : book.pages || 20000;
@@ -104,10 +119,10 @@ function diaryForm(book, entry, today) {
       <form class="notes-form" data-diary-form data-date="${esc(entry.date)}" novalidate>
         <span class="label">Corrigir registro</span>
         <div class="field"><label for="d-date">Data</label><input id="d-date" name="date" type="date" max="${esc(today)}" value="${esc(entry.date)}"></div>
-        <div class="two-cols">
+        ${entry.unit === UNITS.MINUTE ? audioTimeFields(book, entry) : `<div class="two-cols">
           <div class="field"><label for="d-from">De ${unitLabel}</label><input id="d-from" name="from" type="number" inputmode="numeric" min="0" max="${max}" value="${esc(entry.from)}"></div>
           <div class="field"><label for="d-to">Até ${unitLabel}</label><input id="d-to" name="to" type="number" inputmode="numeric" min="0" max="${max}" value="${esc(entry.to)}"></div>
-        </div>
+        </div>`}
         <div class="field"><label for="d-note">Nota (opcional)</label><input id="d-note" name="note" type="text" maxlength="500" placeholder="Onde leu, o que achou…" value="${esc(entry.note || '')}"></div>
         <div class="notes-form-actions">
           <button type="button" class="btn-text danger" data-action="diary-delete" data-date="${esc(entry.date)}">Excluir</button>
@@ -121,7 +136,7 @@ function diaryForm(book, entry, today) {
 
 function diaryTab(book, ui, today) {
   const entries = entriesNewestFirst(book);
-  const where = quoteUsesPercent(book) ? 'a porcentagem' : 'a página';
+  const where = book.format === FORMATS.AUDIO ? 'o tempo ouvido' : quoteUsesPercent(book) ? 'a porcentagem' : 'a página';
   if (!entries.length) {
     const hint = book.status === STATUS.WANT
       ? `Quando começar a ler, cada vez que você atualizar ${where} no cartão do Início, o dia fica registrado aqui.`
@@ -168,7 +183,7 @@ function diaryWeek(book, week, index, ui, today) {
 function quoteForm(book, quote) {
   const percent = quoteUsesPercent(book);
   const position = percent ? quote?.percent : quote?.page;
-  const posLabel = percent ? 'Posição no Kindle (%)' : `Página${book.pages ? ` (de ${book.pages})` : ''}`;
+  const posLabel = percent ? `Posição no ${book.format === FORMATS.AUDIO ? 'áudio' : 'Kindle'} (%)` : `Página${book.pages ? ` (de ${book.pages})` : ''}`;
   return `
     <form class="card notes-form quote-form" data-quote-form data-id="${esc(quote?.id || '')}" novalidate>
       <span class="label">${quote ? 'Corrigir trecho' : 'Novo trecho'}</span>

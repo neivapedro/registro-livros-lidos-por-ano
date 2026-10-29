@@ -2,8 +2,10 @@
 // O registro automático fica em journal.js; aqui só se lê e se corrige o que já existe.
 // Funções puras: devolvem um diário novo, sem alterar o original.
 
+import { formatDuration, parseDuration } from './audio.js';
 import { formatShort, isIsoDate, yearOf } from './dates.js';
-import { entryPages, UNITS } from './journal.js';
+import { entryPages, positionField, UNITS } from './journal.js';
+import { FORMATS, MAX_AUDIO_MIN } from './store.js';
 
 const nf = new Intl.NumberFormat('pt-BR');
 const num = (n) => nf.format(Math.round(n));
@@ -16,14 +18,26 @@ export function entriesNewestFirst(book) {
 /**
  * Totais do diário: dias que avançaram, páginas e média por dia de leitura.
  * Kindle sem total de páginas: soma os % (pages fica null).
+ * Audiolivro: soma os minutos ouvidos (unit 'minute', avg em minutos por dia).
  */
 export function diarySummary(book) {
   let days = 0;
   let pages = 0;
   let percent = 0;
+  let minutes = 0;
   let unknownPages = false;
-  for (const entry of book.journal || []) {
-    if (entry.to <= entry.from) continue;
+  const advanced = (book.journal || []).filter((e) => e.to > e.from);
+  // Audiolivro (ou diário só em minutos): o resumo é em tempo ouvido.
+  if (advanced.some((e) => e.unit === UNITS.MINUTE)
+    && (book.format === FORMATS.AUDIO || advanced.every((e) => e.unit === UNITS.MINUTE))) {
+    for (const entry of advanced) {
+      days += 1;
+      if (entry.unit === UNITS.MINUTE) minutes += entry.to - entry.from;
+      pages += entryPages(book, entry);
+    }
+    return { days, pages, percent: 0, minutes, avg: days ? Math.round(minutes / days) : 0, unit: UNITS.MINUTE };
+  }
+  for (const entry of advanced) {
     days += 1;
     if (entry.unit === UNITS.PERCENT) {
       percent += entry.to - entry.from;
@@ -46,11 +60,22 @@ export function entryDate(date, today) {
  * Partes do texto de uma entrada:
  * físico  → { range: 'p. 120 → 164', delta: '+44 págs.' }
  * Kindle  → { range: '20% → 45%', delta: '+25%', approx: '≈ 80 págs.' } (approx só com o total de páginas)
+ * Audiolivro → { range: '1h 20min → 2h 5min', delta: '+45 min', approx: '≈ 30 págs.' } (com páginas e duração)
  * Voltou atrás (correção): delta 'correção'.
  */
 export function entryParts(book, entry) {
   const back = entry.to < entry.from;
   const minutes = Number.isFinite(entry.minutes) && entry.minutes > 0 ? `${Math.round(entry.minutes)} min` : '';
+  if (entry.unit === UNITS.MINUTE) {
+    const pages = entryPages(book, entry);
+    return {
+      range: `${formatDuration(entry.from)} → ${formatDuration(entry.to)}`,
+      delta: back ? 'correção' : `+${formatDuration(entry.to - entry.from)}`,
+      approx: !back && pages ? `≈ ${num(pages)} págs.` : '',
+      // O cronômetro, à parte do tempo de áudio (que pode ser acelerado).
+      minutes: minutes ? `${minutes} no cronômetro` : '',
+    };
+  }
   if (entry.unit === UNITS.PERCENT) {
     const pages = entryPages(book, entry);
     return {
@@ -76,7 +101,8 @@ export function entryLine(book, entry, today) {
   return [`${entryDate(entry.date, today)} · ${p.range} (${extra})`, p.minutes].filter(Boolean).join(' · ');
 }
 
-function parseValue(raw) {
+function parseValue(raw, unit) {
+  if (unit === UNITS.MINUTE) return parseDuration(raw);
   const text = String(raw ?? '').trim().replace('%', '').replace(',', '.');
   if (text === '') return null;
   const n = Number(text);
@@ -100,14 +126,21 @@ export function editEntry(book, originalDate, input, today) {
   if (date !== originalDate && journal.some((e) => e.date === date)) {
     return { error: `Já existe um registro em ${formatShort(date)}. Corrija aquele registro ou escolha outra data.` };
   }
-  const from = parseValue(input.from);
-  const to = parseValue(input.to);
+  const from = parseValue(input.from, entry.unit);
+  const to = parseValue(input.to, entry.unit);
   const percent = entry.unit === UNITS.PERCENT;
-  if (from === null || to === null) return { error: percent ? 'Informe as duas porcentagens.' : 'Informe as duas páginas.' };
-  if (Number.isNaN(from) || Number.isNaN(to) || from < 0 || to < 0) {
-    return { error: 'Use números a partir de 0.' };
+  const audio = entry.unit === UNITS.MINUTE;
+  if (from === null || to === null) {
+    return { error: percent ? 'Informe as duas porcentagens.' : audio ? 'Informe os dois tempos.' : 'Informe as duas páginas.' };
   }
-  if (percent) {
+  if (Number.isNaN(from) || Number.isNaN(to) || from < 0 || to < 0) {
+    return { error: audio ? 'Use tempos como 1h 20min ou 1:20.' : 'Use números a partir de 0.' };
+  }
+  if (audio) {
+    const total = Number(book.durationMin) || 0;
+    if (total && (from > total || to > total)) return { error: `O tempo não pode passar de ${formatDuration(total)}, a duração do audiolivro.` };
+    if (from > MAX_AUDIO_MIN || to > MAX_AUDIO_MIN) return { error: 'Tempo grande demais.' };
+  } else if (percent) {
     if (from > 100 || to > 100) return { error: 'A porcentagem vai de 0 a 100.' };
   } else {
     if (!Number.isInteger(from) || !Number.isInteger(to)) return { error: 'Use números inteiros de página.' };
@@ -143,12 +176,12 @@ export function restoreEntry(book, entry) {
  * Posição atual depois de corrigir a última entrada: se o livro estava exatamente
  * no 'to' antigo, passa para o novo (senão o cartão do Início ficaria desatualizado).
  * Recebe o livro ANTES da correção e o diário novo.
- * Devolve o campo a mudar ({ currentPage } ou { currentPercent }) ou {}.
+ * Devolve o campo a mudar ({ currentPage }, { currentPercent } ou { currentMin }) ou {}.
  */
 export function syncPosition(book, before, after, nextJournal) {
   const journal = book.journal || [];
   const last = journal[journal.length - 1];
   if (!last || last.date !== before.date || nextJournal[nextJournal.length - 1] !== after) return {};
-  const field = before.unit === UNITS.PERCENT ? 'currentPercent' : 'currentPage';
+  const field = positionField(before.unit);
   return book[field] === before.to && after.to !== before.to ? { [field]: after.to } : {};
 }

@@ -2,15 +2,16 @@
 // Só exportação: o backup continua sendo o arquivo .json.
 // Padrão do Excel brasileiro: separador ';', vírgula decimal e BOM para os acentos.
 
+import { formatDuration } from './audio.js';
 import { formatBR } from './dates.js';
-import { FORMAT_LABELS, STATUS_LABELS } from './store.js';
+import { FORMAT_LABELS, FORMATS, STATUS_LABELS } from './store.js';
 import { CRITERIA, MOOD_LABELS, PACE_LABELS } from './book-meta.js';
 
 export const CSV_SEPARATOR = ';';
 const BOM = '﻿';
 
 export const CSV_COLUMNS = [
-  'Título', 'Autor(es)', 'Status', 'Formato', 'Gênero', 'Etiquetas', 'Série', 'Nº', 'Páginas',
+  'Título', 'Autor(es)', 'Status', 'Formato', 'Gênero', 'Etiquetas', 'Série', 'Nº', 'Páginas', 'Duração',
   'Início', 'Término', 'Nota', 'Favorito', 'Releitura', 'Abandonado por', 'ISBN', 'Anotações',
   // 1.6: humor e ritmo, critérios, sinopse e empréstimo (no fim, para não mudar as colunas de antes).
   'Humor', 'Ritmo', ...CRITERIA.map((c) => c.label), 'Sinopse', 'Emprestado para', 'Emprestado desde',
@@ -44,6 +45,8 @@ export function bookCsvRow(book) {
     book.series || '',
     decimalBR(book.seriesNumber),
     book.pages ?? '',
+    // Duração do audiolivro: "9h 45min" (vazio nos outros formatos).
+    book.format === FORMATS.AUDIO && book.durationMin ? formatDuration(book.durationMin) : '',
     formatBR(book.startDate),
     formatBR(book.endDate),
     decimalBR(book.rating),

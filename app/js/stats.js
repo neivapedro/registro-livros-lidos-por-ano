@@ -1,7 +1,7 @@
 // Cálculos dos indicadores. Funções puras: recebem os livros e devolvem números.
 
 import { daysElapsedInYear, daysInclusive, monthOf, yearOf } from './dates.js';
-import { pagesReadInYear } from './journal.js';
+import { minutesListenedInYear, pagesReadInYear } from './journal.js';
 import { STATUS, FORMATS } from './store.js';
 
 export function readBooks(books) {
@@ -31,6 +31,40 @@ function ranking(map) {
     .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'pt-BR'));
 }
 
+/** Contagem por formato, todos começando em zero (físico, Kindle, audiolivro). */
+export function emptyFormats() {
+  return Object.fromEntries(Object.values(FORMATS).map((f) => [f, 0]));
+}
+
+/**
+ * Formatos usados, na ordem físico → Kindle → audiolivro, com o % de cada um.
+ * Os % somam 100 (maiores restos: 1 de 8 e 7 de 8 não viram 13% + 88%).
+ * Devolve [{ format, count, pct }] só com os formatos que têm livros.
+ */
+export function formatShares(formats) {
+  const list = Object.values(FORMATS).map((format) => ({ format, count: formats[format] || 0 })).filter((f) => f.count > 0);
+  const total = list.reduce((s, f) => s + f.count, 0);
+  if (!total) return [];
+  const raw = list.map((f) => (f.count * 100) / total);
+  const pcts = raw.map(Math.floor);
+  let left = 100 - pcts.reduce((s, n) => s + n, 0);
+  const order = raw.map((r, i) => [r - Math.floor(r), i]).sort((a, b) => b[0] - a[0] || a[1] - b[1]);
+  for (const [, i] of order) {
+    if (left <= 0) break;
+    pcts[i] += 1;
+    left -= 1;
+  }
+  return list.map((f, i) => ({ ...f, pct: pcts[i] }));
+}
+
+/** "3 físicos · 2 no Kindle" (e "· 1 audiolivro" quando houver). */
+export function formatsText(formats) {
+  const n = (f) => formats[f] || 0;
+  const parts = [`${n(FORMATS.PHYSICAL)} ${n(FORMATS.PHYSICAL) === 1 ? 'físico' : 'físicos'}`, `${n(FORMATS.KINDLE)} no Kindle`];
+  if (n(FORMATS.AUDIO)) parts.push(`${n(FORMATS.AUDIO)} ${n(FORMATS.AUDIO) === 1 ? 'audiolivro' : 'audiolivros'}`);
+  return parts.join(' · ');
+}
+
 function average(values) {
   return values.length ? values.reduce((s, v) => s + v, 0) / values.length : null;
 }
@@ -46,7 +80,7 @@ export function yearStats(books, year, goal, today) {
     .map((b) => daysInclusive(b.startDate, b.endDate));
 
   const byMonth = Array(12).fill(0);
-  const formats = { [FORMATS.PHYSICAL]: 0, [FORMATS.KINDLE]: 0 };
+  const formats = emptyFormats();
   const genres = new Map();
   const authors = new Map();
   for (const b of read) {
@@ -68,6 +102,8 @@ export function yearStats(books, year, goal, today) {
     // Livros concluídos no ano com nº de páginas (os sem nº não somam páginas).
     pagesKnown: read.filter((b) => b.pages).length,
     pagesPerDay: daysElapsed > 0 ? pages / daysElapsed : 0,
+    // Minutos ouvidos em audiolivros no ano (contam à parte das páginas).
+    listened: minutesListenedInYear(books, year),
     avgRating: average(ratings),
     avgDays: average(durations),
     favorite: read.find((b) => b.favorite) || null,
@@ -188,7 +224,7 @@ export function allTimeStats(books, today) {
   const perYear = new Map();
   const genres = new Map();
   const authors = new Map();
-  const formats = { [FORMATS.PHYSICAL]: 0, [FORMATS.KINDLE]: 0 };
+  const formats = emptyFormats();
   for (const b of read) {
     const y = yearOf(b.endDate);
     perYear.set(y, (perYear.get(y) || 0) + 1);
@@ -203,6 +239,7 @@ export function allTimeStats(books, today) {
   return {
     count: read.length,
     pages: pagesAllTime(books),
+    listened: minutesListenedInYear(books, null),
     avgRating: average(read.map((b) => b.rating).filter((r) => r)),
     // Média dos anos já encerrados; no primeiro ano, o próprio ano em andamento.
     avgPerYear: years.length > 1

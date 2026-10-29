@@ -7,8 +7,9 @@ import {
   ratingDistribution,
 } from '../charts.js';
 import { monthInitial, monthName, monthOf, yearOf } from '../dates.js';
-import { FORMATS, getGoal, getPageGoal } from '../store.js';
-import { yearStats, yearsWithData } from '../stats.js';
+import { formatDuration } from '../audio.js';
+import { FORMAT_LABELS, FORMATS, getGoal, getPageGoal } from '../store.js';
+import { formatShares, yearStats, yearsWithData } from '../stats.js';
 import { ratingWindow } from '../trend.js';
 import { decimal, esc, formatRating, icon, num, plural } from '../ui.js';
 
@@ -63,28 +64,51 @@ export function pagesMonthLegend(state, year) {
 
 // ---------- Formato: uma barra só, com rótulo direto ----------
 
+// Cor de cada formato na barra (split-*) e na legenda (dot-*): físico, Kindle e audiolivro.
+export const FORMAT_SWATCH = { [FORMATS.PHYSICAL]: 'a', [FORMATS.KINDLE]: 'b', [FORMATS.AUDIO]: 'c' };
+
+/** Lado da legenda pela posição: a primeira à esquerda, a última à direita, a do meio no centro. */
+export function legendSide(i, n) {
+  if (i === 0 || n === 1) return 'a';
+  return i === n - 1 ? 'b' : 'm';
+}
+
+/** Barra de formatos (uma faixa por formato usado) e o texto para leitores de tela. */
+export function formatBar(shares, formats) {
+  const parts = shares.map((f) => `<span class="split-${FORMAT_SWATCH[f.format]}" style="flex:${f.count}"></span>`).join('');
+  return `<div class="fmt-bar" role="img" aria-label="${esc(formatsAria(formats))}">${parts}</div>`;
+}
+
+/** "3 físicos e 2 no Kindle" (com "e 1 audiolivro" quando houver). */
+function formatsAria(formats) {
+  const out = [`${formats[FORMATS.PHYSICAL] || 0} físicos`, `${formats[FORMATS.KINDLE] || 0} no Kindle`];
+  if (formats[FORMATS.AUDIO]) out.push(plural(formats[FORMATS.AUDIO], 'audiolivro', 'audiolivros'));
+  return out.length > 2 ? `${out.slice(0, -1).join(', ')} e ${out[out.length - 1]}` : out.join(' e ');
+}
+
 export function formatCard(state, s) {
   if (!s.count) return '';
-  const phys = s.formats[FORMATS.PHYSICAL];
-  const kin = s.formats[FORMATS.KINDLE];
   const pages = pagesByFormat(state.books, s.year);
-  // Os dois % somam 100 (1 de 8 e 7 de 8 não viram 13% + 88%).
-  const pct = (n) => (n === kin && phys ? 100 - Math.round((phys / s.count) * 100) : Math.round((n / s.count) * 100));
-  const label = (format, side, name, books, pg) => `
-    <button type="button" class="fmt-label fmt-${side}" ${tapAttrs(s.year, 'format', format, `${name}: ${plural(books, 'livro', 'livros')}, ${num(pg)} páginas. Ver livros`)}>
-      <span class="fmt-name"><span class="dot ${side === 'a' ? 'dot-a' : 'dot-b'}"></span>${name} <span class="fmt-pct">${pct(books)}%</span></span>
-      <span class="fmt-detail">${plural(books, 'livro', 'livros')}${pg ? ` · ${num(pg)} págs.` : ''}</span>
+  const shares = formatShares(s.formats);
+  const label = (f, i) => {
+    const name = FORMAT_LABELS[f.format];
+    const pg = pages[f.format];
+    // Audiolivro: as horas ouvidas no ano no lugar das páginas.
+    const extra = f.format === FORMATS.AUDIO
+      ? (s.listened ? `${formatDuration(s.listened)} ouvidas` : '')
+      : (pg ? `${num(pg)} págs.` : '');
+    const aria = `${name}: ${plural(f.count, 'livro', 'livros')}${f.format === FORMATS.AUDIO ? (extra ? `, ${extra}` : '') : `, ${num(pg)} páginas`}. Ver livros`;
+    return `
+    <button type="button" class="fmt-label fmt-${legendSide(i, shares.length)}" ${tapAttrs(s.year, 'format', f.format, aria)}>
+      <span class="fmt-name"><span class="dot dot-${FORMAT_SWATCH[f.format]}"></span>${name} <span class="fmt-pct">${f.pct}%</span></span>
+      <span class="fmt-detail">${plural(f.count, 'livro', 'livros')}${extra ? ` · ${extra}` : ''}</span>
     </button>`;
+  };
   return `
     <section class="card fmt-card">
       <h2>Formato</h2>
-      <div class="fmt-bar" role="img" aria-label="${esc(`${phys} físicos e ${kin} no Kindle`)}">
-        ${phys ? `<span class="split-a" style="flex:${phys}"></span>` : ''}${kin ? `<span class="split-b" style="flex:${kin}"></span>` : ''}
-      </div>
-      <div class="fmt-labels split-legend-tap">
-        ${phys ? label(FORMATS.PHYSICAL, 'a', 'Físico', phys, pages[FORMATS.PHYSICAL]) : ''}
-        ${kin ? label(FORMATS.KINDLE, 'b', 'Kindle', kin, pages[FORMATS.KINDLE]) : ''}
-      </div>
+      ${formatBar(shares, s.formats)}
+      <div class="fmt-labels split-legend-tap${shares.length > 2 ? ' is-3' : ''}">${shares.map(label).join('')}</div>
     </section>`;
 }
 

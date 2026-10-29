@@ -64,12 +64,11 @@ export function pagesByMonth(books, year) {
   return months;
 }
 
-/** Páginas lidas no ano por formato. */
+/** Páginas lidas no ano por formato (audiolivro: as "páginas equivalentes", com páginas e duração). */
 export function pagesByFormat(books, year) {
-  return {
-    [FORMATS.PHYSICAL]: pagesReadInYear(books.filter((b) => b.format !== FORMATS.KINDLE), year),
-    [FORMATS.KINDLE]: pagesReadInYear(books.filter((b) => b.format === FORMATS.KINDLE), year),
-  };
+  const known = Object.values(FORMATS);
+  const of = (f) => books.filter((b) => (f === FORMATS.PHYSICAL ? !known.includes(b.format) || b.format === f : b.format === f));
+  return Object.fromEntries(known.map((f) => [f, pagesReadInYear(of(f), year)]));
 }
 
 // ---------- Filtros vindos dos gráficos ----------

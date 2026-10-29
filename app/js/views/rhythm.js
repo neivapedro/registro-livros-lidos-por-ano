@@ -2,17 +2,20 @@
 // na escala do tempo. Só HTML/CSS (barras em flex, altura proporcional ao máximo).
 // Tocar no gráfico mostra o dia mais próximo na linha de baixo (main.js, sem redesenhar).
 
+import { formatDuration } from '../audio.js';
 import { UNITS } from '../journal.js';
 import { dayLabel, formatMinutes, rhythmSeries } from '../reading-days.js';
 import { decimal, esc, num } from '../ui.js';
 
-/** "44 págs.", "1 pág.", "12%". */
+/** "44 págs.", "1 pág.", "12%", "1h 5min". */
 export function amountText(value, unit) {
   if (unit === UNITS.PERCENT) return `${num(value)}%`;
+  if (unit === UNITS.MINUTE) return formatDuration(value);
   return `${num(value)} ${Math.round(value) === 1 ? 'pág.' : 'págs.'}`;
 }
 
 function perDayText(avg, unit) {
+  if (unit === UNITS.MINUTE) return `${formatDuration(avg)}/dia`;
   const n = avg >= 10 || Number.isInteger(avg) ? num(avg) : decimal(avg, 1).replace(/,0$/, '');
   return unit === UNITS.PERCENT ? `${n}%/dia` : `${n} ${avg > 1 ? 'págs.' : 'pág.'}/dia`;
 }
@@ -20,7 +23,8 @@ function perDayText(avg, unit) {
 /** Texto padrão da linha de baixo: dias, média e cronômetro. */
 function summaryLine(s) {
   const parts = [];
-  if (s.days) parts.push(`${s.days} ${s.days === 1 ? 'dia' : 'dias'} de leitura`, `média ${perDayText(s.avg, s.unit)}`);
+  const what = s.unit === UNITS.MINUTE ? 'ouvindo' : 'de leitura';
+  if (s.days) parts.push(`${s.days} ${s.days === 1 ? 'dia' : 'dias'} ${what}`, `média ${perDayText(s.avg, s.unit)}`);
   if (s.minutes) parts.push(`${formatMinutes(s.minutes)} cronometradas`);
   return parts.join(' · ') || 'Sem avanço registrado ainda';
 }
@@ -39,7 +43,7 @@ function barTip(bar, s, today) {
 export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = false, hint = false, footer = '' } = {}) {
   const s = rhythmSeries(book);
   if (!s) return '';
-  const unitWord = s.unit === UNITS.PERCENT ? '% lidos' : 'páginas';
+  const unitWord = { [UNITS.PERCENT]: '% lidos', [UNITS.MINUTE]: 'tempo ouvido' }[s.unit] || 'páginas';
   const range = s.first === s.last ? dayLabel(s.first, today) : `${dayLabel(s.first, today)} → ${dayLabel(s.last, today)}`;
   const max = s.max || 1;
   const dense = s.bars.length > 40;
@@ -59,7 +63,7 @@ export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = fa
     <section class="rchart${tall ? ' is-tall' : ''}" data-rchart>
       <div class="rchart-head">
         <h2 class="rchart-title">${esc(title)}</h2>
-        <span class="rchart-range">${s.unit === UNITS.PERCENT ? '%' : 'págs.'} por ${s.step === 'week' ? 'semana' : 'dia'}</span>
+        <span class="rchart-range">${{ [UNITS.PERCENT]: '%', [UNITS.MINUTE]: 'min' }[s.unit] || 'págs.'} por ${s.step === 'week' ? 'semana' : 'dia'}</span>
       </div>
       <div class="rchart-plot" role="img" aria-label="${esc(label)}">
         <span class="rchart-max" aria-hidden="true">${esc(amountText(s.max, s.unit))}</span>
