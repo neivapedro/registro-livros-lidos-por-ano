@@ -105,7 +105,8 @@ const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const isOpen = () => page.getAttribute('[data-action="toggle-more"]', 'aria-expanded').then((v) => v === 'true');
 const saveBtn = '.form-actions .btn-primary';
-const strip = (b) => ({ ...b, updatedAt: null });
+// Campos novos da 1.6 (audiolivro) entram como null nos livros antigos: não é mudança de dado.
+const strip = (b) => ({ durationMin: null, currentMin: null, ...b, updatedAt: null });
 
 async function seedAndOpen(hash) {
   await page.goto(`${BASE}#/inicio`);
