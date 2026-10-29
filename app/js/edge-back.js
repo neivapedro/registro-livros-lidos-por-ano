@@ -83,6 +83,8 @@ function begin() {
   document.body.append(under);
   // A barra compacta (position: fixed dentro da tela) fica onde estava enquanto a tela anda.
   el.style.setProperty('--edge-top', `${-box.top}px`);
+  // Se a página ainda rola por inércia durante o gesto, a barra compacta acompanha.
+  addEventListener('scroll', syncTop, { passive: true });
   el.style.setProperty('--edge-m', `${Math.max(0, box.left)}px`);
   el.style.transition = 'none';
   document.body.classList.add('edge-back');
@@ -100,6 +102,11 @@ function paintUnder(p) {
   drag.dim.style.opacity = (1 - p).toFixed(3);
 }
 
+function syncTop() {
+  const el = app();
+  el.style.setProperty('--edge-top', `${-el.getBoundingClientRect().top}px`);
+}
+
 function paint() {
   if (!drag) return;
   drag.frame = 0;
@@ -114,6 +121,7 @@ function cleanup() {
   el.style.transform = '';
   el.style.removeProperty('--edge-top');
   el.style.removeProperty('--edge-m');
+  removeEventListener('scroll', syncTop);
   document.body.classList.remove('edge-back');
   for (const u of document.querySelectorAll('.edge-under')) u.remove();
   busy = false;

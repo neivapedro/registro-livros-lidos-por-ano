@@ -118,7 +118,7 @@ const shot = async (name) => {
 // ---------- Toques de verdade ----------
 
 const touchAt = (type, x, y) => cdp.send('Input.dispatchTouchEvent', { type, touchPoints: type === 'touchEnd' ? [] : [{ x, y, id: 1 }] });
-const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
+const frame = () => page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => r())))));
 
 /** Arrasta de (x0, y0) a (x1, y1) em `steps` passos; end: false deixa o dedo na tela. */
 async function drag(x0, y0, x1, y1, { steps = 14, stepMs = 16, end = true, holdMs = 0 } = {}) {
@@ -143,9 +143,8 @@ async function drag(x0, y0, x1, y1, { steps = 14, stepMs = 16, end = true, holdM
  * gesto, por exemplo); um toque simples o encerra, como um toque novo encerra o embalo no iPhone.
  */
 async function calm() {
-  const b = await page.locator('#app h1').first().boundingBox();
-  await touchAt('touchStart', b.x + 4, b.y + b.height / 2);
-  await touchAt('touchEnd', b.x + 4, b.y + b.height / 2);
+  await touchAt('touchStart', 200, 420);
+  await touchAt('touchEnd', 200, 420);
   await page.waitForTimeout(120);
 }
 
@@ -264,10 +263,10 @@ try {
   await page.goto(`${BASE}#/resumo/todos`);
   await onPage('resumo');
   await page.waitForTimeout(200);
-  await calm();
   await page.evaluate(() => window.scrollTo(0, 500));
   await page.waitForFunction(() => document.querySelector('#app .cbar.is-on'));
   await page.waitForTimeout(300);
+  await calm();
   const scrolled = await page.evaluate(() => window.scrollY);
   assert.ok(scrolled > 300, `a tela rolou (${scrolled})`);
   const barBefore = await page.locator('#app .cbar').boundingBox();
@@ -281,12 +280,13 @@ try {
     await touchAt('touchMove', 110, 400);
     await page.waitForTimeout(40);
   }
+  const beforeRelease = await page.evaluate(() => window.scrollY);
   await touchAt('touchEnd', 110, 400);
   await page.waitForTimeout(450);
   await settled();
   assert.equal(await page.evaluate(() => location.hash), '#/resumo/todos', 'soltou antes de 35%: fica');
   const scrolledAfter = await page.evaluate(() => window.scrollY);
-  assert.ok(Math.abs(scrolledAfter - scrolled) < 2, `a rolagem não mudou (${scrolled} → ${scrolledAfter})`);
+  assert.ok(Math.abs(scrolledAfter - beforeRelease) < 2, `soltar não mexe na rolagem (${beforeRelease} → ${scrolledAfter})`);
   await drag(6, 400, 300, 400);
   await onPage('inicio');
   await settled();

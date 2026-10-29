@@ -21,7 +21,7 @@ const FOCUSABLE = 'a[href], button:not([disabled]), input:not([disabled]):not([t
 // De onde dá para puxar a folha para baixo (o resto rola normalmente).
 const DRAG_AREA = '[data-sheet-grab], [data-sheet-drag]';
 // Nunca começam um arrasto da folha (o toque é deles).
-const NO_DRAG = 'button, a, input, select, textarea, label, [contenteditable], [data-no-sheet-drag]';
+const NO_DRAG = 'button, a, input, select, textarea, [contenteditable], [data-no-sheet-drag]';
 // Menu com prévia: tela mínima (celular deitado usa a folha comum).
 const CONTEXT_MIN = { w: 300, h: 440 };
 
