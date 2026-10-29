@@ -55,6 +55,7 @@ test('normalizeGoogleVolume', () => {
     isbn: '9788521315315',
     year: 2014,
     lang: '',
+    description: '',
   });
   assert.equal(normalizeGoogleVolume({ volumeInfo: {} }), null);
   assert.equal(normalizeGoogleVolume({ id: 'x', volumeInfo: { title: 'Sem capa' } }).cover, null);
@@ -70,6 +71,8 @@ test('normalizeOpenLibraryDoc', () => {
     cover: 'https://covers.openlibrary.org/b/id/8231856-M.jpg',
     isbn: '9780884271956',
     year: 1984,
+    description: '',
+    workKey: '/works/OL123W',
   });
   assert.equal(normalizeOpenLibraryDoc({}), null);
 });
@@ -106,6 +109,7 @@ test('normalizeBrasilApiBook', () => {
     cover: 'https://exemplo.com/capa.jpg',
     isbn: '9788521315315',
     year: 2014,
+    description: '',
   });
   assert.equal(normalizeBrasilApiBook({}), null);
 });

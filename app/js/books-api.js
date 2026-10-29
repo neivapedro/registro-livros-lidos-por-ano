@@ -11,6 +11,7 @@
 // Buscas repetidas na mesma sessão saem da memória, sem consultar a rede de novo.
 
 import { normalizeCoverUrl } from './cover-url.js';
+import { descriptionFromSource } from './book-meta.js';
 
 const GOOGLE_URL = 'https://www.googleapis.com/books/v1/volumes';
 const OPEN_LIBRARY_URL = 'https://openlibrary.org/search.json';
@@ -119,8 +120,11 @@ export function normalizeGoogleVolume(item) {
     isbn: pickIsbn(ids),
     year: info.publishedDate ? Number(String(info.publishedDate).slice(0, 4)) || null : null,
     lang: String(info.language || '').toLowerCase(),
+    description: descriptionFromSource(info.description),
   };
 }
+
+const WORK_KEY_RE = /^\/works\/OL\d+W$/;
 
 /**
  * A Open Library organiza por obra (título original, quase sempre em inglês).
@@ -143,6 +147,9 @@ export function normalizeOpenLibraryDoc(doc) {
     cover: coverId ? `https://covers.openlibrary.org/b/id/${coverId}-M.jpg` : null,
     isbn: pickIsbn(src.isbn) || (useEdition ? '' : pickIsbn(doc.isbn)),
     year: doc.first_publish_year || null,
+    // A busca não traz a sinopse; ela vem da obra, consultada só ao escolher o livro (fetchWorkDescription).
+    description: '',
+    workKey: WORK_KEY_RE.test(doc.key || '') ? doc.key : '',
   };
 }
 
@@ -166,6 +173,7 @@ export function normalizeBrasilApiBook(data, fallbackIsbn = '') {
     cover: toHttps(data.cover_url) || (isbn ? openLibraryCoverByIsbn(isbn) : null),
     isbn,
     year: year > 0 ? year : null,
+    description: descriptionFromSource(data.synopsis),
   };
 }
 
@@ -368,4 +376,19 @@ export async function searchBooks(query, { fetchImpl = fetch, signal, googleKey 
   // Só guarda resposta completa: se alguma fonte falhou, a próxima tentativa consulta de novo.
   if (!outcome.partial) remember(key, outcome);
   return { results: outcome.results, failed: outcome.failed, isbn };
+}
+
+/**
+ * Sinopse da obra na Open Library (/works/OL…W.json), pedida só quando a pessoa escolhe o
+ * livro: a busca não traz esse campo e pedir para cada resultado deixaria a lista lenta.
+ * Devolve '' se não houver, demorar ou falhar.
+ */
+export async function fetchWorkDescription(workKey, { fetchImpl = fetch, signal, timeoutMs = SOURCE_TIMEOUT_MS } = {}) {
+  if (!WORK_KEY_RE.test(String(workKey || ''))) return '';
+  try {
+    const data = await getJson(fetchImpl, `https://openlibrary.org${workKey}.json`, { signal, timeoutMs });
+    return descriptionFromSource(data?.description);
+  } catch {
+    return '';
+  }
 }

@@ -1,3 +1,4 @@
+import { formatDuration, timeInputs } from '../audio.js';
 import { daysInclusive, formatShort, isIsoDate, yearOf } from '../dates.js';
 import { formatSeriesNumber, seriesInfo, seriesNames } from '../series.js';
 import { FORMAT_LABELS, FORMATS, STATUS, STATUS_LABELS, allGenres, allTags, validateBook } from '../store.js';
@@ -5,6 +6,8 @@ import { hasTag } from '../tags.js';
 import { AI_MONTHLY_LIMIT, aiLimitReached } from '../prefs.js';
 import { cover, esc, formatRating, icon, plural, progressOf, ratingLabel, starIcon } from '../ui.js';
 import { bookTabBar, bookTabScreen, storedBook } from './book-tabs.js';
+import { criteriaBlock, descriptionField, moodFields } from './meta-ui.js';
+import { PACE_LABELS } from '../book-meta.js';
 
 function segmented(options, current, action, label, cls = '') {
   const buttons = options.map(([value, text]) => `
@@ -231,7 +234,8 @@ const filled = (v) => v !== null && v !== undefined && String(v).trim() !== '';
 /** Algum campo de "Mais detalhes" (dos que aparecem neste status) está preenchido? */
 export function detailsFilled(d) {
   return filled(d.genre) || filled(d.series) || filled(d.seriesNumber) || (d.tags || []).length > 0
-    || filled(d.notes)
+    || filled(d.notes) || filled(d.description)
+    || (d.status !== STATUS.WANT && ((d.moods || []).length > 0 || filled(d.pace)))
     || (d.status === STATUS.READING && filled(d.targetDate))
     || (d.status === STATUS.READ && d.favorite === true);
 }
@@ -261,11 +265,17 @@ export function detailsSummary(d) {
   if (filled(d.series)) parts.push(filled(d.seriesNumber) ? `${d.series} nº ${formatSeriesNumber(d.seriesNumber)}` : d.series);
   const tags = (d.tags || []).length;
   if (tags) parts.push(plural(tags, 'etiqueta', 'etiquetas'));
+  const moods = d.status === STATUS.WANT ? 0 : (d.moods || []).length;
+  if (moods) parts.push(plural(moods, 'humor', 'humores'));
+  if (d.status !== STATUS.WANT && PACE_LABELS[d.pace]) parts.push(`ritmo ${PACE_LABELS[d.pace].toLowerCase()}`);
   if (d.status === STATUS.READING && isIsoDate(d.targetDate)) parts.push(`terminar até ${formatShort(d.targetDate)}`);
   if (d.status === STATUS.READ && d.favorite) parts.push('favorito');
+  if (filled(d.description)) parts.push('com sinopse');
   if (filled(d.notes)) parts.push(d.status === STATUS.DROPPED ? 'com observações' : 'com anotações');
   if (parts.length) return parts.map(esc).join(' · ');
   const hints = ['Gênero', 'série', 'etiquetas'];
+  if (d.status !== STATUS.WANT) hints.push('humor');
+  hints.push('sinopse');
   if (d.status === STATUS.READING) hints.push('data alvo');
   if (d.status === STATUS.READ) hints.push('favorito');
   hints.push(d.status === STATUS.DROPPED ? 'observações' : 'anotações');
@@ -320,8 +330,10 @@ function moreDetails(state, ui, d, isEdit) {
             ${genreField(state, ui, d)}
             ${seriesFields(state, d, isEdit)}
             ${tagsField(state, ui, d)}
+            ${d.status === STATUS.WANT ? '' : moodFields(d)}
             ${d.status === STATUS.READING ? `<section class="field-group">${targetDateField(d)}</section>` : ''}
             ${d.status === STATUS.READ ? favoriteToggle(d) : ''}
+            ${descriptionField(d)}
             <section class="field-group">
               <label class="label" for="f-notes">${d.status === STATUS.DROPPED ? 'Observações' : 'Anotações'}</label>
               <textarea id="f-notes" rows="5" maxlength="10000" placeholder="Ideias, citações, o que ficou do livro…" data-field="notes">${esc(d.notes)}</textarea>
@@ -335,7 +347,9 @@ function moreDetails(state, ui, d, isEdit) {
 function periodFields(d) {
   if (d.status === STATUS.WANT) return '';
   const tracksProgress = d.status === STATUS.READING || d.status === STATUS.DROPPED;
-  const progress = !tracksProgress ? '' : d.format === FORMATS.KINDLE
+  const progress = !tracksProgress ? '' : d.format === FORMATS.AUDIO
+    ? `<div class="field field-time"><label for="f-current">${d.status === STATUS.READING ? 'Tempo ouvido' : 'Parei em'}${d.durationMin ? ` (de ${esc(formatDuration(d.durationMin))})` : ''}</label>${timeInputs({ id: 'f-current', value: d.currentMin, attrs: 'data-time-field="currentMin"', label: 'Tempo ouvido' })}</div>`
+    : d.format === FORMATS.KINDLE
     ? `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Progresso no Kindle (%)' : 'Parei em (%)'}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="100" value="${esc(d.currentPercent ?? '')}" data-field="currentPercent"></div>`
     : `<div class="field"><label for="f-current">${d.status === STATUS.READING ? 'Página atual' : 'Parei na página'}${d.pages ? ` (de ${d.pages})` : ''}</label><input id="f-current" type="number" inputmode="numeric" min="0" max="${d.pages || 20000}" value="${esc(d.currentPage ?? '')}" data-field="currentPage"></div>`;
   const finished = d.status === STATUS.READ || d.status === STATUS.DROPPED;
@@ -390,7 +404,8 @@ export function formView({ state, ui, isEdit, today }) {
         <div class="field-stack">
           <div class="field"><label for="f-title">Título</label><input id="f-title"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.title)}" data-field="title" required></div>
           <div class="field"><label for="f-authors">Autor(es)</label><input id="f-authors"${isEdit ? '' : ' enterkeyhint="next"'} type="text" maxlength="300" value="${esc(d.authors)}" data-field="authors" placeholder="Separe vários com vírgula"></div>
-          <div class="field"><label for="f-pages">Páginas</label><input id="f-pages"${isEdit ? '' : ' enterkeyhint="done"'} type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+          <div class="field"><label for="f-pages">Páginas${d.format === FORMATS.AUDIO ? ' <span class="faint">(do livro impresso, opcional)</span>' : ''}</label><input id="f-pages"${isEdit ? '' : ' enterkeyhint="done"'} type="number" inputmode="numeric" min="1" max="20000" value="${esc(d.pages ?? '')}" data-field="pages"></div>
+          ${d.format === FORMATS.AUDIO ? `<div class="field field-time"><label for="f-duration">Duração do audiolivro</label>${timeInputs({ id: 'f-duration', value: d.durationMin, attrs: 'data-time-field="durationMin"', label: 'Duração do audiolivro' })}</div>` : ''}
         </div>
         <div class="cover-edit">
           ${d.cover
@@ -418,6 +433,7 @@ export function formView({ state, ui, isEdit, today }) {
       <section class="field-group">
         <span class="label">Sua nota</span>
         <div class="star-row" role="group" aria-label="Nota">${starButtons}<span class="star-value" aria-hidden="true">${d.rating ? formatRating(d.rating) : ''}</span></div>
+        ${criteriaBlock(ui)}
       </section>` : ''}
 
       ${d.status === STATUS.DROPPED ? `

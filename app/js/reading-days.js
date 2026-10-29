@@ -33,10 +33,11 @@ export function dayLabel(iso, today) {
 
 /**
  * Quanto a entrada avançou, na unidade do gráfico: páginas (físico, ou Kindle com o total de
- * páginas) ou % (Kindle sem total). Correção para trás conta 0.
+ * páginas), % (Kindle sem total) ou minutos (audiolivro). Correção para trás conta 0.
  */
 function amountOf(book, entry, unit) {
   if (!(entry.to > entry.from)) return 0;
+  if (unit === UNITS.MINUTE) return entry.unit === UNITS.MINUTE ? entry.to - entry.from : 0;
   if (unit === UNITS.PERCENT) return entry.unit === UNITS.PERCENT ? entry.to - entry.from : 0;
   return entryPages(book, entry);
 }
@@ -47,7 +48,7 @@ const minutesOf = (entry) => (Number.isFinite(entry.minutes) && entry.minutes > 
  * Série do gráfico de ritmo, do primeiro ao último dia do diário, na escala do tempo
  * (dias sem leitura aparecem como vão). Mais de 90 dias: uma barra por semana.
  * Devolve null sem diário; senão
- * { unit: 'page'|'percent', step: 'day'|'week', bars: [{ date, value, minutes }],
+ * { unit: 'page'|'percent'|'minute', step: 'day'|'week', bars: [{ date, value, minutes }],
  *   first, last, max, avg (por dia de leitura), days (dias com leitura), total, minutes }.
  */
 export function rhythmSeries(book) {

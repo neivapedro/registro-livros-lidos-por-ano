@@ -214,7 +214,7 @@ export function extractJson(text) {
 }
 
 
-const cleanText = (v, max = 300) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
+export const cleanText = (v, max = 300) => (typeof v === 'string' ? v.replace(/\s+/g, ' ').trim().slice(0, max) : '');
 const PLACEHOLDER = /^(null|undefined|n\/?a|-+|\?+|desconhecido|não encontrado|nao encontrado|unknown|título|titulo|sem título)$/i;
 
 function toInt(v) {
@@ -352,7 +352,7 @@ export function retrievalStatus(data) {
 const dedupeKey = (r) => r.isbn || `${r.title.toLowerCase()}|${r.authors.toLowerCase()}`;
 
 /** Lê a resposta do modelo; lança AiSearchError('blocked'/'bad-response') se não houver JSON. */
-function readJson(data) {
+export function readJson(data) {
   if (data?.promptFeedback?.blockReason) throw new AiSearchError('blocked');
   const text = responseText(data);
   if (!text.trim()) throw new AiSearchError(data?.candidates?.[0]?.finishReason === 'SAFETY' ? 'blocked' : 'bad-response');
@@ -488,23 +488,17 @@ export function mapGeminiError(status, body) {
 // ---------- Chamada ----------
 
 /**
- * Busca com IA. Devolve { results, sources, notFound, model, steps } ou lança AiSearchError
- * (code: key, permission, quota, unreadable, offline, network, timeout, model, server, blocked,
- * bad-response, bad-request, cancelled).
- * onSend(): chamado uma vez, quando o primeiro pedido sai de fato para o Google (a busca
- * conta uma vez no limite do aparelho, mesmo com as duas etapas).
- * onStage('confirm', { timeoutMs, elapsedMs }): começou a etapa de conferir o ISBN.
+ * Conversa com o Gemini (generateContent), usada pela busca com IA e pelas outras funções de
+ * IA do app (trecho por foto e sugestões, em ai-extras.js). Cuida do prazo, do cancelamento e
+ * de passar para o próximo modelo quando um não existe ou está fora.
+ * ask(body): manda o corpo (objeto) e devolve { data, model }, ou lança AiSearchError.
+ * onSend(): chamado uma vez, quando o primeiro pedido sai de fato para o Google.
+ * arm(ms): novo prazo, contado de agora. close(): solta o prazo e o sinal de quem chamou.
  */
-export async function aiSearch(query, {
-  key, fetchImpl = fetch, signal, timeoutMs = AI_TIMEOUT_MS, confirmTimeoutMs = AI_CONFIRM_TIMEOUT_MS,
-  models = GEMINI_MODELS, today = new Date(), onSend, onStage,
+export function geminiCaller({
+  key, fetchImpl = fetch, signal, timeoutMs = AI_TIMEOUT_MS, models = GEMINI_MODELS, onSend,
   online = () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false),
 } = {}) {
-  const q = cleanQuery(query);
-  if (!key) throw new AiSearchError('key');
-  if (q.length < 2) return { results: [], sources: [], notFound: true, model: null, steps: 0 };
-  if (!online()) throw new AiSearchError('offline');
-
   const started = Date.now();
   const ctrl = new AbortController();
   let timedOut = false;
@@ -527,8 +521,8 @@ export async function aiSearch(query, {
 
   let sent = false;
   /** Um pedido ao Google, passando para o próximo modelo se este não existir ou estiver fora. */
-  async function ask(prompt) {
-    const body = JSON.stringify(requestBody(prompt));
+  async function ask(request) {
+    const body = JSON.stringify(request);
     let lastError = new AiSearchError('model');
     for (const model of models) {
       let res;
@@ -566,6 +560,37 @@ export async function aiSearch(query, {
     }
     throw lastError;
   }
+
+  function close() {
+    clearTimeout(timer);
+    signal?.removeEventListener('abort', abort);
+  }
+
+  return { ask, arm, close, started };
+}
+
+/**
+ * Busca com IA. Devolve { results, sources, notFound, model, steps } ou lança AiSearchError
+ * (code: key, permission, quota, unreadable, offline, network, timeout, model, server, blocked,
+ * bad-response, bad-request, cancelled).
+ * onSend(): chamado uma vez, quando o primeiro pedido sai de fato para o Google (a busca
+ * conta uma vez no limite do aparelho, mesmo com as duas etapas).
+ * onStage('confirm', { timeoutMs, elapsedMs }): começou a etapa de conferir o ISBN.
+ */
+export async function aiSearch(query, {
+  key, fetchImpl = fetch, signal, timeoutMs = AI_TIMEOUT_MS, confirmTimeoutMs = AI_CONFIRM_TIMEOUT_MS,
+  models = GEMINI_MODELS, today = new Date(), onSend, onStage,
+  online = () => (typeof navigator === 'undefined' ? true : navigator.onLine !== false),
+} = {}) {
+  const q = cleanQuery(query);
+  if (!key) throw new AiSearchError('key');
+  if (q.length < 2) return { results: [], sources: [], notFound: true, model: null, steps: 0 };
+  if (!online()) throw new AiSearchError('offline');
+
+  const gemini = geminiCaller({ key, fetchImpl, signal, timeoutMs, models, onSend, online });
+  const ask = (prompt) => gemini.ask(requestBody(prompt));
+  const { started } = gemini;
+  const arm = (ms) => gemini.arm(ms);
 
   try {
     // Etapa 1: procurar. Se o Google não abriu a página de resultados, a resposta não vale
@@ -610,8 +635,7 @@ export async function aiSearch(query, {
     }
     return out;
   } finally {
-    clearTimeout(timer);
-    signal?.removeEventListener('abort', abort);
+    gemini.close();
   }
 }
 
@@ -620,7 +644,7 @@ export async function aiSearch(query, {
 const STOP_WORDS = new Set(['the', 'and', 'uma', 'com', 'para', 'por', 'que', 'dos', 'das', 'nos', 'nas', 'del', 'los', 'las']);
 
 /** Palavras com 3+ letras, sem acento e em minúsculas ("O Diário de Anne" → diario, anne). */
-function words(text) {
+export function words(text) {
   return String(text || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
     .split(/[^a-z0-9]+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
 }
@@ -661,6 +685,8 @@ export async function enrichAiResults(results, lookupIsbn, { queryIsbn = '' } = 
       pages: official.pages || r.pages,
       year: official.year || r.year,
       cover: official.cover || r.cover || openLibraryCoverByIsbn(r.isbn),
+      // Sinopse só das bases (a IA não escreve sinopse: inventaria).
+      description: official.description || '',
       checkedBy: official.source || '',
     };
   }));

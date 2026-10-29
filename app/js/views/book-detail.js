@@ -3,16 +3,19 @@
 // Só mostra: editar fica em #/livro/:id/editar (form.js e as abas Diário/Trechos).
 // Tudo é derivado do livro salvo; nada aqui muda o modelo de dados.
 
+import { formatDuration } from '../audio.js';
 import { daysInclusive, formatShort, isIsoDate } from '../dates.js';
 import { paceLines } from '../pace.js';
 import { quotePosition, quotesNewestFirst } from '../quotes.js';
 import { formatMinutes } from '../reading-days.js';
 import { seriesInfo, seriesLabel, formatSeriesNumber } from '../series.js';
-import { FORMAT_LABELS, FORMATS, STATUS } from '../store.js';
+import { FORMATS, STATUS } from '../store.js';
 import { normalizeCoverUrl } from '../cover-url.js';
-import { cover, decimal, esc, formatRating, icon, largeCoverUrl, num, plural, progressOf, starIcon } from '../ui.js';
+import { cover, decimal, esc, formatChip, formatRating, icon, largeCoverUrl, num, plural, progressOf, starIcon } from '../ui.js';
 import { rhythmChart } from './rhythm.js';
 import { timerButton } from './timer.js';
+import { criteriaList, loanBadge, loanSection, moodChips, shopSection, synopsisSection } from './meta-ui.js';
+import { bookEstimateLine } from './speed.js';
 
 /** Endereço da edição: #/livro/:id/editar, com ?concluir=1 ou ?aba=diario|trechos. */
 export function editHref(id, query = '') {
@@ -94,7 +97,14 @@ function readBlock(book) {
   const tiles = [];
   // Do início ao fim, contando os dias sem leitura: "dias de leitura" é o que o gráfico de ritmo
   // conta (só os dias com registro no diário), e os dois números lado a lado se contradiriam.
-  if (days === 1) {
+  // Audiolivro com duração: o tempo ouvido no lugar das páginas.
+  const listened = book.format === FORMATS.AUDIO ? Number(book.durationMin) || 0 : 0;
+  if (listened) {
+    if (days === 1) tiles.push(['Um dia', 'do início ao fim']);
+    else if (days) tiles.push([num(days), 'dias corridos'], [formatDuration(listened / days), 'por dia']);
+    tiles.push([formatDuration(listened), 'de áudio']);
+    if (minutes && tiles.length < 3) tiles.push([formatMinutes(minutes), 'no cronômetro']);
+  } else if (days === 1) {
     // Lido num dia só: "1 dia · 90 págs. por dia · 90 páginas" repetiria o mesmo número.
     tiles.push(['Um dia', 'do início ao fim']);
     if (pages) tiles.push([num(pages), 'páginas']);
@@ -116,6 +126,12 @@ function readBlock(book) {
     ${line ? `<p class="ficha-period">${esc(line)}</p>` : ''}`;
 }
 
+/** "Registre a página / % / tempo em que você está". */
+export function registerHint(book) {
+  if (book.format === FORMATS.KINDLE) return 'Registre a % em que você está';
+  return book.format === FORMATS.AUDIO ? 'Registre quanto já ouviu' : 'Registre a página em que você está';
+}
+
 function readingBlock(book, ui, today) {
   const p = progressOf(book);
   const { pace, target } = paceLines(book, today);
@@ -129,10 +145,12 @@ function readingBlock(book, ui, today) {
         <div class="ficha-progress-head"><span class="ficha-pct">${p.pct}%</span><span class="ficha-progress-label">${esc(p.label)}</span></div>
         <span class="progress-track"><span class="progress-fill" style="width:${p.pct}%"></span></span>
       </div>`;
+  } else if (p?.audio) {
+    progress = `<p class="ficha-progress-label">${esc(p.label)} · <a class="pages-ask" href="${editHref(book.id, 'campo=duracao')}">informe a duração</a> para ver o %</p>`;
   } else if (p) {
     progress = `<p class="ficha-progress-label">Na ${esc(p.label)} · <a class="pages-ask" href="${editHref(book.id, 'campo=paginas')}">informe o total de páginas</a> para ver o %</p>`;
   } else {
-    progress = `<p class="ficha-progress-label">${book.format === FORMATS.KINDLE ? 'Registre a % em que você está' : 'Registre a página em que você está'}</p>`;
+    progress = `<p class="ficha-progress-label">${registerHint(book)}</p>`;
   }
   const paceHtml = pace || target ? `<p class="ficha-pace">${[pace, target].filter(Boolean).map((t) => `<span>${esc(t)}</span>`).join('')}</p>` : '';
   // Registrar leitura abre a mesma folha do Início (openProgressSheet em main.js): nada de
@@ -152,7 +170,7 @@ function readingBlock(book, ui, today) {
     </section>`;
 }
 
-function wantBlock(state, book) {
+function wantBlock(state, book, today) {
   const queue = state.upNext || [];
   const pos = queue.indexOf(book.id);
   const added = String(book.createdAt || '').slice(0, 10);
@@ -162,6 +180,7 @@ function wantBlock(state, book) {
   return `
     <section class="ficha-card">
       ${isIsoDate(added) ? `<span class="ficha-eyebrow">Na lista desde ${esc(fullDate(added))}</span>` : ''}
+      ${bookEstimateLine(state, book, today)}
       <button type="button" class="btn-primary" data-action="start-reading" data-id="${esc(book.id)}">Começar a ler</button>
       ${next}
     </section>`;
@@ -171,6 +190,7 @@ function droppedBlock(book) {
   const p = progressOf(book);
   let where = '';
   if (p && book.format === FORMATS.KINDLE) where = `Parou em ${p.pct}%`;
+  else if (p?.audio) where = `Parou em ${p.label}${p.pct !== null ? ` · ${p.pct}%` : ''}`;
   else if (p) where = `Parou na ${p.label}${p.pct !== null ? ` · ${p.pct}%` : ''}`;
   const when = isIsoDate(book.endDate) ? `Abandonado em ${fullDate(book.endDate)}` : 'Abandonado';
   const reason = String(book.dropReason || '').trim();
@@ -232,7 +252,7 @@ function notesSection(book) {
 function detailsSection(book) {
   const chips = [];
   if (book.genre) chips.push(`<span class="ficha-chip">${esc(book.genre)}</span>`);
-  chips.push(`<span class="ficha-chip">${esc(FORMAT_LABELS[book.format] || 'Físico')}</span>`);
+  chips.push(formatChip(book, 'ficha-chip'));
   if (book.reread) chips.push('<span class="ficha-chip">Releitura</span>');
   for (const tag of book.tags || []) chips.push(`<span class="ficha-chip is-tag">${esc(tag)}</span>`);
   return `
@@ -245,11 +265,12 @@ function detailsSection(book) {
 const STATUS_TEXT = { [STATUS.READ]: 'Lido', [STATUS.READING]: 'Lendo', [STATUS.WANT]: 'Quero ler', [STATUS.DROPPED]: 'Abandonado' };
 
 export function bookDetailView({ state, ui, today, book }) {
-  const authorLine = [book.authors || 'Autor não informado', book.pages ? `${num(book.pages)} págs.` : ''].filter(Boolean).join(' · ');
+  const length = book.format === FORMATS.AUDIO && book.durationMin ? formatDuration(book.durationMin) : book.pages ? `${num(book.pages)} págs.` : '';
+  const authorLine = [book.authors || 'Autor não informado', length].filter(Boolean).join(' · ');
   const statusBlock = {
     [STATUS.READ]: () => readBlock(book),
     [STATUS.READING]: () => readingBlock(book, ui, today),
-    [STATUS.WANT]: () => wantBlock(state, book),
+    [STATUS.WANT]: () => wantBlock(state, book, today),
     [STATUS.DROPPED]: () => droppedBlock(book),
   }[book.status]?.() || '';
   const heroStats = book.status === STATUS.READ ? statusBlock : '';
@@ -268,12 +289,18 @@ export function bookDetailView({ state, ui, today, book }) {
         <p class="ficha-author">${esc(authorLine)}</p>
       </div>
       ${seriesChip(state, book)}
+      ${loanBadge(book, today)}
+      ${moodChips(book)}
       ${ratingRow(book)}
+      ${criteriaList(book)}
       ${heroStats}
     </section>
     ${book.status === STATUS.READ ? '' : statusBlock}
+    ${synopsisSection(book, ui)}
+    ${shopSection(book)}
     ${rhythmSection(book, today)}
     ${quotesSection(book)}
     ${notesSection(book)}
+    ${loanSection(book, today)}
     ${detailsSection(book)}`;
 }

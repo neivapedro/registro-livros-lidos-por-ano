@@ -7,7 +7,7 @@
 
 import { daysElapsedInYear, daysInclusive, isLeapYear, monthOf, yearOf } from './dates.js';
 import { MIN_PROJECTION_DAYS, pagesByMonth, pageGoalProgress } from './charts.js';
-import { countedEntries, pagesReadPerDay } from './journal.js';
+import { countedEntries, pagesReadPerDay, UNITS } from './journal.js';
 import { booksReadInYear } from './stats.js';
 import { STATUS } from './store.js';
 
@@ -257,8 +257,14 @@ export function dailyPages(books, year) {
   let days = 0;
   let pages = 0;
   let best = null;
+  // Dia só de audiolivro (sem páginas equivalentes) não é dia de leitura de páginas:
+  // entra nas horas ouvidas, não puxa a média de páginas para baixo.
+  const readDates = new Set();
+  for (const b of books) {
+    for (const e of b.journal || []) if (e.unit !== UNITS.MINUTE && e.to > e.from) readDates.add(e.date);
+  }
   for (const [date, day] of pagesReadPerDay(books)) {
-    if (yearOf(date) !== year) continue;
+    if (yearOf(date) !== year || (!day.pages && !readDates.has(date))) continue;
     days += 1;
     pages += day.pages;
     if (day.pages > 0 && (!best || day.pages > best.pages || (day.pages === best.pages && date < best.date))) {

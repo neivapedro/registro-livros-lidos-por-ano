@@ -1,12 +1,15 @@
 import { daysSince, formatBR, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
-import { monthlyTarget } from '../stats.js';
+import { monthlyTarget, yearsWithData } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 import { ACCENTS, validAccent } from '../accent.js';
+import { compareCard } from './compare.js';
+import { importCsvButton, importPreviewCard } from './importar.js';
+import { TEXT_OPTIONS } from '../text-scale.js';
 
-export const APP_VERSION = '1.5.0';
+export const APP_VERSION = '1.6.0';
 
 function stepper(label, value, action, hint) {
   return `
@@ -67,7 +70,7 @@ function geminiKeyCard(hasKey, used = 0) {
     : `Buscas com IA este mês: ${used} de ${AI_MONTHLY_LIMIT}`}</p>`
     : '';
   return group('aikey', 'Busca com IA (gratuita)', `
-        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” procura na internet e a IA do Google (Gemini) lê os resultados. Usa a cota gratuita do Google, sem cartão. Só roda quando você toca nele.</p>
+        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” procura na internet e a IA do Google (Gemini) lê os resultados. Usa a cota gratuita do Google, sem cartão. Só roda quando você toca nele. A mesma chave liga o trecho por foto (em Trechos) e as sugestões de “O que ler a seguir” (no Início).</p>
         <div class="field">
           <label for="ai-key">Chave do Gemini</label>
           <input id="ai-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AQ… ou AIza…)" data-aikey>
@@ -86,7 +89,7 @@ function geminiKeyCard(hasKey, used = 0) {
             <li>Opcional: no <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud › Credenciais</a>, toque na chave e restrinja: em <em>Restrições de aplicativos</em>, “Sites” com <code>https://neivapedro.github.io/*</code>; em <em>Restrições de API</em>, só a “Generative Language API”.</li>
             <li>Volte aqui, cole a chave e toque em Salvar.</li>
           </ol>
-          <p class="muted small">A cota gratuita tem limite por minuto e por dia; se acabar, a busca avisa e volta a funcionar mais tarde. Cada busca usa um ou dois pedidos dela. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular.</p>
+          <p class="muted small">A cota gratuita tem limite por minuto e por dia; se acabar, a busca avisa e volta a funcionar mais tarde. Cada busca usa um ou dois pedidos dela. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular; cada foto lida e cada pedido de sugestões conta como uma.</p>
         </details>`, 'A chave fica só neste aparelho e não vai para o backup. Use uma chave separada da do Google Books, liberada só para a IA.', 'gkey');
 }
 
@@ -144,12 +147,23 @@ export function accentPicker(accent) {
         </div>`;
 }
 
-function appearanceCard(pref, accent) {
+/** Tamanho do texto (1.6): Sistema segue o iPhone (veja text-scale.js). */
+export function textSizePicker(pref) {
+  const current = TEXT_OPTIONS.some(([v]) => v === pref) ? pref : 'sistema';
+  const buttons = TEXT_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-text-size" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
+  return `
+        <div class="text-size-pick">
+          <p class="accent-head" id="text-size-head">Tamanho do texto</p>
+          <div class="segmented text-size-seg" style="--seg-count:4" role="group" aria-labelledby="text-size-head">${buttons}</div>
+        </div>`;
+}
+
+function appearanceCard(pref, accent, textPref) {
   const current = THEME_OPTIONS.some(([v]) => v === pref) ? pref : 'auto';
   const buttons = THEME_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-theme" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
   return group('aparencia', 'Aparência', `
-        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>${accentPicker(accent)}`,
-  'Automático acompanha o iPhone: claro de dia, escuro à noite. O tema e a cor valem só para este aparelho (não vão para o backup).', 'theme-card');
+        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>${accentPicker(accent)}${textSizePicker(textPref)}`,
+  'Automático acompanha o iPhone: claro de dia, escuro à noite. Em Sistema, o texto segue o tamanho escolhido nos Ajustes do iPhone (Tela e Brilho → Tamanho do Texto). Tema, cor e texto valem só para este aparelho (não vão para o backup).', 'theme-card');
 }
 
 /** Nome da saudação do Início (v1.5): só neste aparelho, fora do backup (prefs.js). */
@@ -174,12 +188,14 @@ export function settingsView({ state, ui, today }) {
       <span class="icon-btn-spacer"></span>
     </header>
 ${keyImportCard(ui?.keyImport, { googleBooksKey: ui?.googleKey, geminiKey: ui?.geminiKey })}
+${importPreviewCard(ui?.grImport)}
 ${nameCard(ui?.userName || '')}
 ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
         ${pageGoalSettings(state, year)}`)}
-${appearanceCard(ui?.themePref, ui?.accent)}
+${appearanceCard(ui?.themePref, ui?.accent, ui?.textPref)}
+${compareCard({ years: yearsWithData(state.books, year), year: ui?.cmpYear || year, withBooks: ui?.cmpWithBooks !== false, saved: ui?.cmpSaved })}
 ${group('backup', 'Backup dos dados', `
         <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
         <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>
@@ -188,7 +204,8 @@ ${group('backup', 'Backup dos dados', `
           <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
           <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
           <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
-        </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.')}
+          ${importCsvButton()}
+        </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup. Do Goodreads ou do StoryGraph, os livros entram junto com os seus (os repetidos ficam de fora).')}
 ${googleKeyCard(Boolean(ui?.googleKey))}
 ${geminiKeyCard(Boolean(ui?.geminiKey), aiSearchesThisMonth(ui?.aiUsage, today))}
 ${keysTransferCard(Boolean(ui?.googleKey || ui?.geminiKey))}

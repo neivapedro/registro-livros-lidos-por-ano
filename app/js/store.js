@@ -2,6 +2,7 @@
 // Tudo fica no IndexedDB do celular (veja db.js); o backup em arquivo é a cópia de segurança.
 
 import { isIsoDate, yearOf } from './dates.js';
+import { normalizeCriteria, normalizeDescription, normalizeLoan, normalizeMoods, normalizePace } from './book-meta.js';
 
 // Chave usada até a versão 1.2 (localStorage). Os dados são migrados dela na primeira abertura.
 export const STORAGE_KEY = 'leituras:v1';
@@ -14,8 +15,10 @@ export const DEFAULT_GOAL = 12;
 
 export const STATUS = { WANT: 'quero', READING: 'lendo', READ: 'lido', DROPPED: 'abandonado' };
 export const STATUS_LABELS = { quero: 'Quero ler', lendo: 'Lendo', lido: 'Lido', abandonado: 'Abandonei' };
-export const FORMATS = { PHYSICAL: 'fisico', KINDLE: 'kindle' };
-export const FORMAT_LABELS = { fisico: 'Físico', kindle: 'Kindle' };
+export const FORMATS = { PHYSICAL: 'fisico', KINDLE: 'kindle', AUDIO: 'audio' };
+export const FORMAT_LABELS = { fisico: 'Físico', kindle: 'Kindle', audio: 'Audiolivro' };
+// Audiolivro (1.6): duração e posição em minutos inteiros (até 1.000 horas).
+export const MAX_AUDIO_MIN = 60000;
 
 export const DEFAULT_GENRES = [
   'Gestão', 'Técnico', 'Desenvolvimento pessoal', 'Ficção',
@@ -45,6 +48,7 @@ export function createEmptyState() {
     lastBackupAt: null,
     upNext: [],
     pageGoals: {},
+    challenges: [],
   };
 }
 
@@ -136,7 +140,31 @@ function withMinutes(entry, minutes) {
 }
 
 /**
- * Diário de leitura: { date, from, to, unit: 'page'|'percent', note, minutes? }.
+ * Horário das sessões do cronômetro (1.6, opcional): { 'H': minutos } com H de 0 a 23 (hora local
+ * em que a leitura aconteceu), até 60 por hora. Somar dois (mesmo dia) junta as horas. Vazio: null.
+ */
+export function normalizeHours(...list) {
+  const out = {};
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    for (const [h, m] of Object.entries(raw)) {
+      const hour = /^\d{1,2}$/.test(h) ? Number(h) : -1;
+      const minutes = intIn(m, 1, 60);
+      if (hour < 0 || hour > 23 || !minutes) continue;
+      out[hour] = Math.min(60, (out[hour] || 0) + minutes);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function withHours(entry, hours) {
+  const rest = { ...entry };
+  delete rest.hours;
+  return hours ? { ...rest, hours } : rest;
+}
+
+/**
+ * Diário de leitura: { date, from, to, unit: 'page'|'percent'|'minute', note, minutes?, hours? }.
  * Uma entrada por dia, em ordem de data. Dias repetidos viram um só
  * (fica o 'from' da primeira e o 'to' da última). Regras de gravação em journal.js.
  */
@@ -145,8 +173,9 @@ export function normalizeJournal(value) {
   const byDate = new Map();
   for (const raw of value) {
     if (!raw || typeof raw !== 'object' || !isIsoDate(raw.date)) continue;
-    const unit = raw.unit === 'percent' ? 'percent' : 'page';
-    const max = unit === 'percent' ? 100 : 20000;
+    // 'minute': posição no audiolivro, em minutos (1.6).
+    const unit = raw.unit === 'percent' || raw.unit === 'minute' ? raw.unit : 'page';
+    const max = unit === 'percent' ? 100 : unit === 'minute' ? MAX_AUDIO_MIN : 20000;
     const from = intIn(raw.from, 0, max);
     const to = intIn(raw.to, 0, max);
     if (from === null || to === null) continue;
@@ -155,9 +184,9 @@ export function normalizeJournal(value) {
     const minutes = intIn(raw.minutes, 0, 1440) || 0;
     const prev = byDate.get(raw.date);
     if (prev && prev.unit === unit) {
-      byDate.set(raw.date, withMinutes({ ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') }, (prev.minutes || 0) + minutes));
+      byDate.set(raw.date, withHours(withMinutes({ ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') }, (prev.minutes || 0) + minutes), normalizeHours(prev.hours, raw.hours)));
     } else {
-      byDate.set(raw.date, withMinutes({ date: raw.date, from, to, unit, note }, minutes));
+      byDate.set(raw.date, withHours(withMinutes({ date: raw.date, from, to, unit, note }, minutes), normalizeHours(raw.hours)));
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-MAX_JOURNAL);
@@ -192,6 +221,8 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
   const pages = intIn(raw.pages, 1, 20000);
   const tracksPage = status === STATUS.READING || status === STATUS.DROPPED;
   const finished = status === STATUS.READ || status === STATUS.DROPPED;
+  const format = Object.values(FORMATS).includes(raw.format) ? raw.format : FORMATS.PHYSICAL;
+  const durationMin = intIn(raw.durationMin, 1, MAX_AUDIO_MIN);
   return {
     id: text(raw.id, 100) || newId(),
     title,
@@ -202,10 +233,13 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
     status,
     startDate: status === STATUS.WANT ? null : startDate,
     endDate: finished ? endDate : null,
-    // Kindle mostra o avanço em %, livro físico em página.
-    currentPage: tracksPage && raw.format !== FORMATS.KINDLE ? intIn(raw.currentPage, 0, pages || 20000) : null,
-    currentPercent: tracksPage && raw.format === FORMATS.KINDLE ? intIn(raw.currentPercent, 0, 100) : null,
-    format: raw.format === FORMATS.KINDLE ? FORMATS.KINDLE : FORMATS.PHYSICAL,
+    // Kindle mostra o avanço em %, livro físico em página, audiolivro em minutos.
+    currentPage: tracksPage && format === FORMATS.PHYSICAL ? intIn(raw.currentPage, 0, pages || 20000) : null,
+    currentPercent: tracksPage && format === FORMATS.KINDLE ? intIn(raw.currentPercent, 0, 100) : null,
+    currentMin: tracksPage && format === FORMATS.AUDIO ? intIn(raw.currentMin, 0, durationMin || MAX_AUDIO_MIN) : null,
+    // Duração fica guardada em qualquer formato (trocar de formato e voltar não a perde).
+    durationMin,
+    format,
     genre: text(raw.genre, 60) || null,
     rating: status === STATUS.READ ? normalizeRating(raw.rating) : null,
     favorite: status === STATUS.READ && raw.favorite === true,
@@ -219,6 +253,12 @@ export function normalizeBook(raw, nowTs = new Date().toISOString()) {
     targetDate: status === STATUS.READING && isIsoDate(raw.targetDate) ? raw.targetDate : null,
     quotes: normalizeQuotes(raw.quotes, nowTs),
     journal: normalizeJournal(raw.journal),
+    // 1.6 (book-meta.js): humor e ritmo, critérios (só Lido, como a nota), sinopse e empréstimo.
+    moods: normalizeMoods(raw.moods),
+    pace: normalizePace(raw.pace),
+    criteria: status === STATUS.READ ? normalizeCriteria(raw.criteria) : {},
+    description: normalizeDescription(raw.description),
+    loan: normalizeLoan(raw.loan),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : nowTs,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : nowTs,
   };
@@ -249,8 +289,12 @@ export function validateBook(book, today = null) {
     errors.push('A porcentagem vai de 0 a 100.');
   }
   const tracksPage = book.status === STATUS.READING || book.status === STATUS.DROPPED;
-  if (book.format !== FORMATS.KINDLE && tracksPage && pages && Number(book.currentPage) > pages) {
+  if (book.format !== FORMATS.KINDLE && book.format !== FORMATS.AUDIO && tracksPage && pages && Number(book.currentPage) > pages) {
     errors.push(`A página atual passa do total de ${pages} páginas.`);
+  }
+  const duration = Number(book.durationMin) || 0;
+  if (book.format === FORMATS.AUDIO && tracksPage && duration && Number(book.currentMin) > duration) {
+    errors.push('O tempo ouvido passa da duração do audiolivro.');
   }
   if (book.seriesNumber !== null && book.seriesNumber !== undefined && book.seriesNumber !== ''
     && seriesNumber(book.seriesNumber) === null) {
@@ -296,7 +340,47 @@ export function normalizeState(raw) {
       if (/^\d{4}$/.test(year) && g) state.pageGoals[year] = g;
     }
   }
+  state.challenges = normalizeChallenges(raw.challenges);
   return state;
+}
+
+// ---------- Desafios de leitura (1.6) ----------
+// { id, year, title, target, rule: { type, value }, books }. A regra é avaliada em challenges.js
+// com os livros lidos no ano; 'books' (ids) só no tipo 'manual', em que a pessoa escolhe os livros.
+export const CHALLENGE_TYPES = ['genre', 'nonfiction', 'tag', 'pages', 'format', 'reread', 'series', 'seriesDone', 'authors', 'author', 'manual'];
+export const MAX_CHALLENGES = 100;
+const MAX_CHALLENGE_BOOKS = 1000;
+
+/** Limpa um desafio. Tipo desconhecido (ou sem o valor que ele pede) vira 'manual': o desafio não some. */
+export function normalizeChallenge(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const year = intIn(raw.year, 1900, 2999);
+  const target = intIn(raw.target, 1, 1000);
+  if (!year || !target) return null;
+  const rule = raw.rule && typeof raw.rule === 'object' ? raw.rule : {};
+  let type = CHALLENGE_TYPES.includes(rule.type) ? rule.type : 'manual';
+  let value = null;
+  if (type === 'pages') value = intIn(rule.value, 1, 20000);
+  else if (['genre', 'tag', 'author', 'format', 'series'].includes(type)) value = text(rule.value, MAX_SERIES) || null;
+  if (!value && type !== 'series' && ['genre', 'tag', 'author', 'format', 'pages'].includes(type)) type = 'manual';
+  const books = type === 'manual' && Array.isArray(raw.books)
+    ? [...new Set(raw.books.filter((id) => typeof id === 'string' && id && id.length <= 100))].slice(0, MAX_CHALLENGE_BOOKS)
+    : [];
+  return { id: text(raw.id, 100) || newId(), year, title: text(raw.title, 80), target, rule: { type, value: type === 'manual' ? null : value }, books };
+}
+
+function normalizeChallenges(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of value) {
+    const c = normalizeChallenge(item);
+    if (!c || seen.has(c.id)) continue;
+    seen.add(c.id);
+    out.push(c);
+    if (out.length === MAX_CHALLENGES) break;
+  }
+  return out;
 }
 
 /** Próximos da fila: só livros "Quero ler" que existem, sem repetir, até 5, na ordem dada. */
@@ -360,7 +444,7 @@ export function pauseReading(state, id, nowTs = new Date().toISOString()) {
   const before = state.books.find((b) => b.id === id && b.status === STATUS.READING);
   if (!before) return { state, before: null };
   const { state: next } = upsertBook(state, {
-    ...before, status: STATUS.WANT, startDate: null, currentPage: null, currentPercent: null, targetDate: null, journal: [],
+    ...before, status: STATUS.WANT, startDate: null, currentPage: null, currentPercent: null, currentMin: null, targetDate: null, journal: [],
   }, nowTs);
   return { state: next, before };
 }
@@ -374,6 +458,7 @@ export function startReread(state, id, today, nowTs = new Date().toISOString()) 
     title: original.title,
     authors: original.authors,
     pages: original.pages,
+    durationMin: original.durationMin,
     cover: original.cover,
     isbn: original.isbn,
     format: original.format,
@@ -381,6 +466,7 @@ export function startReread(state, id, today, nowTs = new Date().toISOString()) 
     series: original.series,
     seriesNumber: original.seriesNumber,
     tags: original.tags,
+    description: original.description,
     status: STATUS.READING,
     startDate: today,
     reread: true,

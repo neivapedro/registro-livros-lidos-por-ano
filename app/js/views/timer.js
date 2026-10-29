@@ -1,11 +1,33 @@
 // Tela do cronômetro de leitura (#/ler/:id) e aviso de leitura em andamento no Início.
 
-import { STATUS } from '../store.js';
+import { formatDuration, timeInputs } from '../audio.js';
+import { FORMATS, STATUS } from '../store.js';
 import { elapsedMs, formatElapsed, isPaused, wholeMinutes } from '../timer.js';
 import { cover, esc, icon } from '../ui.js';
+import { ambientPicker } from './ambient.js';
+
+/** "Ler agora" ou, no audiolivro, "Ouvir agora". */
+export function timerVerb(book) {
+  return book.format === FORMATS.AUDIO ? 'Ouvir agora' : 'Ler agora';
+}
+
+/** Audiolivro: onde parou em horas e minutos. */
+function audioStopForm(book) {
+  return `
+    <form class="timer-stop" data-timer-form novalidate>
+      <label class="timer-stop-label" for="timer-h">Em que ponto do áudio você parou?</label>
+      <span class="progress-edit-field is-time">
+        ${timeInputs({ id: 'timer-h', value: book.currentMin, label: 'Tempo ouvido' })}
+        ${book.durationMin ? `<span class="progress-edit-suffix">de ${esc(formatDuration(book.durationMin))}</span>` : ''}
+      </span>
+      <button type="submit" class="btn-primary">Salvar</button>
+      <button type="button" class="btn-text timer-text-btn" data-action="timer-back">Voltar ao cronômetro</button>
+    </form>`;
+}
 
 /** Formulário do "Parar": onde parou, já preenchido com a posição atual. */
 function stopForm(book) {
+  if (book.format === FORMATS.AUDIO) return audioStopForm(book);
   const kindle = book.format === 'kindle';
   const value = kindle ? book.currentPercent : book.currentPage;
   const label = kindle ? 'Quantos % o Kindle mostra?' : 'Em que página você parou?';
@@ -22,7 +44,7 @@ function stopForm(book) {
     </form>`;
 }
 
-export function timerView({ book, session, now, stopping }) {
+export function timerView({ book, session, now, stopping, ambient = null }) {
   const paused = isPaused(session);
   const controls = stopping ? stopForm(book) : `
     <div class="timer-actions">
@@ -33,7 +55,7 @@ export function timerView({ book, session, now, stopping }) {
   return `
     <header class="top">
       <a class="icon-btn" href="#/inicio" aria-label="Voltar ao Início">${icon('chevronLeft', { size: 20, stroke: 2 })}</a>
-      <span class="eyebrow">Lendo agora</span>
+      <span class="eyebrow">${book.format === FORMATS.AUDIO ? 'Ouvindo agora' : 'Lendo agora'}</span>
       <span class="icon-btn-spacer" aria-hidden="true"></span>
     </header>
     <section class="timer${paused ? ' is-paused' : ''}">
@@ -43,9 +65,9 @@ export function timerView({ book, session, now, stopping }) {
         <span class="muted small">${esc(book.authors || 'Autor não informado')}</span>
       </div>
       <p class="timer-clock" role="timer" aria-label="Tempo de leitura" data-timer-elapsed>${formatElapsed(elapsedMs(session, now))}</p>
-      <span class="timer-state">${stopping ? 'Tempo da sessão' : paused ? 'Pausado' : 'Lendo · a tela fica acesa'}</span>
+      <span class="timer-state">${stopping ? 'Tempo da sessão' : paused ? 'Pausado' : `${book.format === FORMATS.AUDIO ? 'Ouvindo' : 'Lendo'} · a tela fica acesa`}</span>
     </section>
-    <section class="timer-controls">${controls}</section>`;
+    <section class="timer-controls">${controls}</section>${ambient && !stopping ? ambientPicker(ambient, { paused }) : ''}`;
 }
 
 // Triângulo desenhado (o caractere ▶ vira emoji no iPhone).
@@ -54,8 +76,9 @@ const PLAY = '<svg class="icon" width="12" height="12" viewBox="0 0 24 24" fill=
 /** Botão "Ler agora" do cartão de leitura; com a sessão deste livro aberta (destacado), volta a ela. */
 export function timerButton(book, session) {
   const running = session?.bookId === book.id;
-  const label = running ? ' aria-label="Ler agora: voltar ao cronômetro"' : '';
-  return `<button type="button" class="btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(book.id)}"${label}>${PLAY}Ler agora</button>`;
+  const verb = timerVerb(book);
+  const label = running ? ` aria-label="${verb}: voltar ao cronômetro"` : '';
+  return `<button type="button" class="btn-timer${running ? ' is-running' : ''}" data-action="start-timer" data-id="${esc(book.id)}"${label}>${PLAY}${verb}</button>`;
 }
 
 /** Aviso no Início quando há uma sessão aberta (inclusive depois de fechar e abrir o app). */
@@ -63,7 +86,8 @@ export function timerBanner(books, session, now = Date.now()) {
   if (!session) return '';
   const book = books.find((b) => b.id === session.bookId && b.status === STATUS.READING);
   if (!book) return '';
-  const label = isPaused(session) ? 'Leitura pausada' : 'Leitura em andamento';
+  const audio = book.format === FORMATS.AUDIO;
+  const label = isPaused(session) ? (audio ? 'Audiolivro pausado' : 'Leitura pausada') : (audio ? 'Ouvindo' : 'Leitura em andamento');
   return `
     <a class="timer-banner" href="#/ler/${encodeURIComponent(book.id)}">
       <span class="timer-dot${isPaused(session) ? ' is-paused' : ''}" aria-hidden="true"></span>

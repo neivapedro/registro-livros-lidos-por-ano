@@ -24,18 +24,26 @@ async function loadImage(file) {
   }
 }
 
-/** Devolve a capa como data URL JPEG. */
-export async function photoToCover(file) {
-  if (!file || !file.type.startsWith('image/')) throw new Error('Escolha uma imagem.');
+/**
+ * Reduz a foto para caber em maxW × maxH (sem aumentar) e devolve um data URL JPEG.
+ * Usada pela capa e pelo trecho por foto (que precisa de mais detalhe para ler o texto).
+ */
+export async function resizePhoto(file, { maxW = MAX_W, maxH = MAX_H, quality = QUALITY } = {}) {
+  if (!file || !String(file.type || '').startsWith('image/')) throw new Error('Escolha uma imagem.');
   const image = await loadImage(file);
   const w = image.width;
   const h = image.height;
   if (!w || !h) throw new Error('Não foi possível ler a imagem.');
-  const scale = Math.min(1, MAX_W / w, MAX_H / h);
+  const scale = Math.min(1, maxW / w, maxH / h);
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(w * scale);
   canvas.height = Math.round(h * scale);
   canvas.getContext('2d').drawImage(image, 0, 0, canvas.width, canvas.height);
   image.close?.();
-  return canvas.toDataURL('image/jpeg', QUALITY);
+  return canvas.toDataURL('image/jpeg', quality);
+}
+
+/** Devolve a capa como data URL JPEG. */
+export function photoToCover(file) {
+  return resizePhoto(file);
 }

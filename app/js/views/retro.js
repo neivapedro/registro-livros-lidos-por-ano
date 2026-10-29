@@ -4,8 +4,9 @@ import { BIG_BOOK_PAGES, milestonesInYear } from '../milestones.js';
 import {
   RETRO_MIN_BOOKS, longestAndShortest, readerProfile, stackHeight, strongestMonth,
 } from '../retro-stats.js';
-import { FORMATS, getGoal } from '../store.js';
-import { monthsMetInYear, yearStats } from '../stats.js';
+import { getGoal } from '../store.js';
+import { formatsText, monthsMetInYear, yearStats } from '../stats.js';
+import { hoursText } from '../audio.js';
 import { cover, esc, icon, num, plural, stars } from '../ui.js';
 import { milestoneList } from './marcos.js';
 
@@ -78,13 +79,24 @@ function countSlide(d, year) {
 
 function pagesSlide(d) {
   const { s, stack } = d;
-  if (!s.pages) return '';
+  // Audiolivros: as horas ouvidas (num slide próprio, quando não há páginas).
+  const heard = s.listened ? `<span class="retro-note retro-heard">E mais <strong>${hoursText(s.listened)} horas</strong> ouvindo audiolivros.</span>` : '';
+  if (!s.pages) {
+    if (!s.listened) return '';
+    return `
+    <div class="slide">
+      <span class="eyebrow">Horas ouvidas</span>
+      <span class="retro-big accent">${hoursText(s.listened)}</span>
+      <span class="retro-line">horas <em>de audiolivro${d.isCurrent ? ' até aqui.' : ' no ano.'}</em></span>
+    </div>`;
+  }
   return `
     <div class="slide">
       <span class="eyebrow">Páginas viradas</span>
       <span class="retro-big accent">${num(s.pages)}</span>
       <span class="retro-line">Cerca de <em>${plural(Math.max(1, Math.round(s.pagesPerDay)), 'página', 'páginas')} por dia</em>${d.isCurrent ? ' até aqui.' : ', o ano inteiro.'}</span>
       ${stack.cm >= 1 ? `<span class="retro-note">Sua pilha de livros teria <strong>${num(stack.cm)} cm</strong> de altura${stack.comparison ? ` — ${stack.comparison}` : ''}.</span>` : ''}
+      ${heard}
     </div>`;
 }
 
@@ -137,13 +149,12 @@ function tasteSlide(d) {
   const { s } = d;
   const genre = s.genres[0];
   const author = s.authors[0];
-  const phys = s.formats[FORMATS.PHYSICAL];
-  const kin = s.formats[FORMATS.KINDLE];
+  const [phys, ...rest] = formatsText(s.formats).split(' · ');
   return `
     <div class="slide gap-lg">
       ${genre ? `<div class="retro-block"><span class="eyebrow">Gênero favorito</span><span class="retro-mid accent">${esc(genre.label)}</span><span class="muted">${genre.count} de ${plural(s.count, 'livro', 'livros')}</span></div>` : ''}
       ${author ? `<div class="retro-block"><span class="eyebrow">Autor mais lido</span><span class="retro-name">${esc(author.label)}</span><span class="muted">${plural(author.count, 'livro', 'livros')}</span></div>` : ''}
-      <div class="retro-block"><span class="eyebrow">Formato</span><span class="retro-format">${plural(phys, 'físico', 'físicos')} <span class="faint">·</span> <em>${kin} no Kindle</em></span></div>
+      <div class="retro-block"><span class="eyebrow">Formato</span><span class="retro-format">${phys} <span class="faint">·</span> <em>${rest.join(' · ')}</em></span></div>
     </div>`;
 }
 

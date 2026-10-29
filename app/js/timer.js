@@ -4,6 +4,8 @@
 // Sessão: { bookId, startedAt, pausedAt, pausedMs } (horários em ms desde 1970).
 // Uma sessão por vez, guardada no localStorage para sobreviver a fechar o app.
 
+import { formatDuration } from './audio.js';
+
 export const SESSION_KEY = 'leituras:sessao';
 
 export function startSession(bookId, now) {
@@ -90,13 +92,16 @@ export function wholeMinutes(ms) {
 }
 
 /**
- * Resumo depois de salvar: "32 min · 18 págs. · 34 págs./hora" (Kindle: "32 min · 6%").
- * delta: quanto avançou na sessão (páginas ou pontos de %).
+ * Resumo depois de salvar: "32 min · 18 págs. · 34 págs./hora" (Kindle: "32 min · 6%";
+ * audiolivro: "32 min · 45 min ouvidos", o avanço no áudio, que pode ser acelerado).
+ * delta: quanto avançou na sessão (páginas, pontos de % ou minutos do áudio).
  */
 export function sessionSummary({ minutes, unit, delta }) {
   const parts = [minutes > 0 ? `${minutes} min` : 'menos de 1 min'];
   if (delta > 0) {
-    if (unit === 'percent') {
+    if (unit === 'minute') {
+      parts.push(`${formatDuration(delta)} ouvidos`);
+    } else if (unit === 'percent') {
       parts.push(`${delta}%`);
     } else {
       parts.push(`${delta} ${delta === 1 ? 'pág.' : 'págs.'}`);
@@ -104,4 +109,24 @@ export function sessionSummary({ minutes, unit, delta }) {
     }
   }
   return parts.join(' · ');
+}
+
+/**
+ * Horário da sessão (1.6): os minutos lidos espalhados pelas horas do relógio a partir do início,
+ * { 'H': minutos } na hora local. Uma sessão das 21h50 com 30 min → { 21: 10, 22: 20 }.
+ * Pausas no meio não são conhecidas: a leitura conta como seguida desde o início.
+ */
+export function sessionHours(startedAt, minutes) {
+  const out = {};
+  let left = Math.min(1440, Math.round(Number(minutes) || 0));
+  if (!isTime(startedAt) || left <= 0) return null;
+  const at = new Date(startedAt);
+  for (let i = 0; left > 0 && i < 26; i += 1) {
+    const take = Math.min(left, 60 - at.getMinutes());
+    const h = at.getHours();
+    out[h] = Math.min(60, (out[h] || 0) + take);
+    left -= take;
+    at.setMinutes(at.getMinutes() + take, 0, 0);
+  }
+  return out;
 }

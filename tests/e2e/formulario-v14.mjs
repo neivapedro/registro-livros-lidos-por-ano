@@ -154,7 +154,7 @@ try {
   for (const sel of ['#f-genre', '#f-series', '#f-tag', '#f-notes', '[data-action="toggle-fav"]']) {
     assert.equal(await page.isVisible(sel), false, `${sel} recolhido`);
   }
-  assert.match(await page.textContent('.more-summary'), /Gênero, série, etiquetas, favorito e anotações/);
+  assert.match(await page.textContent('.more-summary'), /Gênero, série, etiquetas, humor, sinopse, favorito e anotações/);
   assert.equal(await page.getAttribute('.more-toggle', 'aria-controls'), 'more-details');
   await tapTargets('novo');
   await shots('novo');
@@ -365,7 +365,7 @@ try {
   await page.goto(`${BASE}#/ajustes`);
   await page.waitForSelector('.set-group');
   assert.deepEqual(await page.$$eval('.set-head', (els) => els.map((e) => e.textContent)),
-    ['Seu nome', 'Meta de leitura', 'Aparência', 'Backup dos dados', 'Busca de livros', 'Busca com IA (gratuita)', 'Outro celular', 'Instalar no celular', 'Sobre']);
+    ['Seu nome', 'Meta de leitura', 'Aparência', 'Comparar com alguém', 'Backup dos dados', 'Busca de livros', 'Busca com IA (gratuita)', 'Outro celular', 'Instalar no celular', 'Sobre']);
   await shots('ajustes');
 
   assert.deepEqual(errors, [], 'sem erros no console');

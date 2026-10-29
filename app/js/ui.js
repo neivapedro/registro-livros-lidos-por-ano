@@ -1,6 +1,8 @@
 // Peças de interface reutilizadas pelas telas. Todo texto vindo de dados passa por esc().
 
-import { formatShort } from './dates.js';
+import { formatDuration, headphonesIcon } from './audio.js';
+import { formatShort, todayIso } from './dates.js';
+import { loanLabel } from './book-meta.js';
 import { seriesLabel } from './series.js';
 import { FORMAT_LABELS, FORMATS, STATUS } from './store.js';
 import { isGoogleCoverHost, normalizeCoverUrl } from './cover-url.js';
@@ -181,10 +183,29 @@ export function chip(text, cls = '') {
   return `<span class="chip ${cls}">${esc(text)}</span>`;
 }
 
+/** Chip do formato; o audiolivro leva os fones de ouvido. */
+export function formatChip(book, cls = 'chip') {
+  const label = FORMAT_LABELS[book.format] || FORMAT_LABELS[FORMATS.PHYSICAL];
+  if (book.format !== FORMATS.AUDIO) return `<span class="${cls}">${esc(label)}</span>`;
+  return `<span class="${cls} chip-audio">${headphonesIcon(12)}${esc(label)}</span>`;
+}
+
 const isBlank = (v) => v === null || v === undefined || v === '';
 
-/** Avanço da leitura: { pct, label }. Kindle usa a % informada; físico calcula pela página. */
+/**
+ * Avanço da leitura: { pct, label }. Kindle usa a % informada; físico calcula pela página;
+ * audiolivro pelo tempo ouvido ÷ duração ("2h 10min de 9h 45min").
+ */
 export function progressOf(book) {
+  if (book.format === FORMATS.AUDIO) {
+    if (isBlank(book.currentMin) || !Number.isFinite(Number(book.currentMin))) return null;
+    const at = Number(book.currentMin);
+    const total = Number(book.durationMin) || 0;
+    // Sem a duração não dá para calcular o percentual.
+    if (!total) return { pct: null, label: `${formatDuration(at)} ouvidos`, audio: true };
+    const pct = Math.max(0, Math.min(100, Math.round((at / total) * 100)));
+    return { pct, label: `${formatDuration(at)} de ${formatDuration(total)}`, audio: true };
+  }
   if (book.format === FORMATS.KINDLE) {
     if (isBlank(book.currentPercent)) return null;
     const pct = Math.max(0, Math.min(100, Math.round(Number(book.currentPercent))));
@@ -204,7 +225,8 @@ export function progressBar(book) {
   const p = progressOf(book);
   if (!p) return '';
   if (p.pct === null) {
-    return `<span class="progress"><span class="progress-text">Na ${esc(p.label)} · informe o total de páginas para ver o %</span></span>`;
+    const text = p.audio ? `${p.label} · informe a duração para ver o %` : `Na ${p.label} · informe o total de páginas para ver o %`;
+    return `<span class="progress"><span class="progress-text">${esc(text)}</span></span>`;
   }
   return `<span class="progress" role="img" aria-label="${p.pct}% lido, ${esc(p.label)}"><span class="progress-track"><span class="progress-fill" style="width:${p.pct}%"></span></span><span class="progress-text">${p.pct}% · ${esc(p.label)}</span></span>`;
 }
@@ -217,7 +239,7 @@ export function bookRow(book, { action = '' } = {}) {
   if (book.status === STATUS.WANT) meta.push(chip('Quero ler'));
   if (book.status === STATUS.DROPPED) meta.push(chip(book.endDate ? `Abandonado em ${formatShort(book.endDate)} ${book.endDate.slice(0, 4)}` : 'Abandonado', 'chip-muted'));
   if (book.reread) meta.push(chip('Releitura'));
-  meta.push(chip(FORMAT_LABELS[book.format]));
+  meta.push(formatChip(book));
   if (book.genre) meta.push(chip(book.genre));
   if (book.series) meta.push(chip(seriesLabel(book), 'chip-series'));
   for (const tag of book.tags || []) meta.push(chip(tag, 'chip-tag'));
@@ -291,7 +313,7 @@ function itemWhen(book, withYear) {
   }
   if (book.status === STATUS.DROPPED) return book.endDate ? `parou em ${formatShort(book.endDate)}${y(book.endDate)}` : 'abandonado';
   if (withYear) return 'quero ler';
-  return [book.genre, book.format === FORMATS.KINDLE ? 'Kindle' : ''].filter(Boolean).join(' · ');
+  return [book.genre, book.format === FORMATS.PHYSICAL ? '' : FORMAT_LABELS[book.format]].filter(Boolean).join(' · ');
 }
 
 /**
@@ -313,7 +335,7 @@ export function bookItem(book, { withYear = false, tools = '', swipe = '', badge
           <span class="li-text">
             <span class="book-row-title li-title">${esc(book.title)}${fav}</span>
             <span class="li-sub">${esc(author)}${when ? ` · ${esc(when)}` : ''}</span>
-            ${second ? `<span class="li-extra">${esc(second)}</span>` : ''}${extra}
+            ${second ? `<span class="li-extra">${esc(second)}</span>` : ''}${extra}${book.loan?.to ? `<span class="li-loan">${esc(loanLabel(book.loan, todayIso()))}</span>` : ''}
           </span>
           ${ratingBadge(book.rating)}
         </a>

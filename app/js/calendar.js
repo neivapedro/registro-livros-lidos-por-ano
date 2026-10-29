@@ -2,7 +2,8 @@
 // Funções puras: recebem os livros e devolvem estruturas prontas para desenhar.
 
 import { formatShort, isLeapYear, monthOf, toIso, yearOf } from './dates.js';
-import { longestDayStreak, pagesReadPerDay } from './journal.js';
+import { formatDuration } from './audio.js';
+import { longestDayStreak, minutesListenedPerDay, pagesReadPerDay } from './journal.js';
 import { STATUS } from './store.js';
 
 /** Dia da semana com segunda = 0 … domingo = 6 (o calendário começa na segunda). */
@@ -71,13 +72,15 @@ export function levelFor(pages, sortedPositive) {
 
 /**
  * Tudo o que o calendário do ano precisa.
- * days: Map data → { pages, byBook, level } (só dias com leitura no diário).
+ * days: Map data → { pages, byBook, level, listened } (só dias com leitura no diário;
+ * listened: minutos ouvidos em audiolivros no dia).
  * finished / dropped: Map data → livros concluídos / abandonados naquele dia.
  */
 export function calendarData(books, year) {
   const days = new Map();
+  const heard = minutesListenedPerDay(books);
   for (const [date, day] of pagesReadPerDay(books)) {
-    if (yearOf(date) === year) days.set(date, { ...day });
+    if (yearOf(date) === year) days.set(date, { ...day, listened: heard.get(date) || 0 });
   }
   const sorted = [...days.values()].map((d) => d.pages).filter((p) => p > 0).sort((a, b) => a - b);
   for (const day of days.values()) day.level = levelFor(day.pages, sorted);
@@ -116,7 +119,8 @@ export function dayDetail(data, date) {
   const parts = [];
   if (day) {
     const books = day.byBook.map((b) => (b.pages ? `${b.title} (${b.pages})` : b.title)).join(', ');
-    parts.push(`${label} · ${day.pages ? pagesLabel(day.pages) : 'Leitura registrada'} — ${books}`);
+    const amount = [day.pages ? pagesLabel(day.pages) : '', day.listened ? `${formatDuration(day.listened)} ouvidos` : ''].filter(Boolean).join(' + ');
+    parts.push(`${label} · ${amount || 'Leitura registrada'} — ${books}`);
   } else {
     parts.push(`${label} · sem leitura registrada`);
   }

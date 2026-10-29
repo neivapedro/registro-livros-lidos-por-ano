@@ -1,4 +1,6 @@
-import { searchBooks } from './books-api.js';
+import { fetchWorkDescription, searchBooks } from './books-api.js';
+import { loanNames, normalizeCriteria, normalizeLoan, normalizePace, toggleMood } from './book-meta.js';
+import { loanSheet } from './views/meta-ui.js';
 import { booksToCsv, csvFileName } from './csv.js';
 import { readGoogleKey, readName, removeGoogleKey, saveGoogleKey, saveName } from './prefs.js';
 import { addTags, removeTag } from './tags.js';
@@ -13,7 +15,8 @@ import { normalizeCoverUrl } from './cover-url.js';
 import { photoToCover } from './cover-photo.js';
 import * as db from './db.js';
 import { editEntry, removeEntry, restoreEntry, syncPosition } from './diary.js';
-import { journalOnSave, recordProgress, unitOf, UNITS } from './journal.js';
+import { journalOnSave, positionField, recordProgress, unitOf } from './journal.js';
+import { fitTimeInput, formatDuration, parseDuration, readTimeInputs, writeTimeInputs } from './audio.js';
 import { renderQuoteImage } from './quote-image.js';
 import { buildQuote, quoteFileName, removeQuote, restoreQuote, upsertQuote } from './quotes.js';
 import { yearsWithData } from './stats.js';
@@ -44,22 +47,41 @@ import { curveMonthAt } from './views/scurve.js';
 import { addMinutes } from './journal.js';
 import {
   elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
-  sessionMinutes, sessionSummary, startSession, wholeMinutes,
+  sessionHours, sessionMinutes, sessionSummary, startSession, wholeMinutes,
 } from './timer.js';
 import { timerView } from './views/timer.js';
-import { closeSheet, openSheet } from './sheet.js';
+import {
+  CHALLENGE_TEMPLATES, challengeTitle, newlyCompleted, removeChallenge, restoreChallenge, saveChallenge, toggleChallengeBook,
+} from './challenges.js';
+import { challengeDetailSheet, challengeFormSheet, challengeNewSheet, targetUnit, valueField } from './views/challenges.js';
+import { autoTitle, RULE_VALUE } from './challenges.js';
+import { closeSheet, openSheet, remeasureSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
 import { celebrateFinish, confettiColors, introMotion } from './motion.js';
-import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
+import { progressSheet, progressTotal, quickMenu, quickMenuPreview } from './views/sheets.js';
 import { coverFallbackColor, finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initAccent, setAccentPref } from './accent.js';
+import { initTextScale, setTextPref } from './text-scale.js';
 import { slideTabs } from './tab-slide.js';
 import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
+import { initEdgeBack } from './edge-back.js';
+import { initNavShrink, resetNavShrink } from './nav-shrink.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
+import {
+  OCR_MAX_SIDE, OCR_QUALITY, OCR_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, extrasErrorMessage, keepSelection, ownsBook,
+  readPagePhoto, readSuggestions, saveSuggestions, suggestBooks,
+} from './ai-extras.js';
+import { resizePhoto } from './cover-photo.js';
+import { quotePhotoBlock, suggestionsView } from './views/ai-views.js';
+import { buildSnapshot, commonBooks, compareLink, decodeSnapshot, encodeWithinLimit, extractParam, readSavedCompare, removeSavedCompare, saveCompare } from './compare.js';
+import { compareEmptyView, compareView } from './views/compare.js';
+import { applyImport, MAX_FILE_BYTES, planImport, undoImport } from './goodreads.js';
+import { createAmbient, readAmbientPref, saveAmbientPref } from './ambient.js';
+import { ambientPicker } from './views/ambient.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -194,7 +216,7 @@ function blankDraft(status) {
     startDate: status === STATUS.READING ? today : null,
     endDate: status === STATUS.READ ? today : null,
     format: FORMATS.PHYSICAL, genre: null, rating: null, favorite: false, notes: '',
-    currentPage: null, currentPercent: null, dropReason: '', reread: false,
+    currentPage: null, currentPercent: null, currentMin: null, durationMin: null, dropReason: '', reread: false,
     series: '', seriesNumber: null, tags: [], targetDate: null, quotes: [], journal: [],
   };
 }
@@ -249,6 +271,7 @@ function enterRoute(route) {
     refreshStorageInfo();
     takeKeysFromRoute(route);
   }
+  if (route.name === 'comparar') takeCompareFromRoute(route);
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
   if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
@@ -276,6 +299,7 @@ function render() {
     enterRoute(route);
     window.scrollTo(0, 0);
   }
+  const changedScreen = !sameScreen;
   const today = todayIso();
   const ctx = { state, ui, today, year: ui.year };
   let html;
@@ -323,6 +347,13 @@ function render() {
     case 'trechos':
       html = allQuotesView(ctx);
       break;
+    case 'sugestoes':
+      html = suggestionsScreen(ctx);
+      break;
+    case 'comparar':
+      html = compareScreen();
+      showNav = false;
+      break;
     case 'ler':
       html = timerScreen(route.params[0]);
       if (html === null) return;
@@ -338,6 +369,7 @@ function render() {
   applyTints(root);
   applySpineColors(root);
   revealFinishFields();
+  fitSynopsis();
   // Abas e seletores: a marca desliza da opção anterior até a nova (js/tab-slide.js).
   slideTabs(root, [route.name, ...route.params].join('/'));
   if (route.name === 'resumo') summaryIntro(route);
@@ -360,6 +392,8 @@ function render() {
   const summaryLink = nav.querySelector('[data-nav="resumo"]');
   if (summaryLink) summaryLink.href = `#/resumo/${ui.year}`;
   syncLargeTitle();
+  // Tela nova: a barra de baixo volta ao tamanho cheio.
+  if (changedScreen) resetNavShrink();
 }
 
 /**
@@ -694,13 +728,37 @@ function openCoverViewer(src, title) {
 function withProgress(book, value) {
   const unit = unitOf(book);
   const journal = recordProgress(book, value, unit, todayIso());
-  return unit === UNITS.PERCENT ? { ...book, currentPercent: value, journal } : { ...book, currentPage: value, journal };
+  return { ...book, [positionField(unit)]: value, journal };
+}
+
+/** Audiolivro: minutos ouvidos (dos campos h e min, ou texto "5h30"). Chegar ao fim abre o Concluir. */
+function saveAudioProgress(book, raw) {
+  const value = typeof raw === 'number' || raw === null || raw === undefined ? raw ?? null : parseDuration(raw);
+  if (value === null) {
+    toast('Informe quanto já ouviu.');
+    return;
+  }
+  const total = Number(book.durationMin) || 0;
+  if (!Number.isFinite(value) || value < 0 || (total && value > total)) {
+    toast(total ? `Informe um tempo entre 0 e ${formatDuration(total)}.` : 'Informe um tempo válido, em horas e minutos.');
+    return;
+  }
+  ui.editingProgress = null;
+  if (total && value === total) {
+    go(`#/livro/${encodeURIComponent(book.id)}/editar?concluir=1`);
+    return value;
+  }
+  persist(upsertBook(state, withProgress(book, value)).state, 'Progresso atualizado.');
+  render();
+  closeSheet();
+  return value;
 }
 
 /** Kindle: valor em %. Físico: página. Chegar ao fim abre o Concluir. Devolve o valor aceito (nada se inválido). */
 function saveProgress(bookId, raw) {
   const book = state.books.find((b) => b.id === bookId);
   if (!book) return;
+  if (book.format === FORMATS.AUDIO) return saveAudioProgress(book, raw);
   const text = String(raw ?? '').trim().replace('%', '').replace(',', '.');
   if (text === '') {
     toast(book.format === FORMATS.KINDLE ? 'Informe a porcentagem.' : 'Informe a página.');
@@ -864,15 +922,19 @@ function saveBook() {
   // grava o mesmo livro de novo em vez de criar outro igual.
   d.id ||= newId();
   const booksBefore = state.books;
+  const stateBefore = state;
   const { state: next, book } = upsertBook(state, { ...d, journal: journalOnSave(d, ui.original, todayIso()) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
+  let milestone = false;
   if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) {
-    const milestone = celebrateMilestones(booksBefore, next.books);
+    milestone = celebrateMilestones(booksBefore, next.books);
     // Livro que estava em leitura (ou na fila) e foi concluído: festa ao voltar ao Início.
     if (ui.finishing || ui.original) queueFinishCelebration(book, milestone);
   }
+  // Desafio que este livro completou (1.6): um aviso, depois do de conclusão (ou do marco).
+  celebrateChallenges(stateBefore, next, milestone ? 5200 : 1800);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   leaveForm(ui.backHref);
 }
@@ -893,9 +955,11 @@ const actions = {
   'pick-result'(el) {
     const r = ui.lookup.results[Number(el.dataset.index)];
     if (!r) return;
-    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn });
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn, description: r.description || '' });
     ui.picked = true;
     render();
+    // Open Library: a sinopse fica na obra; vem depois, sem segurar a tela.
+    if (!r.description && r.workKey) loadWorkDescription(ui.draft, r.workKey);
   },
   unpick() {
     ui.picked = false;
@@ -1290,6 +1354,15 @@ document.addEventListener('click', (e) => {
 
 document.addEventListener('input', (e) => {
   const t = e.target;
+  // Duração e posição do audiolivro: dois campos (h e min) que viram um total de minutos.
+  if (t.dataset.timePart) fitTimeInput(t);
+  const timeGroup = t.dataset.timePart && ui.draft ? t.closest('[data-time-field]') : null;
+  if (timeGroup) {
+    const minutes = readTimeInputs(timeGroup);
+    ui.draft[timeGroup.dataset.timeField] = Number.isFinite(minutes) ? minutes : null;
+    const summary = document.getElementById('reading-summary');
+    if (summary) summary.innerHTML = readingSummary(ui.draft);
+  }
   if (t.dataset.field && ui.draft) {
     ui.draft[t.dataset.field] = t.type === 'number' ? (t.value === '' ? null : Number(t.value)) : t.value;
     // Atualiza só o resumo (dias, %): redesenhar o formulário tiraria o foco do campo.
@@ -1341,7 +1414,7 @@ document.addEventListener('keydown', (e) => {
     // Livro novo: o Return do teclado não salva (sairia "Lido" com a data de hoje sem querer).
     // Título → Autor → Páginas; nos outros campos só fecha o teclado. Salvar é só pelo botão.
     e.preventDefault();
-    const order = ['f-title', 'f-authors', 'f-pages'];
+    const order = ['f-title', 'f-authors', 'f-pages', 'f-duration', 'f-duration-min'];
     const at = order.indexOf(e.target.id);
     const next = at >= 0 ? document.getElementById(order[at + 1]) : null;
     if (next) next.focus();
@@ -1357,7 +1430,8 @@ document.addEventListener('submit', (e) => {
   const progressForm = e.target.closest('[data-progress-form]');
   if (progressForm) {
     e.preventDefault();
-    saveProgress(progressForm.dataset.id, progressForm.querySelector('input')?.value);
+    const time = progressForm.querySelector('[data-time]');
+    saveProgress(progressForm.dataset.id, time ? readTimeInputs(time) : progressForm.querySelector('#progress-input')?.value);
   }
 });
 
@@ -1656,7 +1730,7 @@ function timerScreen(id) {
     return null;
   }
   syncWakeLock();
-  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop) });
+  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop), ambient: ambientState() });
 }
 
 function tickTimer() {
@@ -1711,8 +1785,9 @@ function saveTimerSession(raw) {
   const book = sessionBook();
   if (!book) return;
   const minutes = sessionMinutes(elapsedMs(ui.session, Date.now()));
+  const hours = sessionHours(ui.session.startedAt, minutes);
   const unit = unitOf(book);
-  const before = (unit === UNITS.PERCENT ? book.currentPercent : book.currentPage) ?? 0;
+  const before = book[positionField(unit)] ?? 0;
   const value = saveProgress(book.id, raw);
   if (value === undefined) return;
   ui.timerStop = null;
@@ -1720,7 +1795,7 @@ function saveTimerSession(raw) {
   // Sessão de menos de 1 minuto não soma minutos (a posição já foi salva).
   if (minutes) {
     const saved = state.books.find((b) => b.id === book.id);
-    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso()) }).state);
+    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso(), hours) }).state);
   }
   // Fim do livro: saveProgress já abriu o Concluir; senão, volta ao Início.
   if (parseRoute().name === 'ler') go('#/inicio');
@@ -1755,7 +1830,7 @@ Object.assign(actions, {
     ui.timerStop = { resume: !isPaused(ui.session) };
     setSession(pauseSession(ui.session, Date.now()));
     render();
-    const input = document.getElementById('timer-input');
+    const input = document.querySelector('[data-timer-form] [data-time-part="h"]') || document.getElementById('timer-input');
     input?.focus();
     input?.select();
   },
@@ -1776,7 +1851,8 @@ Object.assign(actions, {
 document.addEventListener('submit', (e) => {
   if (!e.target.closest('[data-timer-form]')) return;
   e.preventDefault();
-  saveTimerSession(document.getElementById('timer-input')?.value);
+  const time = e.target.closest('[data-timer-form]').querySelector('[data-time]');
+  saveTimerSession(time ? readTimeInputs(time) : document.getElementById('timer-input')?.value);
 });
 
 window.addEventListener('hashchange', syncWakeLock);
@@ -1823,7 +1899,7 @@ function openProgressSheet(id, opener) {
     cls: 'sheet-progress',
     label: esc(`Registrar leitura: ${book.title}`),
     html: progressSheet(book, todayIso()),
-    focus: '#progress-input',
+    focus: book.format === FORMATS.AUDIO ? '#progress-h' : '#progress-input',
     opener,
     onClose: () => {
       if (ui.progressSheet === id) ui.progressSheet = null;
@@ -1831,22 +1907,42 @@ function openProgressSheet(id, opener) {
   });
 }
 
+// Menu com prévia (1.6): a capa do item na tela (ou o item inteiro, na lombada) é a que levanta.
+const PREVIEW_SOURCE = '.rn-cover, .li-cover, .cover';
+
+function previewSourceOf(item) {
+  return item ? item.querySelector(PREVIEW_SOURCE) || item : null;
+}
+
 function openQuickMenu(id, opener) {
   const book = state.books.find((b) => b.id === id);
   if (!book) return;
-  openSheet({ id: 'menu', cls: 'sheet-menu', label: esc(`Ações: ${book.title}`), html: quickMenu(book, state), opener });
+  // O botão "Mais ações" fica dentro do cartão/linha: a capa dele levanta junto.
+  const item = opener?.closest?.('[data-longpress]');
+  const resolve = () => previewSourceOf([...root.querySelectorAll('[data-longpress]')].find((x) => x.dataset.id === id));
+  const source = previewSourceOf(item) || resolve();
+  openSheet({
+    id: 'menu',
+    cls: 'sheet-menu',
+    label: esc(`Ações: ${book.title}`),
+    html: quickMenu(book, state),
+    opener,
+    context: source ? { source, resolve, preview: quickMenuPreview(book), href: `#/livro/${encodeURIComponent(id)}` } : null,
+  });
 }
 
-/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. */
+/** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. Audiolivro: campos h e min. */
 function syncProgressRange(form, fromRange) {
   const range = form.querySelector('#progress-range');
+  const time = form.querySelector('[data-time]');
   const input = form.querySelector('#progress-input');
-  if (!range || !input) return;
+  if (!range || (!input && !time)) return;
   if (fromRange) {
-    input.value = range.value;
+    if (time) writeTimeInputs(time, Number(range.value));
+    else input.value = range.value;
   } else {
-    const v = Number(String(input.value).replace(',', '.'));
-    if (input.value !== '' && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
+    const v = time ? readTimeInputs(time) : input.value === '' ? null : Number(String(input.value).replace(',', '.'));
+    if (v !== null && Number.isFinite(v)) range.value = String(Math.min(Number(range.max), Math.max(0, v)));
   }
   range.style.setProperty('--fill', `${((Number(range.value) / Number(range.max)) * 100).toFixed(1)}%`);
 }
@@ -1857,13 +1953,16 @@ Object.assign(actions, {
     const form = el.closest('[data-progress-form]');
     const book = state.books.find((b) => b.id === form?.dataset.id);
     const input = form?.querySelector('#progress-input');
-    if (!book || !input) return;
+    const time = form?.querySelector('[data-time]');
+    if (!book || (!input && !time)) return;
     const total = progressTotal(book);
-    const typed = Number(String(input.value).trim().replace(',', '.'));
-    const saved = Number(book.format === FORMATS.KINDLE ? book.currentPercent : book.currentPage) || 0;
-    let next = (input.value.trim() !== '' && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
+    const typed = time ? readTimeInputs(time) : input.value.trim() === '' ? null : Number(String(input.value).trim().replace(',', '.'));
+    const saved = Number(book[positionField(unitOf(book))]) || 0;
+    let next = (typed !== null && Number.isFinite(typed) ? typed : saved) + Number(el.dataset.delta);
     if (total) next = Math.min(total, next);
-    input.value = String(Math.max(0, Math.round(next)));
+    next = Math.max(0, Math.round(next));
+    if (time) writeTimeInputs(time, next);
+    else input.value = String(next);
     syncProgressRange(form, false);
   },
   'progress-finish'(el) {
@@ -1888,7 +1987,9 @@ Object.assign(actions, {
 
 document.addEventListener('input', (e) => {
   const form = e.target.closest?.('[data-progress-form]');
-  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input')) syncProgressRange(form, e.target.id === 'progress-range');
+  if (form && (e.target.id === 'progress-range' || e.target.id === 'progress-input' || e.target.dataset.timePart)) {
+    syncProgressRange(form, e.target.id === 'progress-range');
+  }
 });
 
 initLongPress((el) => {
@@ -1896,6 +1997,64 @@ initLongPress((el) => {
   openQuickMenu(el.dataset.id, el);
 });
 initSwipe();
+
+// ---------- Gestos nativos (1.6) ----------
+// Voltar deslizando da borda esquerda: nas telas com "Voltar" (ficha, edição, livro novo,
+// Ajustes, Todos os anos, Trechos, retrospectiva, cronômetro). Nunca nas abas principais.
+const ROOT_TABS = ['inicio', 'estante', 'buscar'];
+const BACK_LINK = '.ficha-back, .form-top a[data-leave], header.top > a.icon-btn[href^="#/"]:first-child, .retro-top a[href^="#/"]';
+
+function edgeBackTarget() {
+  const route = parseRoute();
+  if (ROOT_TABS.includes(route.name) || (route.name === 'resumo' && route.params[0] !== 'todos')) return null;
+  return root.querySelector(BACK_LINK);
+}
+
+/** O mesmo destino do botão Voltar; se ele é a tela anterior do histórico, volta por ele. */
+function edgeGoBack(link) {
+  const href = link.getAttribute('href') || '#/inicio';
+  if (link.matches('[data-leave]')) {
+    leaveForm(href);
+    return;
+  }
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  if (historyIndex > 0 && historyKeys.get(historyIndex - 1) === key) history.back();
+  else go(href);
+}
+
+/**
+ * Fundo do gesto: a tela para onde o Voltar leva, desenhada sem ids (não é a tela de verdade,
+ * só a imagem dela por baixo). Devolve a rolagem que ela terá ao voltar, ou null se não sabe
+ * desenhar (fica só o fundo do app).
+ */
+function edgeBackPreview(link, page) {
+  const href = link.getAttribute('href') || '#/inicio';
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  const [path, qs] = key.split('?');
+  const parts = path.split('/').filter(Boolean).map((p) => decodeURIComponent(p));
+  const name = parts[0] || 'inicio';
+  const ctx = { state, ui, today: todayIso(), year: ui.year };
+  let html = null;
+  if (name === 'inicio') html = homeView(ctx);
+  else if (name === 'estante') html = shelfView({ ...ctx, tab: new URLSearchParams(qs || '').get('aba') || ui.shelfTab });
+  else if (name === 'buscar') html = searchView(ctx);
+  else if (name === 'resumo') html = parts[1] === 'todos' ? allTimeView(ctx) : summaryView({ ...ctx, year: Number(parts[1]) || ui.year });
+  else if (name === 'ajustes') html = settingsView(ctx);
+  else if (name === 'livro' && parts.length === 2 && !qs) {
+    const book = state.books.find((b) => b.id === parts[1]);
+    if (book) html = bookDetailView({ ...ctx, book });
+  }
+  if (!html) return null;
+  page.innerHTML = html;
+  page.dataset.page = name;
+  for (const el of page.querySelectorAll('[id]')) el.removeAttribute('id');
+  // (sem applySpineColors: ele troca o observador das lombadas da tela de verdade)
+  applyTints(page);
+  return isBookKey(currentKey) && !isBookKey(key) ? listScroll.get(key) || 0 : 0;
+}
+
+initEdgeBack({ target: edgeBackTarget, back: edgeGoBack, preview: edgeBackPreview });
+initNavShrink();
 
 // ---------- Ficha do livro (v1.4) ----------
 // #/livro/:id mostra a ficha (views/book-detail.js); editar fica em #/livro/:id/editar.
@@ -1999,7 +2158,9 @@ document.addEventListener('click', (e) => {
   // Abrir a ficha a partir de uma capa (Início, Estante, Buscar, Resumo...).
   if (/^#\/livro\/[^/?]+$/.test(href)) {
     // No cartão "Lendo agora" a capa fica fora do link (que cobre o cartão inteiro).
-    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover');
+    // "Abrir livro" no menu com prévia: a capa levantada é a que voa para a ficha.
+    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover')
+      || link.closest('.sheet-layer.is-ctx')?.querySelector('.ctx-preview .cover');
     if (!from || href === location.hash) return;
     e.preventDefault();
     navigateWithCover(href, from);
@@ -2211,7 +2372,7 @@ Object.assign(actions, {
     const r = ui.lookup.ai?.results?.[Number(el.dataset.index)];
     if (!r || !ui.draft) return;
     // Sem ISBN conferido da IA, fica o ISBN que a pessoa digitou na busca (se digitou).
-    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn || ui.lookup.isbn || '' });
+    Object.assign(ui.draft, { title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn || ui.lookup.isbn || '', description: r.description || '' });
     ui.picked = true;
     render();
   },
@@ -2271,6 +2432,7 @@ window.addEventListener('hashchange', () => {
 
 ui.themePref = initTheme();
 ui.accent = initAccent();
+ui.textPref = initTextScale();
 initLargeTitles();
 
 actions['set-theme'] = (el) => {
@@ -2285,6 +2447,14 @@ actions['set-accent'] = (el) => {
   const id = el.dataset.value;
   if (!setAccentPref(id)) toast('Não foi possível guardar a cor neste aparelho; vale até fechar o app.');
   ui.accent = id;
+  render();
+};
+
+// Tamanho do texto (1.6): Sistema (segue o iPhone), Menor, Padrão ou Maior; só deste aparelho (js/text-scale.js).
+actions['set-text-size'] = (el) => {
+  const pref = el.dataset.value;
+  if (!setTextPref(pref)) toast('Não foi possível guardar o tamanho do texto neste aparelho; vale até fechar o app.');
+  ui.textPref = pref;
   render();
 };
 
@@ -2319,8 +2489,10 @@ document.addEventListener('keydown', (e) => {
 // o campo Páginas recebe o foco uma vez por rascunho.
 let askedDraft = null;
 function focusAskedField(route) {
-  if (!isBookEdit(route) || route.query.get('campo') !== 'paginas' || !ui.draft || askedDraft === ui.draft) return;
-  const input = document.getElementById('f-pages');
+  // ?campo=duracao (audiolivro sem duração): o campo de horas da duração.
+  const field = { paginas: 'f-pages', duracao: 'f-duration' }[route.query.get('campo')];
+  if (!isBookEdit(route) || !field || !ui.draft || askedDraft === ui.draft) return;
+  const input = document.getElementById(field);
   if (!input) return;
   askedDraft = ui.draft;
   input.focus({ preventScroll: true });
@@ -2351,6 +2523,678 @@ function playFinishCelebration(tick) {
   celebrateFinish(root, { id: c.id, colors, tick, big: c.big }).catch(() => {});
 }
 
+// ---------- 1.6: humor e ritmo, critérios, sinopse e empréstimo (book-meta.js, views/meta-ui.js) ----------
+
+/** Sinopse da obra (Open Library) chegando depois de escolher o livro: só preenche se ainda estiver vazia. */
+async function loadWorkDescription(draft, workKey) {
+  const text = await fetchWorkDescription(workKey);
+  if (!text || ui.draft !== draft || String(draft.description || '').trim()) return;
+  draft.description = text;
+  const typing = document.activeElement?.closest?.('#app') && document.activeElement.matches('input, textarea, select');
+  if (!typing) {
+    render();
+    return;
+  }
+  // Digitando em outro campo: não redesenha (o foco sairia); atualiza só a sinopse e o resumo.
+  const area = document.getElementById('f-description');
+  if (area && !area.value.trim()) area.value = text;
+  const summary = document.querySelector('.more-summary');
+  if (summary) summary.innerHTML = detailsSummary(draft);
+}
+
+/** "Ler mais" só quando a sinopse passa das ~4 linhas. */
+function fitSynopsis() {
+  const box = root.querySelector('.ficha-syn');
+  const text = box?.querySelector('.ficha-syn-text');
+  if (!text || box.classList.contains('is-open')) return;
+  box.classList.toggle('is-short', text.scrollHeight <= text.clientHeight + 2);
+}
+
+let lastLoan = null;
+
+function openLoanSheet(id, opener) {
+  const book = state.books.find((b) => b.id === id);
+  if (!book) return;
+  openSheet({
+    id: 'loan', cls: 'sheet-loan', label: esc(`Empréstimo: ${book.title}`),
+    html: loanSheet(book, loanNames(state.books), todayIso()), focus: '#loan-to', opener,
+  });
+}
+
+function saveLoan(form) {
+  const book = state.books.find((b) => b.id === form.dataset.id);
+  if (!book) return;
+  const to = form.querySelector('#loan-to')?.value || '';
+  const since = form.querySelector('#loan-since')?.value || '';
+  const loan = normalizeLoan({ to, since });
+  if (!loan) {
+    toast('Escreva o nome de quem pegou o livro.');
+    form.querySelector('#loan-to')?.focus();
+    return;
+  }
+  if (loan.since && loan.since > todayIso()) {
+    toast('A data do empréstimo não pode estar no futuro.');
+    return;
+  }
+  persist(upsertBook(state, { ...book, loan }).state, `Emprestado para ${loan.to}.`);
+  closeSheet();
+  render();
+}
+
+// ---------- IA 1.6: trecho por foto e "O que ler a seguir" ----------
+// Mesma IA gratuita (chave deste aparelho) e mesmo limite do mês da busca com IA: cada foto
+// lida e cada pedido de sugestões conta um uso, só quando sai de fato para o Google.
+// O texto da foto vai para o campo do trecho; nada é salvo sem o toque em Salvar.
+
+ui.suggest = { mode: 'fila', cache: readSuggestions(localStorage), loading: null, error: null };
+let ocrAbort = null;
+let ocrPhoto = null; // última foto já reduzida, para o "Tentar de novo"
+let quoteSelection = null; // última seleção feita no campo do trecho
+let suggestAbort = null;
+
+/** Ainda dentro do limite do mês? (outra aba pode ter contado também) */
+function aiAllowed() {
+  const stored = readAiUsage(localStorage);
+  if (aiSearchesThisMonth(stored, todayIso()) > aiSearchesThisMonth(ui.aiUsage, todayIso())) ui.aiUsage = stored;
+  return !aiLimitReached(ui.aiUsage, todayIso());
+}
+
+function countAiUse() {
+  ui.aiUsage = countAiSearch(localStorage, todayIso(), ui.aiUsage);
+}
+
+/** Redesenha só o bloco da foto (a tela inteira apagaria o que está sendo digitado). */
+function renderOcr() {
+  const el = document.getElementById('quote-ocr');
+  if (!el || !ui.quoteForm) return;
+  el.outerHTML = quotePhotoBlock(ui.quoteForm.ocr, { hasKey: Boolean(ui.geminiKey), limitReached: aiLimitReached(ui.aiUsage, todayIso()) });
+}
+
+function cancelOcr() {
+  ocrAbort?.abort();
+  ocrAbort = null;
+}
+
+async function readQuotePhoto(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  const form = ui.quoteForm;
+  if (!file || !form || !ui.geminiKey) return;
+  try {
+    ocrPhoto = await resizePhoto(file, { maxW: OCR_MAX_SIDE, maxH: OCR_MAX_SIDE, quality: OCR_QUALITY });
+  } catch {
+    ocrPhoto = null;
+    form.ocr = { status: 'error', code: 'image', message: extrasErrorMessage('ocr', 'image'), retry: false };
+    renderOcr();
+    return;
+  }
+  runOcr(form);
+}
+
+/** Texto lido: entra no campo (depois do que já estava escrito) e a página, se o campo está vazio. */
+function applyOcrText(form, { text, page }) {
+  const area = document.getElementById('q-text');
+  const pos = document.getElementById('q-pos');
+  const current = area ? area.value.trim() : '';
+  const value = (current ? `${current}\n\n${text}` : text).slice(0, 5000);
+  const position = pos && !pos.value && page ? String(page) : pos?.value ?? '';
+  if (area) {
+    area.value = value;
+    // O campo cresce para mostrar o texto lido (até um limite; depois rola).
+    area.style.height = 'auto';
+    area.style.height = `${Math.min(area.scrollHeight + 2, 420)}px`;
+  }
+  if (pos) pos.value = position;
+  form.prefill = { text: value, position };
+  form.ocr = { status: 'done', page };
+  quoteSelection = null;
+}
+
+async function runOcr(form) {
+  if (!ui.geminiKey || !ocrPhoto || ui.quoteForm !== form) return;
+  if (!aiAllowed()) {
+    form.ocr = null;
+    renderOcr();
+    return;
+  }
+  cancelOcr();
+  const ctrl = new AbortController();
+  ocrAbort = ctrl;
+  form.ocr = { status: 'loading', timeoutMs: OCR_TIMEOUT_MS };
+  renderOcr();
+  const book = state.books.find((b) => b.id === ui.draft?.id);
+  const stale = () => ctrl.signal.aborted || ui.quoteForm !== form;
+  try {
+    const out = await readPagePhoto(ocrPhoto, { key: ui.geminiKey, signal: ctrl.signal, maxPage: book?.pages || null, onSend: countAiUse });
+    if (stale()) return;
+    applyOcrText(form, out);
+  } catch (err) {
+    if (stale() || err?.code === 'cancelled') return;
+    const code = err?.code || 'server';
+    form.ocr = { status: 'error', code, message: extrasErrorMessage('ocr', code), retry: isRetryable(code) && code !== 'image' };
+  } finally {
+    if (ocrAbort === ctrl) ocrAbort = null;
+  }
+  renderOcr();
+  document.getElementById('q-text')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/** Deixa no campo só o que a pessoa selecionou. */
+function keepQuoteSelection() {
+  const area = document.getElementById('q-text');
+  if (!area) return;
+  let start = area.selectionStart;
+  let end = area.selectionEnd;
+  // Ao tocar no botão o campo perde o foco; vale a última seleção feita nele.
+  if (start === end && quoteSelection?.value === area.value) ({ start, end } = quoteSelection);
+  const picked = keepSelection(area.value, start, end);
+  if (!picked || picked === area.value.trim()) {
+    toast('Selecione o trecho no texto (toque duas vezes numa palavra e arraste) e toque de novo.', { duration: 5000 });
+    return;
+  }
+  area.value = picked;
+  if (ui.quoteForm?.prefill) ui.quoteForm.prefill.text = picked;
+  quoteSelection = null;
+  toast('Ficou só o trecho selecionado. Confira e toque em Salvar.');
+}
+
+document.addEventListener('selectionchange', () => {
+  const area = document.activeElement;
+  if (area?.id !== 'q-text' || area.selectionStart === area.selectionEnd) return;
+  quoteSelection = { start: area.selectionStart, end: area.selectionEnd, value: area.value };
+});
+
+document.addEventListener('change', (e) => {
+  if ('ocrPhoto' in e.target.dataset) readQuotePhoto(e.target);
+});
+
+// O texto lido continua no campo se a tela for redesenhada (com o que a pessoa já apagou).
+document.addEventListener('input', (e) => {
+  const prefill = ui.quoteForm?.prefill;
+  if (!prefill) return;
+  if (e.target.id === 'q-text') prefill.text = e.target.value;
+  else if (e.target.id === 'q-pos') prefill.position = e.target.value;
+});
+
+// Trocar de trecho, de aba ou cancelar: a leitura em andamento deixa de valer.
+for (const name of ['quote-new', 'quote-edit', 'quote-cancel', 'book-tab']) {
+  const original = actions[name];
+  actions[name] = (el) => {
+    cancelOcr();
+    return original(el);
+  };
+}
+
+// ---------- O que ler a seguir (#/sugestoes) ----------
+
+function suggestionsScreen(ctx) {
+  const used = aiSearchesThisMonth(ui.aiUsage, ctx.today);
+  return suggestionsView({ ...ctx, hasKey: Boolean(ui.geminiKey), used, limitReached: aiLimitReached(ui.aiUsage, ctx.today) });
+}
+
+function renderSuggest() {
+  if (parseRoute().name === 'sugestoes') render();
+}
+
+function cancelSuggest() {
+  suggestAbort?.abort();
+  suggestAbort = null;
+  ui.suggest.loading = null;
+}
+
+async function runSuggest() {
+  const sg = ui.suggest;
+  const mode = sg.mode;
+  if (!ui.geminiKey || sg.loading?.mode === mode) return;
+  if (sg.loading) cancelSuggest();
+  if (!aiAllowed()) {
+    renderSuggest();
+    return;
+  }
+  const ctrl = new AbortController();
+  suggestAbort = ctrl;
+  sg.loading = { mode, stage: 'ask', timeoutMs: SUGGEST_TIMEOUT_MS };
+  sg.error = null;
+  renderSuggest();
+  // Conferir os livros sugeridos na busca de sempre: só os achados aparecem, com os dados de lá.
+  const search = (q) => {
+    if (sg.loading?.mode === mode && sg.loading.stage !== 'verify' && !ctrl.signal.aborted) {
+      sg.loading = { mode, stage: 'verify', timeoutMs: 20000 };
+      renderSuggest();
+    }
+    return searchBooks(q, { signal: ctrl.signal, googleKey: googleBooksKey() });
+  };
+  try {
+    const out = await suggestBooks(mode, state.books, { key: ui.geminiKey, signal: ctrl.signal, onSend: countAiUse, search });
+    if (ctrl.signal.aborted) return;
+    sg.cache = saveSuggestions(localStorage, mode, out.items, todayIso());
+    sg.loading = null;
+  } catch (err) {
+    if (ctrl.signal.aborted) return;
+    const code = err?.code || 'server';
+    sg.loading = null;
+    sg.error = { mode, code, message: extrasErrorMessage('suggest', code), retry: isRetryable(code) };
+  } finally {
+    if (suggestAbort === ctrl) suggestAbort = null;
+  }
+  renderSuggest();
+}
+
+/** Livro sugerido (já conferido na busca) entra na fila "Quero ler". */
+function addSuggestion(index) {
+  const r = ui.suggest.cache?.novos?.items?.[index];
+  if (!r) return;
+  if (ownsBook(state.books, r)) {
+    toast('Esse livro já está nos seus livros.');
+    return;
+  }
+  const { state: next } = upsertBook(state, {
+    ...blankDraft(STATUS.WANT), title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn,
+  });
+  persist(next, `“${r.title}” entrou na fila Quero ler.`);
+  render();
+}
+
+Object.assign(actions, {
+  'toggle-mood'(el) {
+    if (!ui.draft) return;
+    ui.draft.moods = toggleMood(ui.draft.moods, el.dataset.value);
+    render();
+  },
+  'set-pace'(el) {
+    if (!ui.draft) return;
+    const pace = normalizePace(el.dataset.value);
+    ui.draft.pace = ui.draft.pace === pace ? null : pace;
+    render();
+  },
+  'toggle-criteria'(el) {
+    if (!ui.draft) return;
+    ui.criteriaOpen = { draft: ui.draft, open: el.getAttribute('aria-expanded') !== 'true' };
+    render();
+  },
+  'set-criterion'(el) {
+    if (!ui.draft) return;
+    const id = el.dataset.crit;
+    const n = Number(el.dataset.value);
+    const current = { ...(ui.draft.criteria || {}) };
+    if (current[id] === n) delete current[id];
+    else current[id] = n;
+    ui.draft.criteria = normalizeCriteria(current);
+    ui.criteriaOpen = { draft: ui.draft, open: true };
+    render();
+  },
+  'synopsis-more'(el) {
+    const box = el.closest('.ficha-syn');
+    if (!box) return;
+    const open = !box.classList.contains('is-open');
+    box.classList.toggle('is-open', open);
+    el.setAttribute('aria-expanded', String(open));
+    el.textContent = open ? 'Ler menos' : 'Ler mais';
+    ui.synopsisOpen = open ? el.dataset.id : null;
+  },
+  'loan-open'(el) { openLoanSheet(el.dataset.id, el); },
+  'loan-return'(el) {
+    const book = state.books.find((b) => b.id === el.dataset.id);
+    if (!book?.loan) return;
+    lastLoan = { id: book.id, loan: book.loan };
+    persist(upsertBook(state, { ...book, loan: null }).state);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    toast(`Devolvido: "${book.title}".`, { actionLabel: 'Desfazer', action: 'undo-loan-return', duration: 7000 });
+  },
+  'undo-loan-return'() {
+    const book = lastLoan && state.books.find((b) => b.id === lastLoan.id);
+    if (!book || book.loan) return;
+    persist(upsertBook(state, { ...book, loan: lastLoan.loan }).state, `De volta com ${lastLoan.loan.to}.`);
+    lastLoan = null;
+    render();
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest?.('[data-loan-form]');
+  if (!form) return;
+  e.preventDefault();
+  saveLoan(form);
+});
+
+Object.assign(actions, {
+  'ocr-nokey'() {
+    if (!ui.quoteForm) return;
+    ui.quoteForm.ocr = { status: 'nokey' };
+    renderOcr();
+  },
+  'ocr-cancel'() {
+    cancelOcr();
+    if (ui.quoteForm) ui.quoteForm.ocr = null;
+    renderOcr();
+  },
+  'ocr-retry'() { runOcr(ui.quoteForm); },
+  'ocr-keep-selection'() { keepQuoteSelection(); },
+  'suggest-mode'(el) {
+    const mode = el.dataset.value === 'novos' ? 'novos' : 'fila';
+    if (ui.suggest.mode === mode) return;
+    ui.suggest.mode = mode;
+    render();
+  },
+  'suggest-run'() { runSuggest(); },
+  'suggest-cancel'() {
+    cancelSuggest();
+    render();
+  },
+  'suggest-add'(el) { addSuggestion(Number(el.dataset.index)); },
+});
+
+window.addEventListener('hashchange', () => {
+  cancelOcr();
+  if (parseRoute().name !== 'sugestoes' && ui.suggest.loading) cancelSuggest();
+});
+
+// ---------- 1.6: comparar com alguém, importar do Goodreads e sons ambiente ----------
+
+// Comparar: o link (#/comparar?d=...) traz o resumo do ano de outra pessoa. Ele só é mostrado:
+// nada entra nos livros. "Guardar para ver depois" grava só esse resumo, numa chave própria do
+// localStorage (compare.js), fora do estado e do backup.
+ui.cmpWithBooks = true;
+ui.cmpYear = null;
+ui.cmpSaved = readSavedCompare(localStorage);
+ui.cmpPeer = null; // { param, snap } aberto agora
+let cmpLinkReady = null; // link já montado para as opções atuais (o Compartilhar do iPhone pede o toque "fresco")
+
+/** Abriu #/comparar: pelo link (confere e tira o resumo do endereço) ou sem nada (mostra o guardado). */
+function takeCompareFromRoute(route) {
+  if (route.query.has('d')) {
+    const param = extractParam(route.query.get('d'));
+    const snap = decodeSnapshot(param);
+    ui.cmpPeer = snap ? { param, snap } : null;
+    if (!snap) toast('Esse link de comparação não abriu. Peça para enviarem de novo.');
+    try {
+      history.replaceState(history.state, '', '#/comparar');
+    } catch { /* sem acesso ao histórico: o endereço fica, e nada é salvo */ }
+    currentKey = parseRoute().key;
+    historyKeys.set(historyIndex, currentKey);
+  } else if (!ui.cmpPeer && ui.cmpSaved) {
+    ui.cmpPeer = { param: ui.cmpSaved.param, snap: ui.cmpSaved.snap };
+  }
+}
+
+function compareScreen() {
+  const peer = ui.cmpPeer;
+  if (!peer) return compareEmptyView();
+  const theirs = peer.snap;
+  const mine = buildSnapshot(state, theirs.y, todayIso(), { name: ui.userName, withBooks: false });
+  const names = [ui.userName || 'Você', theirs.n || 'Outra pessoa'];
+  return compareView({ mine, theirs, common: commonBooks(theirs, state.books), saved: ui.cmpSaved?.param === peer.param, names });
+}
+
+function compareOptions() {
+  const year = ui.cmpYear || yearOf(todayIso());
+  return { year, withBooks: ui.cmpWithBooks, name: ui.userName, state };
+}
+
+/** Monta o link para as opções atuais (compactar é assíncrono). */
+async function prepareCompareLink() {
+  const opts = compareOptions();
+  const snap = buildSnapshot(state, opts.year, todayIso(), { name: opts.name, withBooks: opts.withBooks });
+  const out = await encodeWithinLimit(snap);
+  if (!out) return null;
+  const ready = {
+    opts,
+    year: opts.year,
+    link: compareLink(`${location.origin}${location.pathname}`, out.param),
+    cut: snap.b ? snap.b.length - (out.snap.b?.length || 0) : 0,
+    kept: out.snap.b?.length || 0,
+  };
+  cmpLinkReady = ready;
+  return ready;
+}
+
+function sameOptions(a, b) {
+  return a && b && a.year === b.year && a.withBooks === b.withBooks && a.name === b.name && a.state === b.state;
+}
+
+async function shareCompare() {
+  const ready = sameOptions(cmpLinkReady?.opts, compareOptions()) ? cmpLinkReady : await prepareCompareLink();
+  if (!ready) {
+    toast('Não foi possível montar o link agora.');
+    return;
+  }
+  const { link, year } = ready;
+  if (ready.cut) toast(`A lista foi encurtada para ${ready.kept} livros, para o link não ficar grande demais.`, { duration: 5000 });
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: `Minhas leituras de ${year}`, text: `Compare as nossas leituras de ${year} no Leituras. No iPhone, abra o app e cole este link em Ajustes › Comparar com alguém:`, url: link });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link copiado. Mande pelo WhatsApp ou e-mail para quem vai comparar.', { duration: 6000 });
+  } catch {
+    window.prompt('Copie o link e envie:', link);
+  }
+}
+
+// Import do Goodreads / StoryGraph: prévia no topo de Ajustes; só acrescenta livros.
+ui.grImport = null;
+let grUndo = null; // ids acrescentados pela última importação
+
+const IMPORT_ERRORS = {
+  vazio: 'O arquivo está vazio.',
+  formato: 'Esse arquivo não parece a planilha do Goodreads (Exportar biblioteca) nem a do StoryGraph.',
+  grande: 'Arquivo grande demais para importar de uma vez.',
+};
+
+async function importCsv(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (file.size > MAX_FILE_BYTES) {
+    toast(IMPORT_ERRORS.grande);
+    return;
+  }
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    toast('Não foi possível ler o arquivo.');
+    return;
+  }
+  const plan = planImport(state, text);
+  if (plan.error) {
+    toast(IMPORT_ERRORS[plan.error]);
+    return;
+  }
+  ui.grImport = { plan, fileName: file.name, includeDuplicates: false };
+  if (parseRoute().name !== 'ajustes') return;
+  render();
+  window.scrollTo(0, 0);
+}
+
+// Som ambiente do cronômetro: só neste aparelho (localStorage), fora do backup.
+const ambientPlayer = createAmbient();
+ui.ambient = readAmbientPref(localStorage);
+
+function ambientState() {
+  return { ...ui.ambient, playing: ambientPlayer.playing };
+}
+
+/** Deve tocar: há um som escolhido e o cronômetro corre (sem o formulário do Parar aberto). */
+function ambientWanted() {
+  return ui.ambient.sound !== 'off' && Boolean(ui.session) && !isPaused(ui.session) && !ui.timerStop;
+}
+
+/** Atualiza só o seletor (redesenhar a tela inteira mexeria no relógio e no foco). */
+function refreshAmbientUi() {
+  const el = root.querySelector('.amb');
+  if (el) el.outerHTML = ambientPicker(ambientState(), { paused: Boolean(ui.session && isPaused(ui.session)) });
+}
+
+/**
+ * Liga ou desliga o som conforme o cronômetro. gesture: chamado dentro de um toque (só aí o
+ * iPhone deixa o som começar). Fora da tela do cronômetro, só toca se o toque vai levar a ela.
+ */
+function syncAmbient({ gesture = false } = {}) {
+  const onTimer = parseRoute().name === 'ler';
+  if (!ambientWanted() || (!onTimer && !gesture)) {
+    if (ambientPlayer.playing) ambientPlayer.stop();
+  } else if (gesture && !ambientPlayer.playing) {
+    ambientPlayer.play(ui.ambient.sound, ui.ambient.volume);
+  }
+  refreshAmbientUi();
+}
+
+// Os botões do cronômetro (todos são toques) ligam ou desligam o som depois de fazer o seu trabalho.
+for (const name of ['start-timer', 'timer-toggle', 'timer-stop', 'timer-back', 'timer-cancel']) {
+  const original = actions[name];
+  actions[name] = (el) => {
+    original(el);
+    syncAmbient({ gesture: true });
+  };
+}
+
+Object.assign(actions, {
+  'share-compare'() { shareCompare(); },
+  'compare-books'() {
+    ui.cmpWithBooks = !ui.cmpWithBooks;
+    render();
+    prepareCompareLink();
+  },
+  'paste-compare'() {
+    const param = extractParam(document.querySelector('[data-comparelink]')?.value);
+    const snap = decodeSnapshot(param);
+    if (!snap) {
+      toast('Cole o link inteiro recebido (ele tem “comparar?d=” no meio).');
+      return;
+    }
+    ui.cmpPeer = { param, snap };
+    go('#/comparar');
+  },
+  'compare-save'() {
+    const peer = ui.cmpPeer;
+    if (!peer) return;
+    const old = ui.cmpSaved;
+    if (old && old.param !== peer.param
+      && !window.confirm(`Trocar a comparação guardada (${old.snap.n || 'Outra pessoa'} · ${old.snap.y}) por esta?`)) return;
+    if (!saveCompare(localStorage, peer.param, todayIso())) {
+      toast('Não foi possível guardar neste aparelho.');
+      return;
+    }
+    ui.cmpSaved = readSavedCompare(localStorage);
+    render();
+    toast('Guardada neste celular. Veja de novo em Ajustes › Comparar com alguém.', { duration: 5000 });
+  },
+  'compare-open-saved'() {
+    if (!ui.cmpSaved) return;
+    ui.cmpPeer = { param: ui.cmpSaved.param, snap: ui.cmpSaved.snap };
+    go('#/comparar');
+  },
+  'compare-forget'() {
+    removeSavedCompare(localStorage);
+    ui.cmpSaved = null;
+    if (parseRoute().name !== 'comparar') ui.cmpPeer = null;
+    render();
+    toast('Comparação guardada apagada.');
+  },
+  'gr-dups'() {
+    if (!ui.grImport?.plan) return;
+    ui.grImport.includeDuplicates = !ui.grImport.includeDuplicates;
+    render();
+  },
+  'gr-import'() {
+    const imp = ui.grImport;
+    if (!imp?.plan) return;
+    const { state: next, ids } = applyImport(state, imp.plan, { includeDuplicates: imp.includeDuplicates });
+    if (!ids.length) return;
+    grUndo = ids;
+    ui.grImport = { done: { count: ids.length } };
+    persist(next);
+    render();
+    window.scrollTo(0, 0);
+    toast(`${ids.length === 1 ? '1 livro importado' : `${ids.length} livros importados`}.`, { actionLabel: 'Desfazer', action: 'gr-undo', duration: 10000 });
+  },
+  'gr-undo'() {
+    if (!grUndo) return;
+    const ids = grUndo;
+    grUndo = null;
+    persist(undoImport(state, ids));
+    ui.grImport = null;
+    render();
+    toast('Importação desfeita.');
+  },
+  'gr-cancel'() {
+    ui.grImport = null;
+    render();
+    toast('Nada foi importado.');
+  },
+  'gr-close'() {
+    ui.grImport = null;
+    render();
+  },
+  'ambient-pick'(el) {
+    const sound = el.dataset.value;
+    ui.ambient = { ...ui.ambient, sound };
+    if (!saveAmbientPref(localStorage, ui.ambient)) toast('Não foi possível guardar o som neste aparelho; vale até fechar o app.');
+    if (sound === 'off' || !ambientWanted() || parseRoute().name !== 'ler') ambientPlayer.stop();
+    else ambientPlayer.play(sound, ui.ambient.volume);
+    refreshAmbientUi();
+    root.querySelector(`.amb-chip[data-value="${sound}"]`)?.focus({ preventScroll: true });
+  },
+});
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if ('importCsv' in t.dataset) importCsv(t);
+  else if ('compareYear' in t.dataset) {
+    ui.cmpYear = Number(t.value) || null;
+    prepareCompareLink();
+  } else if ('ambientVolume' in t.dataset) {
+    if (!saveAmbientPref(localStorage, ui.ambient)) toast('Não foi possível guardar o volume neste aparelho.');
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (!('ambientVolume' in e.target.dataset)) return;
+  ui.ambient = { ...ui.ambient, volume: Number(e.target.value) };
+  ambientPlayer.setVolume(ui.ambient.volume);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && 'comparelink' in e.target.dataset) {
+    e.preventDefault();
+    actions['paste-compare']();
+  }
+});
+
+// Voltar ao cronômetro pelo aviso do Início também é um toque: o som pode começar já.
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('a[href^="#/ler/"]') && ambientWanted()) ambientPlayer.play(ui.ambient.sound, ui.ambient.volume);
+}, true);
+
+// O iPhone interrompe o áudio (ligação, outro app, tela bloqueada): no próximo toque, volta.
+for (const type of ['touchend', 'click']) {
+  document.addEventListener(type, () => {
+    if (ambientPlayer.playing && ambientPlayer.state !== 'running') ambientPlayer.resume();
+  }, { capture: true, passive: true });
+}
+
+window.addEventListener('hashchange', () => {
+  const name = parseRoute().name;
+  if (name !== 'ajustes') ui.grImport = null;
+  if (name === 'ajustes') prepareCompareLink();
+  syncAmbient();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') ambientPlayer.resume();
+});
+
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('[data-timer-form]')) queueMicrotask(() => syncAmbient());
+});
+
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
 async function boot() {
   try {
@@ -2367,3 +3211,176 @@ async function boot() {
 }
 
 boot();
+
+// ---------- Desafios de leitura (1.6) ----------
+// Cartão na Visão geral do Resumo; criar, editar, ver e excluir em folhas (views/challenges.js).
+
+let lastChallengeDeleted = null;
+let challengeToastTimer = null;
+
+/** Desafio completado por uma mudança nos livros: um aviso discreto (sem notificação), uma vez. */
+function celebrateChallenges(before, after, delay = 0) {
+  const done = newlyCompleted(before, after);
+  if (!done.length) return;
+  const message = done.length === 1
+    ? `Desafio concluído: ${challengeTitle(done[0])}. Parabéns!`
+    : `${done.length} desafios concluídos. Parabéns!`;
+  clearTimeout(challengeToastTimer);
+  challengeToastTimer = setTimeout(() => toast(message, { duration: 5000 }), delay);
+}
+
+/** Troca o conteúdo da folha aberta (sugestões → formulário → detalhe) sem fechá-la. */
+function swapSheet(html, focus = null) {
+  const body = document.querySelector('.sheet-layer .sheet-body');
+  if (!body) return false;
+  body.innerHTML = html;
+  body.scrollTop = 0;
+  remeasureSheet();
+  const target = focus ? body.querySelector(focus) : null;
+  (target || body.closest('.sheet'))?.focus({ preventScroll: true });
+  return true;
+}
+
+function openChallengeSheet(html, opener, label, focus = null) {
+  openSheet({ id: 'challenge', cls: 'sheet-challenge', label: esc(label), html, opener, focus });
+}
+
+function challengeById(id) {
+  return (state.challenges || []).find((c) => c.id === id) || null;
+}
+
+function challengeDraftFrom(form) {
+  const data = new FormData(form);
+  return {
+    id: form.dataset.id || null,
+    year: Number(form.dataset.year),
+    type: String(data.get('type') || 'manual'),
+    value: String(data.get('value') ?? '').trim(),
+    target: String(data.get('target') ?? '').trim(),
+    title: String(data.get('title') ?? '').trim(),
+  };
+}
+
+/** Atualiza o que depende do tipo e da meta (campo do valor, palavra da meta e nome sugerido). */
+function syncChallengeForm(form, typeChanged) {
+  const d = challengeDraftFrom(form);
+  if (typeChanged) {
+    form.querySelector('[data-ch-value]').innerHTML = valueField(state, d.type, null);
+    d.value = String(form.querySelector('#ch-value')?.value ?? '').trim();
+  }
+  const n = Number(d.target) || 1;
+  const unit = form.querySelector('[data-ch-unit]');
+  if (unit) unit.textContent = targetUnit(d.type, n);
+  const value = d.type === 'pages' ? Number(d.value) || 500 : d.value || '…';
+  form.querySelector('#ch-title')?.setAttribute('placeholder', autoTitle({ type: d.type, value }, n));
+}
+
+function submitChallenge(form) {
+  const d = challengeDraftFrom(form);
+  const target = Number(d.target);
+  let error = '';
+  if (!Number.isInteger(target) || target < 1 || target > 1000) error = 'A meta vai de 1 a 1000.';
+  const kind = RULE_VALUE[d.type];
+  let value = d.value || null;
+  if (kind === 'number') {
+    value = Number(d.value);
+    if (!Number.isInteger(value) || value < 1 || value > 20000) error ||= 'Informe um número de páginas entre 1 e 20000.';
+  } else if (kind && d.type !== 'series' && !value) {
+    error ||= d.type === 'tag' ? 'Informe a etiqueta.' : d.type === 'author' ? 'Informe o autor.' : 'Escolha uma opção.';
+  }
+  if (error) {
+    const p = form.querySelector('.chs-error');
+    p.textContent = error;
+    p.hidden = false;
+    return;
+  }
+  const existing = d.id ? challengeById(d.id) : null;
+  const { state: next, challenge } = saveChallenge(state, {
+    ...(existing || {}), id: d.id || undefined, year: d.year, title: d.title, target, rule: { type: d.type, value },
+  });
+  if (!challenge) {
+    toast('Não foi possível salvar o desafio.');
+    return;
+  }
+  persist(next, existing ? 'Desafio salvo.' : 'Desafio criado.');
+  render();
+  // Criado do zero no modo "eu escolho": a folha já mostra os livros para marcar.
+  if (!existing && challenge.rule.type === 'manual') swapSheet(challengeDetailSheet(state, challenge));
+  else closeSheet();
+}
+
+Object.assign(actions, {
+  'challenge-new'(el) {
+    openChallengeSheet(challengeNewSheet(state, Number(el.dataset.year)), el, 'Novo desafio');
+  },
+  'challenge-template'(el) {
+    const t = CHALLENGE_TEMPLATES.find((x) => x.key === el.dataset.key);
+    if (!t) return;
+    const { state: next, challenge } = saveChallenge(state, { year: Number(el.dataset.year), title: t.title, target: t.target, rule: t.rule });
+    if (!challenge) return;
+    persist(next, `Desafio criado: ${t.title}.`);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    document.querySelector(`.ch-item[data-id="${CSS.escape(challenge.id)}"]`)?.focus({ preventScroll: true });
+  },
+  'challenge-custom'(el) {
+    swapSheet(challengeFormSheet(state, { id: null, year: Number(el.dataset.year), type: 'genre', value: null, target: 3, title: '' }), '#ch-type');
+  },
+  'challenge-open'(el) {
+    const c = challengeById(el.dataset.id);
+    if (c) openChallengeSheet(challengeDetailSheet(state, c), el, `Desafio: ${challengeTitle(c)}`);
+  },
+  'challenge-edit'(el) {
+    const c = challengeById(el.dataset.id);
+    if (c) swapSheet(challengeFormSheet(state, { ...c, type: c.rule.type, value: c.rule.value }), '#ch-type');
+  },
+  'challenge-step'(el) {
+    const form = el.closest('[data-challenge-form]');
+    const input = form?.querySelector('#ch-target');
+    if (!input) return;
+    input.value = String(Math.min(1000, Math.max(1, (Number(input.value) || 0) + Number(el.dataset.delta))));
+    syncChallengeForm(form, false);
+  },
+  'challenge-delete'(el) {
+    const { state: next, removed, index } = removeChallenge(state, el.dataset.id);
+    if (!removed) return;
+    lastChallengeDeleted = { challenge: removed, index };
+    persist(next);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    toast(`Desafio "${challengeTitle(removed)}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-challenge-delete', duration: 7000 });
+  },
+  'undo-challenge-delete'() {
+    if (!lastChallengeDeleted) return;
+    persist(restoreChallenge(state, lastChallengeDeleted.challenge, lastChallengeDeleted.index), 'Desafio restaurado.');
+    lastChallengeDeleted = null;
+    render();
+  },
+  'challenge-pick'(el) {
+    const before = state;
+    const next = toggleChallengeBook(state, el.dataset.id, el.dataset.book);
+    if (next === state) return;
+    persist(next);
+    render();
+    const c = challengeById(el.dataset.id);
+    if (c) swapSheet(challengeDetailSheet(state, c), `[data-action="challenge-pick"][data-book="${CSS.escape(el.dataset.book)}"]`);
+    celebrateChallenges(before, state);
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (!form) return;
+  e.preventDefault();
+  submitChallenge(form);
+});
+
+document.addEventListener('change', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (form) syncChallengeForm(form, e.target.id === 'ch-type');
+});
+
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (form && e.target.id !== 'ch-title') syncChallengeForm(form, false);
+});

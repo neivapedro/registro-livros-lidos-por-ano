@@ -1,15 +1,18 @@
 // Abas da página do livro: Dados (o formulário de form.js), Diário e Trechos.
 // Diário e Trechos salvam na hora; o formulário de Dados continua com o Salvar do topo.
 
+import { formatDuration } from '../audio.js';
 import { formatShort } from '../dates.js';
 import { diarySummary, entriesNewestFirst, entryDate, entryParts } from '../diary.js';
 import { UNITS } from '../journal.js';
-import { STATUS } from '../store.js';
+import { FORMATS, STATUS } from '../store.js';
 import { quotePosition, quoteSavedDay, quotesNewestFirst, quoteUsesPercent } from '../quotes.js';
 import { dayLabel, formatMinutes, weekGroups } from '../reading-days.js';
 import { esc, icon, num, plural } from '../ui.js';
 import { emptyScene } from '../empty-art.js';
 import { amountText, rhythmChart } from './rhythm.js';
+import { aiLimitReached } from '../prefs.js';
+import { quotePhotoBlock } from './ai-views.js';
 
 export const BOOK_TABS = ['dados', 'diario', 'trechos'];
 
@@ -67,6 +70,14 @@ export function bookTabScreen({ state, ui, today }) {
 function diarySummaryTiles(book) {
   const s = diarySummary(book);
   if (!s.days) return '';
+  if (s.unit === UNITS.MINUTE) {
+    return `
+    <section class="tiles tiles-3 diary-summary" aria-label="Resumo do diário">
+      <div class="tile"><span class="tile-value">${num(s.days)}</span><span class="tile-label">${s.days === 1 ? 'dia ouvindo' : 'dias ouvindo'}</span></div>
+      <div class="tile"><span class="tile-value">${esc(formatDuration(s.minutes))}</span><span class="tile-label">ouvidos</span></div>
+      <div class="tile"><span class="tile-value">${esc(formatDuration(s.avg))}</span><span class="tile-label">por dia ouvindo</span></div>
+    </section>`;
+  }
   const percent = s.unit === UNITS.PERCENT;
   return `
     <section class="tiles tiles-3 diary-summary" aria-label="Resumo do diário">
@@ -95,6 +106,12 @@ function diaryRow(book, entry, today) {
     </li>`;
 }
 
+/** Correção de um dia do audiolivro: tempos em texto ("1h 20min", "1:20" ou "80"). */
+function audioTimeFields(book, entry) {
+  const field = (name, label, value) => `<div class="field"><label for="d-${name}">${label}</label><input id="d-${name}" name="${name}" type="text" inputmode="text" autocomplete="off" placeholder="1h 20min" value="${esc(formatDuration(value))}"></div>`;
+  return `<div class="two-cols">${field('from', 'De (tempo)', entry.from)}${field('to', 'Até (tempo)', entry.to)}</div>`;
+}
+
 function diaryForm(book, entry, today) {
   const percent = entry.unit === UNITS.PERCENT;
   const max = percent ? 100 : book.pages || 20000;
@@ -104,10 +121,10 @@ function diaryForm(book, entry, today) {
       <form class="notes-form" data-diary-form data-date="${esc(entry.date)}" novalidate>
         <span class="label">Corrigir registro</span>
         <div class="field"><label for="d-date">Data</label><input id="d-date" name="date" type="date" max="${esc(today)}" value="${esc(entry.date)}"></div>
-        <div class="two-cols">
+        ${entry.unit === UNITS.MINUTE ? audioTimeFields(book, entry) : `<div class="two-cols">
           <div class="field"><label for="d-from">De ${unitLabel}</label><input id="d-from" name="from" type="number" inputmode="numeric" min="0" max="${max}" value="${esc(entry.from)}"></div>
           <div class="field"><label for="d-to">Até ${unitLabel}</label><input id="d-to" name="to" type="number" inputmode="numeric" min="0" max="${max}" value="${esc(entry.to)}"></div>
-        </div>
+        </div>`}
         <div class="field"><label for="d-note">Nota (opcional)</label><input id="d-note" name="note" type="text" maxlength="500" placeholder="Onde leu, o que achou…" value="${esc(entry.note || '')}"></div>
         <div class="notes-form-actions">
           <button type="button" class="btn-text danger" data-action="diary-delete" data-date="${esc(entry.date)}">Excluir</button>
@@ -121,7 +138,7 @@ function diaryForm(book, entry, today) {
 
 function diaryTab(book, ui, today) {
   const entries = entriesNewestFirst(book);
-  const where = quoteUsesPercent(book) ? 'a porcentagem' : 'a página';
+  const where = book.format === FORMATS.AUDIO ? 'o tempo ouvido' : quoteUsesPercent(book) ? 'a porcentagem' : 'a página';
   if (!entries.length) {
     const hint = book.status === STATUS.WANT
       ? `Quando começar a ler, cada vez que você atualizar ${where} no cartão do Início, o dia fica registrado aqui.`
@@ -165,17 +182,17 @@ function diaryWeek(book, week, index, ui, today) {
 
 // ---------- Trechos ----------
 
-function quoteForm(book, quote) {
+function quoteForm(book, quote, ui = {}, today = '') {
   const percent = quoteUsesPercent(book);
   const position = percent ? quote?.percent : quote?.page;
-  const posLabel = percent ? 'Posição no Kindle (%)' : `Página${book.pages ? ` (de ${book.pages})` : ''}`;
+  const posLabel = percent ? `Posição no ${book.format === FORMATS.AUDIO ? 'áudio' : 'Kindle'} (%)` : `Página${book.pages ? ` (de ${book.pages})` : ''}`;
   return `
     <form class="card notes-form quote-form" data-quote-form data-id="${esc(quote?.id || '')}" novalidate>
       <span class="label">${quote ? 'Corrigir trecho' : 'Novo trecho'}</span>
       <label class="sr-only" for="q-text">Trecho</label>
-      <textarea id="q-text" name="text" rows="5" maxlength="5000" placeholder="Copie ou digite o trecho…">${esc(quote?.text || '')}</textarea>
-      ${percent ? '' : '<p class="quote-hint">Dica: no livro físico, use o Texto ao Vivo da Câmera do iPhone para copiar o trecho e cole aqui.</p>'}
-      <div class="field"><label for="q-pos">${posLabel}</label><input id="q-pos" name="position" type="number" inputmode="numeric" min="0" max="${percent ? 100 : book.pages || 20000}" value="${esc(position ?? '')}"></div>
+      <textarea id="q-text" name="text" rows="5" maxlength="5000" placeholder="Copie ou digite o trecho…">${esc(ui.quoteForm?.prefill?.text ?? quote?.text ?? '')}</textarea>
+      ${percent ? '' : quotePhotoBlock(ui.quoteForm?.ocr, { hasKey: Boolean(ui.geminiKey), limitReached: aiLimitReached(ui.aiUsage, today) })}
+      <div class="field"><label for="q-pos">${posLabel}</label><input id="q-pos" name="position" type="number" inputmode="numeric" min="0" max="${percent ? 100 : book.pages || 20000}" value="${esc(ui.quoteForm?.prefill?.position ?? position ?? '')}"></div>
       <div class="field"><label for="q-note">Nota (opcional)</label><input id="q-note" name="note" type="text" maxlength="500" placeholder="Por que esse trecho marcou" value="${esc(quote?.note || '')}"></div>
       <div class="notes-form-actions">
         <span class="notes-form-gap"></span>
@@ -206,15 +223,15 @@ function quoteCard(book, quote) {
     </article>`;
 }
 
-function quotesTab(book, ui) {
+function quotesTab(book, ui, today) {
   const quotes = quotesNewestFirst(book);
   const form = ui.quoteForm;
   const adding = form && !form.id;
   const addButton = '<button type="button" class="btn-outline sm" data-action="quote-new">+ Trecho</button>';
-  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q) : quoteCard(book, q))).join('');
+  const list = quotes.map((q) => (form?.id === q.id ? quoteForm(book, q, ui, today) : quoteCard(book, q))).join('');
   const body = !quotes.length && !adding
     ? emptyScene('trechos', 'Nenhum trecho salvo', 'Guarde aqui as frases que marcaram você neste livro.', addButton)
-    : `${adding ? quoteForm(book, null) : ''}<div class="quote-list">${list}</div>`;
+    : `${adding ? quoteForm(book, null, ui, today) : ''}<div class="quote-list">${list}</div>`;
   return `
     <section class="book-tab-panel" role="tabpanel">
       ${quotes.length && !adding ? `<div class="quotes-head"><span class="muted small">${plural(quotes.length, 'trecho salvo', 'trechos salvos')}</span>${addButton}</div>` : ''}

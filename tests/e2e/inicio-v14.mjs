@@ -389,7 +389,7 @@ try {
   await page.click('[data-action="quick-menu"][data-id="w3"]');
   await page.waitForSelector(`${openSheet} .qm`);
   assert.deepEqual((await page.locator(`${openSheet} .qm-item`).allTextContents()).map((t) => t.trim()),
-    ['Abrir livro', 'Começar a ler', 'Marcar como próxima']);
+    ['Abrir livro', 'Começar a ler', 'Marcar como próxima', 'Emprestei para…']);
   await shot('menu-quero');
   await page.click(`${openSheet} [data-action="toggle-next"]`);
   await waitState((s) => s.upNext.join() === 'w1,w2,w3');
