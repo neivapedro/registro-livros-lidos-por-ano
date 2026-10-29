@@ -63,6 +63,7 @@ import { progressSheet, progressTotal, quickMenu, quickMenuPreview } from './vie
 import { coverFallbackColor, finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initAccent, setAccentPref } from './accent.js';
+import { initTextScale, setTextPref } from './text-scale.js';
 import { slideTabs } from './tab-slide.js';
 import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
@@ -2431,6 +2432,7 @@ window.addEventListener('hashchange', () => {
 
 ui.themePref = initTheme();
 ui.accent = initAccent();
+ui.textPref = initTextScale();
 initLargeTitles();
 
 actions['set-theme'] = (el) => {
@@ -2445,6 +2447,14 @@ actions['set-accent'] = (el) => {
   const id = el.dataset.value;
   if (!setAccentPref(id)) toast('Não foi possível guardar a cor neste aparelho; vale até fechar o app.');
   ui.accent = id;
+  render();
+};
+
+// Tamanho do texto (1.6): Sistema (segue o iPhone), Menor, Padrão ou Maior; só deste aparelho (js/text-scale.js).
+actions['set-text-size'] = (el) => {
+  const pref = el.dataset.value;
+  if (!setTextPref(pref)) toast('Não foi possível guardar o tamanho do texto neste aparelho; vale até fechar o app.');
+  ui.textPref = pref;
   render();
 };
 

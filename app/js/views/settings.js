@@ -7,6 +7,7 @@ import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 import { ACCENTS, validAccent } from '../accent.js';
 import { compareCard } from './compare.js';
 import { importCsvButton, importPreviewCard } from './importar.js';
+import { TEXT_OPTIONS } from '../text-scale.js';
 
 export const APP_VERSION = '1.5.0';
 
@@ -146,12 +147,23 @@ export function accentPicker(accent) {
         </div>`;
 }
 
-function appearanceCard(pref, accent) {
+/** Tamanho do texto (1.6): Sistema segue o iPhone (veja text-scale.js). */
+export function textSizePicker(pref) {
+  const current = TEXT_OPTIONS.some(([v]) => v === pref) ? pref : 'sistema';
+  const buttons = TEXT_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-text-size" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
+  return `
+        <div class="text-size-pick">
+          <p class="accent-head" id="text-size-head">Tamanho do texto</p>
+          <div class="segmented text-size-seg" style="--seg-count:4" role="group" aria-labelledby="text-size-head">${buttons}</div>
+        </div>`;
+}
+
+function appearanceCard(pref, accent, textPref) {
   const current = THEME_OPTIONS.some(([v]) => v === pref) ? pref : 'auto';
   const buttons = THEME_OPTIONS.map(([value, label]) => `<button type="button" class="seg-btn${value === current ? ' is-on' : ''}" data-action="set-theme" data-value="${value}" aria-pressed="${value === current}">${label}</button>`).join('');
   return group('aparencia', 'Aparência', `
-        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>${accentPicker(accent)}`,
-  'Automático acompanha o iPhone: claro de dia, escuro à noite. O tema e a cor valem só para este aparelho (não vão para o backup).', 'theme-card');
+        <div class="segmented theme-seg" style="--seg-count:3" role="group" aria-label="Aparência">${buttons}</div>${accentPicker(accent)}${textSizePicker(textPref)}`,
+  'Automático acompanha o iPhone: claro de dia, escuro à noite. Em Sistema, o texto segue o tamanho escolhido nos Ajustes do iPhone (Tela e Brilho → Tamanho do Texto). Tema, cor e texto valem só para este aparelho (não vão para o backup).', 'theme-card');
 }
 
 /** Nome da saudação do Início (v1.5): só neste aparelho, fora do backup (prefs.js). */
@@ -182,7 +194,7 @@ ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
         ${pageGoalSettings(state, year)}`)}
-${appearanceCard(ui?.themePref, ui?.accent)}
+${appearanceCard(ui?.themePref, ui?.accent, ui?.textPref)}
 ${compareCard({ years: yearsWithData(state.books, year), year: ui?.cmpYear || year, withBooks: ui?.cmpWithBooks !== false, saved: ui?.cmpSaved })}
 ${group('backup', 'Backup dos dados', `
         <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
