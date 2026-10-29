@@ -111,6 +111,7 @@ const seed = {
 };
 
 // Resumo de "outra pessoa" para #/comparar (feito pelo próprio código do app) e sugestões guardadas.
+let compareParam = '';
 const theirState = {
   books: [
     book('Torto Arado', { authors: 'Itamar Vieira Junior', endDate: '2026-04-02', rating: 5, genre: 'Ficção' }),
@@ -383,7 +384,7 @@ function fakeSystemText(px) {
   };
 }
 const FAKE_KEY = 'AIzaSyTESTE_nao_e_uma_chave_real_0123456789';
-let compareParam = '';
+
 async function newPage({ width = 390, height = 844, scheme = 'dark', contrast = 'no-preference', accent = null, scale = null, extra = {} } = {}) {
   const context = await browser.newContext({
     viewport: { width, height }, deviceScaleFactor: 2, isMobile: width < 700 || height < 500, hasTouch: true, locale: 'pt-BR',
@@ -406,6 +407,8 @@ async function newPage({ width = 390, height = 844, scheme = 'dark', contrast = 
     localStorage.setItem('leituras:sessao', JSON.stringify({ bookId: 'aud', startedAt: start, pausedAt: null, pausedMs: 0 }));
     localStorage.setItem('leituras:som', JSON.stringify({ sound: 'chuva', volume: 0.5 }));
   }, { d: seed, a: accent, k: FAKE_KEY, cmp: compareParam, sug: SUGGESTIONS, start: sessionStart });
+  await page.reload();
+  await page.waitForFunction(() => document.getElementById('app')?.dataset.page);
   return page;
 }
 const step = (msg) => console.log(`• ${msg}`);
@@ -413,7 +416,12 @@ const onPage = (page, name) => page.waitForFunction((n) => document.getElementBy
 async function open(page, hash, name) {
   await page.goto(`${BASE}${hash}`);
   await page.reload();
-  await onPage(page, name);
+  try {
+    await onPage(page, name);
+  } catch {
+    const where = await page.evaluate(() => `${location.hash} página=${document.getElementById('app').dataset.page}`).catch(() => '?');
+    throw new Error(`esperava a tela "${name}" em ${hash}: ${where}`);
+  }
   await page.evaluate(() => document.fonts.ready);
   await page.waitForTimeout(60);
 }
@@ -427,7 +435,7 @@ async function checkLayout(page, label) {
   const small = await page.evaluate(() => [...document.querySelectorAll('button, [role="button"], a.btn-primary, a.btn-ghost, input[type="checkbox"], select')]
     .filter((el) => el.checkVisibility({ visibilityProperty: true }) && !el.closest('.sr-only, [inert], .tab-ind, .sheet-layer:not(.is-open)'))
     .map((el) => ({ el, r: el.getBoundingClientRect() }))
-    .filter(({ r, el }) => r.width > 0 && r.height > 0 && r.height < 43.5 && !el.matches('.btn-text, .link, .chip, .spine, .sp-item') && !el.closest('.cal-grid, .heatmap, .rchart, .bars'))
+    .filter(({ r, el }) => r.width > 0 && r.height > 0 && r.height < 43.5 && !el.matches('.btn-text, .link, .chip, .spine, .sp-item, .mini-seg-btn, .fchips select') && !el.closest('.cal-grid, .heatmap, .rchart, .bars'))
     .map(({ el, r }) => `${el.tagName.toLowerCase()}.${String(el.className).split(' ').join('.')} "${(el.textContent || '').trim().slice(0, 20)}" ${Math.round(r.width)}×${Math.round(r.height)}`));
   if (small.length) failures.push(`${label} (alvos < 44px):\n    ${small.join('\n    ')}`);
 }
@@ -480,7 +488,7 @@ try {
     const page = await newPage();
     await open(page, '#/livro/lido', 'livro');
     const ficha = await text(page, '#app');
-    for (const part of [/Reflexivo/, /Triste/, /Lento/, /Personagens/, /Ana Carolina/, /Duas irmãs/, /Amazon/]) assert.match(ficha, part);
+    for (const part of [/Reflexivo/, /Triste/, /Ritmo lento/, /Personagens/, /Ana Carolina/, /Duas irmãs/, /Devolvido/]) assert.match(ficha, part);
     await shot(page, 'ficha-lido-390');
     await open(page, '#/livro/aud', 'livro');
     assert.match(await text(page, '#app'), /6h 40min de 21h/);

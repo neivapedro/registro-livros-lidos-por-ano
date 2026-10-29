@@ -3753,3 +3753,11 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
 @media (max-width: 440px) {
   [data-text-size="enorme"] .format-row .seg-mini { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* QA 1.6: letra grande em tela estreita. Topo do formulário (o título quebra em vez de empurrar o
+   Salvar para fora), botões da retrospectiva um sobre o outro e números do ritmo que quebram linha. */
+.form-top .form-title { min-width: 0; flex: 1 1 auto; text-align: center; line-height: 1.15; padding: 0 4px; text-wrap: balance; }
+.form-top .btn-text { flex: none; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .ppd { flex-wrap: wrap; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .ppd-cell { flex: 1 1 7.5em; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .retro-actions { grid-template-columns: minmax(0, 1fr); }
