@@ -59,13 +59,15 @@ import { closeSheet, openSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
 import { celebrateFinish, confettiColors, introMotion } from './motion.js';
-import { progressSheet, progressTotal, quickMenu } from './views/sheets.js';
+import { progressSheet, progressTotal, quickMenu, quickMenuPreview } from './views/sheets.js';
 import { coverFallbackColor, finishHref } from './ui.js';
 import { initTheme, setThemePref } from './theme.js';
 import { initAccent, setAccentPref } from './accent.js';
 import { slideTabs } from './tab-slide.js';
 import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
+import { initEdgeBack } from './edge-back.js';
+import { initNavShrink, resetNavShrink } from './nav-shrink.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
 import {
@@ -296,6 +298,7 @@ function render() {
     enterRoute(route);
     window.scrollTo(0, 0);
   }
+  const changedScreen = !sameScreen;
   const today = todayIso();
   const ctx = { state, ui, today, year: ui.year };
   let html;
@@ -388,6 +391,8 @@ function render() {
   const summaryLink = nav.querySelector('[data-nav="resumo"]');
   if (summaryLink) summaryLink.href = `#/resumo/${ui.year}`;
   syncLargeTitle();
+  // Tela nova: a barra de baixo volta ao tamanho cheio.
+  if (changedScreen) resetNavShrink();
 }
 
 /**
@@ -1901,10 +1906,28 @@ function openProgressSheet(id, opener) {
   });
 }
 
+// Menu com prévia (1.6): a capa do item na tela (ou o item inteiro, na lombada) é a que levanta.
+const PREVIEW_SOURCE = '.rn-cover, .li-cover, .cover';
+
+function previewSourceOf(item) {
+  return item ? item.querySelector(PREVIEW_SOURCE) || item : null;
+}
+
 function openQuickMenu(id, opener) {
   const book = state.books.find((b) => b.id === id);
   if (!book) return;
-  openSheet({ id: 'menu', cls: 'sheet-menu', label: esc(`Ações: ${book.title}`), html: quickMenu(book, state), opener });
+  // O botão "Mais ações" fica dentro do cartão/linha: a capa dele levanta junto.
+  const item = opener?.closest?.('[data-longpress]');
+  const resolve = () => previewSourceOf([...root.querySelectorAll('[data-longpress]')].find((x) => x.dataset.id === id));
+  const source = previewSourceOf(item) || resolve();
+  openSheet({
+    id: 'menu',
+    cls: 'sheet-menu',
+    label: esc(`Ações: ${book.title}`),
+    html: quickMenu(book, state),
+    opener,
+    context: source ? { source, resolve, preview: quickMenuPreview(book), href: `#/livro/${encodeURIComponent(id)}` } : null,
+  });
 }
 
 /** Régua da folha acompanha o campo (e vice-versa); --fill pinta a parte já lida. Audiolivro: campos h e min. */
@@ -1973,6 +1996,64 @@ initLongPress((el) => {
   openQuickMenu(el.dataset.id, el);
 });
 initSwipe();
+
+// ---------- Gestos nativos (1.6) ----------
+// Voltar deslizando da borda esquerda: nas telas com "Voltar" (ficha, edição, livro novo,
+// Ajustes, Todos os anos, Trechos, retrospectiva, cronômetro). Nunca nas abas principais.
+const ROOT_TABS = ['inicio', 'estante', 'buscar'];
+const BACK_LINK = '.ficha-back, .form-top a[data-leave], header.top > a.icon-btn[href^="#/"]:first-child, .retro-top a[href^="#/"]';
+
+function edgeBackTarget() {
+  const route = parseRoute();
+  if (ROOT_TABS.includes(route.name) || (route.name === 'resumo' && route.params[0] !== 'todos')) return null;
+  return root.querySelector(BACK_LINK);
+}
+
+/** O mesmo destino do botão Voltar; se ele é a tela anterior do histórico, volta por ele. */
+function edgeGoBack(link) {
+  const href = link.getAttribute('href') || '#/inicio';
+  if (link.matches('[data-leave]')) {
+    leaveForm(href);
+    return;
+  }
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  if (historyIndex > 0 && historyKeys.get(historyIndex - 1) === key) history.back();
+  else go(href);
+}
+
+/**
+ * Fundo do gesto: a tela para onde o Voltar leva, desenhada sem ids (não é a tela de verdade,
+ * só a imagem dela por baixo). Devolve a rolagem que ela terá ao voltar, ou null se não sabe
+ * desenhar (fica só o fundo do app).
+ */
+function edgeBackPreview(link, page) {
+  const href = link.getAttribute('href') || '#/inicio';
+  const key = href.replace(/^#\/?/, '') || 'inicio';
+  const [path, qs] = key.split('?');
+  const parts = path.split('/').filter(Boolean).map((p) => decodeURIComponent(p));
+  const name = parts[0] || 'inicio';
+  const ctx = { state, ui, today: todayIso(), year: ui.year };
+  let html = null;
+  if (name === 'inicio') html = homeView(ctx);
+  else if (name === 'estante') html = shelfView({ ...ctx, tab: new URLSearchParams(qs || '').get('aba') || ui.shelfTab });
+  else if (name === 'buscar') html = searchView(ctx);
+  else if (name === 'resumo') html = parts[1] === 'todos' ? allTimeView(ctx) : summaryView({ ...ctx, year: Number(parts[1]) || ui.year });
+  else if (name === 'ajustes') html = settingsView(ctx);
+  else if (name === 'livro' && parts.length === 2 && !qs) {
+    const book = state.books.find((b) => b.id === parts[1]);
+    if (book) html = bookDetailView({ ...ctx, book });
+  }
+  if (!html) return null;
+  page.innerHTML = html;
+  page.dataset.page = name;
+  for (const el of page.querySelectorAll('[id]')) el.removeAttribute('id');
+  // (sem applySpineColors: ele troca o observador das lombadas da tela de verdade)
+  applyTints(page);
+  return isBookKey(currentKey) && !isBookKey(key) ? listScroll.get(key) || 0 : 0;
+}
+
+initEdgeBack({ target: edgeBackTarget, back: edgeGoBack, preview: edgeBackPreview });
+initNavShrink();
 
 // ---------- Ficha do livro (v1.4) ----------
 // #/livro/:id mostra a ficha (views/book-detail.js); editar fica em #/livro/:id/editar.
@@ -2076,7 +2157,9 @@ document.addEventListener('click', (e) => {
   // Abrir a ficha a partir de uma capa (Início, Estante, Buscar, Resumo...).
   if (/^#\/livro\/[^/?]+$/.test(href)) {
     // No cartão "Lendo agora" a capa fica fora do link (que cobre o cartão inteiro).
-    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover');
+    // "Abrir livro" no menu com prévia: a capa levantada é a que voa para a ficha.
+    const from = link.querySelector('.cover') || link.closest('.reading')?.querySelector('.rn-cover .cover')
+      || link.closest('.sheet-layer.is-ctx')?.querySelector('.ctx-preview .cover');
     if (!from || href === location.hash) return;
     e.preventDefault();
     navigateWithCover(href, from);
