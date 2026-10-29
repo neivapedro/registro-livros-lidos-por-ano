@@ -45,6 +45,7 @@ export function createEmptyState() {
     lastBackupAt: null,
     upNext: [],
     pageGoals: {},
+    challenges: [],
   };
 }
 
@@ -136,7 +137,31 @@ function withMinutes(entry, minutes) {
 }
 
 /**
- * Diário de leitura: { date, from, to, unit: 'page'|'percent', note, minutes? }.
+ * Horário das sessões do cronômetro (1.6, opcional): { 'H': minutos } com H de 0 a 23 (hora local
+ * em que a leitura aconteceu), até 60 por hora. Somar dois (mesmo dia) junta as horas. Vazio: null.
+ */
+export function normalizeHours(...list) {
+  const out = {};
+  for (const raw of list) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) continue;
+    for (const [h, m] of Object.entries(raw)) {
+      const hour = /^\d{1,2}$/.test(h) ? Number(h) : -1;
+      const minutes = intIn(m, 1, 60);
+      if (hour < 0 || hour > 23 || !minutes) continue;
+      out[hour] = Math.min(60, (out[hour] || 0) + minutes);
+    }
+  }
+  return Object.keys(out).length ? out : null;
+}
+
+function withHours(entry, hours) {
+  const rest = { ...entry };
+  delete rest.hours;
+  return hours ? { ...rest, hours } : rest;
+}
+
+/**
+ * Diário de leitura: { date, from, to, unit: 'page'|'percent', note, minutes?, hours? }.
  * Uma entrada por dia, em ordem de data. Dias repetidos viram um só
  * (fica o 'from' da primeira e o 'to' da última). Regras de gravação em journal.js.
  */
@@ -155,9 +180,9 @@ export function normalizeJournal(value) {
     const minutes = intIn(raw.minutes, 0, 1440) || 0;
     const prev = byDate.get(raw.date);
     if (prev && prev.unit === unit) {
-      byDate.set(raw.date, withMinutes({ ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') }, (prev.minutes || 0) + minutes));
+      byDate.set(raw.date, withHours(withMinutes({ ...prev, to, note: [prev.note, note].filter(Boolean).join('\n') }, (prev.minutes || 0) + minutes), normalizeHours(prev.hours, raw.hours)));
     } else {
-      byDate.set(raw.date, withMinutes({ date: raw.date, from, to, unit, note }, minutes));
+      byDate.set(raw.date, withHours(withMinutes({ date: raw.date, from, to, unit, note }, minutes), normalizeHours(raw.hours)));
     }
   }
   return [...byDate.values()].sort((a, b) => a.date.localeCompare(b.date)).slice(-MAX_JOURNAL);
@@ -296,7 +321,47 @@ export function normalizeState(raw) {
       if (/^\d{4}$/.test(year) && g) state.pageGoals[year] = g;
     }
   }
+  state.challenges = normalizeChallenges(raw.challenges);
   return state;
+}
+
+// ---------- Desafios de leitura (1.6) ----------
+// { id, year, title, target, rule: { type, value }, books }. A regra é avaliada em challenges.js
+// com os livros lidos no ano; 'books' (ids) só no tipo 'manual', em que a pessoa escolhe os livros.
+export const CHALLENGE_TYPES = ['genre', 'nonfiction', 'tag', 'pages', 'format', 'reread', 'series', 'seriesDone', 'authors', 'author', 'manual'];
+export const MAX_CHALLENGES = 100;
+const MAX_CHALLENGE_BOOKS = 1000;
+
+/** Limpa um desafio. Tipo desconhecido (ou sem o valor que ele pede) vira 'manual': o desafio não some. */
+export function normalizeChallenge(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const year = intIn(raw.year, 1900, 2999);
+  const target = intIn(raw.target, 1, 1000);
+  if (!year || !target) return null;
+  const rule = raw.rule && typeof raw.rule === 'object' ? raw.rule : {};
+  let type = CHALLENGE_TYPES.includes(rule.type) ? rule.type : 'manual';
+  let value = null;
+  if (type === 'pages') value = intIn(rule.value, 1, 20000);
+  else if (['genre', 'tag', 'author', 'format', 'series'].includes(type)) value = text(rule.value, MAX_SERIES) || null;
+  if (!value && type !== 'series' && ['genre', 'tag', 'author', 'format', 'pages'].includes(type)) type = 'manual';
+  const books = type === 'manual' && Array.isArray(raw.books)
+    ? [...new Set(raw.books.filter((id) => typeof id === 'string' && id && id.length <= 100))].slice(0, MAX_CHALLENGE_BOOKS)
+    : [];
+  return { id: text(raw.id, 100) || newId(), year, title: text(raw.title, 80), target, rule: { type, value: type === 'manual' ? null : value }, books };
+}
+
+function normalizeChallenges(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const out = [];
+  for (const item of value) {
+    const c = normalizeChallenge(item);
+    if (!c || seen.has(c.id)) continue;
+    seen.add(c.id);
+    out.push(c);
+    if (out.length === MAX_CHALLENGES) break;
+  }
+  return out;
 }
 
 /** Próximos da fila: só livros "Quero ler" que existem, sem repetir, até 5, na ordem dada. */

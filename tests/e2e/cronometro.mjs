@@ -118,6 +118,12 @@ const wake = () => page.evaluate(() => window.__wake.active);
 const session = () => page.evaluate(() => JSON.parse(localStorage.getItem('leituras:sessao')));
 const toastText = () => page.waitForSelector('.toast.show').then((el) => el.textContent());
 const book = (st, id) => st.books.find((b) => b.id === id);
+// 1.6: cada entrada com tempo guarda também o horário da sessão ({ hora: minutos }), que soma os minutos.
+const timeless = (entry) => {
+  const { hours, ...rest } = entry;
+  if (rest.minutes) assert.equal(Object.values(hours || {}).reduce((s, m) => s + m, 0), rest.minutes, 'horário soma os minutos');
+  return rest;
+};
 async function noOverflow(label) {
   for (const width of [390, 375, 320]) {
     await page.setViewportSize({ width, height: 844 });
@@ -226,7 +232,7 @@ try {
   assert.equal(await page.locator('.timer-banner').count(), 0);
   let st = await waitState((s) => book(s, 'duna').journal?.some((e) => e.minutes));
   assert.equal(book(st, 'duna').currentPage, 130);
-  assert.deepEqual(book(st, 'duna').journal, [{ date: TODAY, from: 100, to: 130, unit: 'page', note: '', minutes: 15 }]);
+  assert.deepEqual(book(st, 'duna').journal.map(timeless), [{ date: TODAY, from: 100, to: 130, unit: 'page', note: '', minutes: 15 }]);
   await shot('06-resumo');
 
   step('segunda sessão no mesmo dia soma os minutos (sem avanço)');
@@ -260,7 +266,7 @@ try {
   await onPage('inicio');
   assert.equal(await page.textContent('.toast.show span'), '32 min · 6%');
   st = await waitState((s) => book(s, 'fora').journal?.length === 1);
-  assert.deepEqual(book(st, 'fora').journal, [{ date: TODAY, from: 20, to: 26, unit: 'percent', note: '', minutes: 32 }]);
+  assert.deepEqual(book(st, 'fora').journal.map(timeless), [{ date: TODAY, from: 20, to: 26, unit: 'percent', note: '', minutes: 32 }]);
 
   step('sessão curta e cancelar sessão');
   await page.click('.reading:has-text("Fora de Série") .btn-timer');
@@ -301,7 +307,7 @@ try {
   assert.equal(await wake(), 0);
   await page.click('[data-submit="save-book"] .btn-primary, .btn-primary >> text=Salvar');
   st = await waitState((s) => book(s, 'duna').status === 'lido');
-  assert.deepEqual(book(st, 'duna').journal, [{ date: TODAY, from: 100, to: 600, unit: 'page', note: '', minutes: 30 }]);
+  assert.deepEqual(book(st, 'duna').journal.map(timeless), [{ date: TODAY, from: 100, to: 600, unit: 'page', note: '', minutes: 30 }]);
 
   assert.deepEqual(errors, []);
   console.log('\nTudo certo. Capturas em tests/e2e/screens/cronometro-*.png');

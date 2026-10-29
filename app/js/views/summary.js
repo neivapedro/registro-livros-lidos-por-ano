@@ -13,6 +13,8 @@ import { yearSelect } from './home.js';
 import { deltaLine, kpiTile, sparkline } from './kpi.js';
 import { sCurveCard } from './scurve.js';
 import { compactBar } from '../large-title.js';
+import { challengesCard } from './challenges.js';
+import { queueCard, speedCard } from './speed.js';
 
 export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
 const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
@@ -86,6 +88,7 @@ function overview({ state, ui, year, today, s }) {
   return `
     ${kpis(state, s, year, today)}
     ${sCurveCard({ state, ui, year, today, goal: s.goal })}
+    ${challengesCard({ state, year })}
     ${favoriteCard(s)}
     ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
 }
@@ -170,7 +173,9 @@ function rhythm({ state, ui, year, today, s }) {
   return `
     ${calendarSection({ state, ui: ui || {}, year, today })}
     ${monthsCard({ state, ui, s, today, year, streak })}
-    ${pagesPerDayCard(state, s, year)}`;
+    ${pagesPerDayCard(state, s, year)}
+    ${speedCard(state, year)}
+    ${queueCard(state, year, today)}`;
 }
 
 // ---------- Gostos ----------
