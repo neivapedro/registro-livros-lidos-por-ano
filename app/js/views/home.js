@@ -237,7 +237,7 @@ export function homeView({ state, ui, year, today, now = new Date() }) {
   const streak = goalStreak(state.books, (y) => getGoal(state, y), today);
   const reading = state.books.filter((b) => b.status === STATUS.READING);
   const counts = countByStatus(state.books);
-  const settings = `<a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('sliders', { size: 18 })}</a>`;
+  const settings = `<a class="icon-btn" href="#/ajustes" aria-label="Ajustes">${icon('cog', { size: 20 })}</a>`;
   return `
     ${greetingHeader(state, ui, today, now, `${yearSelect(yearsWithData(state.books, currentYear), year, 'home-year')}${settings}`)}
     ${compactBar({ title: year === currentYear ? 'Leituras' : `Leituras ${year}`, end: settings })}

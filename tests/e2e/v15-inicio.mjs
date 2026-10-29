@@ -274,8 +274,9 @@ try {
     assert.equal(tint.r1Veil, '1', 'véu da cor da capa visível');
     assert.equal(tint.r3Src, 'capa');
     assert.equal(tint.r2Src, null, 'capa desenhada: sem cor de imagem');
-    assert.equal(tint.r2Veil, '0', 'capa desenhada: sem o véu novo');
-    assert.match(tint.r2Bg, /linear-gradient/, 'capa desenhada: o degradê de antes');
+    // 1.6.1: o brilho da cor da capa vale para os dois casos; o cartão em si é neutro.
+    assert.equal(tint.r2Veil, '1', 'capa desenhada: brilho da cor da capa');
+    assert.equal(tint.r2Bg, 'none', 'cartão neutro, sem degradê');
 
     // Contraste do texto sobre o véu (título e linha de progresso).
     const contrast = await page.evaluate(() => {
@@ -295,8 +296,8 @@ try {
       const s = getComputedStyle(probe).color.match(/\d+/g).map(Number);
       probe.remove();
       const light = document.documentElement.dataset.theme === 'light';
-      // Canto mais forte do véu (radial 0.78 no escuro; 30% + 13% no claro) sobre a superfície.
-      const a = light ? 0.4 : 0.85;
+      // Ponto mais forte do brilho (1.6.1: 0,19 no escuro; 0,14 no claro) sobre a superfície.
+      const a = light ? 0.14 : 0.19;
       const mix = s.map((v, i) => Math.round(v * (1 - a) + t[i] * a));
       return ratio(text, `rgb(${mix.join(',')})`);
     });

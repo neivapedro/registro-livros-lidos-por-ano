@@ -175,7 +175,9 @@ test('CSS da 1.6: um bloco só no fim, sem color-mix e com "Reduzir movimento"',
   const css = readFileSync(new URL('../app/css/app.css', import.meta.url), 'utf8');
   const start = css.indexOf('/* ===== 1.6 Gestos nativos ===== */');
   assert.ok(start > 0, 'bloco da 1.6');
-  const block = css.slice(start);
+  // Só o bloco da 1.6 (os blocos 1.6.x que vêm depois têm as suas próprias regras).
+  const next = css.indexOf('/* ===== 1.6.', start + 10);
+  const block = css.slice(start, next < 0 ? undefined : next);
   assert.doesNotMatch(block.replace(/\/\*[\s\S]*?\*\//g, ''), /color-mix\(/);
   assert.match(block, /@media \(prefers-reduced-motion: reduce\)/);
   assert.match(block, /body\.nav-compact \.nav \{ scale: \.86;/, 'barra compacta só com transform');
