@@ -275,7 +275,7 @@ try {
   await page.fill('#timer-h-min', '15');
   await page.click('.timer-stop .btn-primary');
   await toastHas(/20 min · 30 min ouvidos/);
-  s = await waitState((st) => bookIn(st, 'a2').currentMin === 435);
+  s = await waitState((st) => bookIn(st, 'a2').currentMin === 435 && bookIn(st, 'a2').journal.at(-1)?.minutes === 20);
   const noHours = ({ hours, ...rest }) => rest;
   const sessionHoursOf = bookIn(s, 'a2').journal.at(-1).hours;
   assert.equal(Object.values(sessionHoursOf || {}).reduce((a, b) => a + b, 0), 20, 'as horas do dia somam os 20 min da sessão');
