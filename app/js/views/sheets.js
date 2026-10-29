@@ -87,3 +87,8 @@ export function quickMenu(book, state) {
       <button type="button" class="btn-ghost qm-cancel" data-sheet-close>Cancelar</button>
     </div>`;
 }
+
+/** Capa grande do menu com prévia (1.6): a que "levanta" do lugar dela ao segurar o livro. */
+export function quickMenuPreview(book) {
+  return cover(book, { size: 'xl' });
+}
