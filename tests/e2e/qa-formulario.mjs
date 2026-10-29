@@ -105,7 +105,8 @@ const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const isOpen = () => page.getAttribute('[data-action="toggle-more"]', 'aria-expanded').then((v) => v === 'true');
 const saveBtn = '.form-actions .btn-primary';
-const strip = (b) => ({ ...b, updatedAt: null });
+// 1.6: o livro salvo ganha os campos novos com os valores padrão (o seed é anterior a eles).
+const strip = (b) => ({ moods: [], pace: null, criteria: {}, description: '', loan: null, ...b, updatedAt: null });
 
 async function seedAndOpen(hash) {
   await page.goto(`${BASE}#/inicio`);
