@@ -521,6 +521,23 @@ try {
         }
       }
     }
+    // Extremos do tamanho do texto (0,85 e 1,6): layout, fim da tela e "Ver todos" aberto.
+    for (const scale of [0.85, 1.6]) {
+      for (const width of [320, 430]) {
+        step(`extremos: texto ${scale}x em ${width}px`);
+        const page = await newPage({ width, height: width === 320 ? 640 : 900, scale });
+        for (const [label, hash, name] of ROUTES) {
+          await open(page, hash, name);
+          await checkLayout(page, `${label} ${scale}x ${width}px`);
+          await checkEnd(page, `${label} ${scale}x ${width}px`);
+          if (scale === 1.6 && width === 320 && ['inicio', 'resumo', 'resumo-gostos', 'ficha-lido', 'cronometro'].includes(label)) await shot(page, `${label}-1.6-320`);
+        }
+        await open(page, '#/resumo/2026?aba=gostos', 'resumo');
+        await page.evaluate(() => document.querySelectorAll('.rb-more').forEach((d) => { d.open = true; }));
+        await checkLayout(page, `gostos aberto ${scale}x ${width}px`);
+        await page.context().close();
+      }
+    }
     for (const scheme of ['light', 'dark']) {
       for (const accent of ['oliva', 'petroleo', 'grafite']) {
         step(`contraste 5 cores: ${scheme} ${accent}`);
