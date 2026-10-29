@@ -3744,3 +3744,12 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
   .top, .greet-row, .ficha-top { min-height: 44px; }
   .cbar { left: calc(var(--safe-l) + var(--rail) + 8px); }
 }
+
+/* Formato (3 opções) com letra grande: o controle desce para baixo do rótulo e ocupa a linha;
+   na "enorme" em tela estreita, as opções ficam uma sobre a outra. */
+:is([data-text-size="grande"], [data-text-size="enorme"]) .format-row { flex-direction: column; align-items: stretch; gap: 8px; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .format-row .seg-mini { max-width: none; }
+:is([data-text-size="grande"], [data-text-size="enorme"]) .format-row .seg-mini .seg-btn { padding: 0 2px; white-space: normal; line-height: 1.15; }
+@media (max-width: 440px) {
+  [data-text-size="enorme"] .format-row .seg-mini { grid-template-columns: minmax(0, 1fr); }
+}

@@ -446,7 +446,7 @@ try {
   await page.waitForTimeout(250);
   await hold('.book-row[data-id="w2"] .li-link');
   await page.waitForSelector(ctxOpen);
-  assert.deepEqual((await page.locator(`${ctxOpen} .qm-item`).allTextContents()).map((t) => t.trim()), ['Abrir livro', 'Começar a ler', 'Marcar como próxima']);
+  assert.deepEqual((await page.locator(`${ctxOpen} .qm-item`).allTextContents()).map((t) => t.trim()), ['Abrir livro', 'Começar a ler', 'Marcar como próxima', 'Emprestei para…']);
   await page.click(`${ctxOpen} [data-action="toggle-next"]`);
   await waitState((s) => s.upNext.includes('w2'));
   await sheetGone();
