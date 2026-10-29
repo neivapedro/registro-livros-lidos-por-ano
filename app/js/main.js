@@ -74,6 +74,11 @@ import {
 } from './ai-extras.js';
 import { resizePhoto } from './cover-photo.js';
 import { quotePhotoBlock, suggestionsView } from './views/ai-views.js';
+import { buildSnapshot, commonBooks, compareLink, decodeSnapshot, encodeWithinLimit, extractParam, readSavedCompare, removeSavedCompare, saveCompare } from './compare.js';
+import { compareEmptyView, compareView } from './views/compare.js';
+import { applyImport, MAX_FILE_BYTES, planImport, undoImport } from './goodreads.js';
+import { createAmbient, readAmbientPref, saveAmbientPref } from './ambient.js';
+import { ambientPicker } from './views/ambient.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -263,6 +268,7 @@ function enterRoute(route) {
     refreshStorageInfo();
     takeKeysFromRoute(route);
   }
+  if (route.name === 'comparar') takeCompareFromRoute(route);
   if (route.name === 'estante' && route.query.get('aba')) ui.shelfTab = route.query.get('aba');
   if (route.name === 'resumo' && SUMMARY_TABS.includes(route.query.get('aba'))) ui.summaryTab = route.query.get('aba');
 }
@@ -339,6 +345,10 @@ function render() {
       break;
     case 'sugestoes':
       html = suggestionsScreen(ctx);
+      break;
+    case 'comparar':
+      html = compareScreen();
+      showNav = false;
       break;
     case 'ler':
       html = timerScreen(route.params[0]);
@@ -1714,7 +1724,7 @@ function timerScreen(id) {
     return null;
   }
   syncWakeLock();
-  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop) });
+  return timerView({ book, session: ui.session, now: Date.now(), stopping: Boolean(ui.timerStop), ambient: ambientState() });
 }
 
 function tickTimer() {
@@ -2785,6 +2795,311 @@ Object.assign(actions, {
 window.addEventListener('hashchange', () => {
   cancelOcr();
   if (parseRoute().name !== 'sugestoes' && ui.suggest.loading) cancelSuggest();
+});
+
+// ---------- 1.6: comparar com alguém, importar do Goodreads e sons ambiente ----------
+
+// Comparar: o link (#/comparar?d=...) traz o resumo do ano de outra pessoa. Ele só é mostrado:
+// nada entra nos livros. "Guardar para ver depois" grava só esse resumo, numa chave própria do
+// localStorage (compare.js), fora do estado e do backup.
+ui.cmpWithBooks = true;
+ui.cmpYear = null;
+ui.cmpSaved = readSavedCompare(localStorage);
+ui.cmpPeer = null; // { param, snap } aberto agora
+let cmpLinkReady = null; // link já montado para as opções atuais (o Compartilhar do iPhone pede o toque "fresco")
+
+/** Abriu #/comparar: pelo link (confere e tira o resumo do endereço) ou sem nada (mostra o guardado). */
+function takeCompareFromRoute(route) {
+  if (route.query.has('d')) {
+    const param = extractParam(route.query.get('d'));
+    const snap = decodeSnapshot(param);
+    ui.cmpPeer = snap ? { param, snap } : null;
+    if (!snap) toast('Esse link de comparação não abriu. Peça para enviarem de novo.');
+    try {
+      history.replaceState(history.state, '', '#/comparar');
+    } catch { /* sem acesso ao histórico: o endereço fica, e nada é salvo */ }
+    currentKey = parseRoute().key;
+    historyKeys.set(historyIndex, currentKey);
+  } else if (!ui.cmpPeer && ui.cmpSaved) {
+    ui.cmpPeer = { param: ui.cmpSaved.param, snap: ui.cmpSaved.snap };
+  }
+}
+
+function compareScreen() {
+  const peer = ui.cmpPeer;
+  if (!peer) return compareEmptyView();
+  const theirs = peer.snap;
+  const mine = buildSnapshot(state, theirs.y, todayIso(), { name: ui.userName, withBooks: false });
+  const names = [ui.userName || 'Você', theirs.n || 'Outra pessoa'];
+  return compareView({ mine, theirs, common: commonBooks(theirs, state.books), saved: ui.cmpSaved?.param === peer.param, names });
+}
+
+function compareOptions() {
+  const year = ui.cmpYear || yearOf(todayIso());
+  return { year, withBooks: ui.cmpWithBooks, name: ui.userName, state };
+}
+
+/** Monta o link para as opções atuais (compactar é assíncrono). */
+async function prepareCompareLink() {
+  const opts = compareOptions();
+  const snap = buildSnapshot(state, opts.year, todayIso(), { name: opts.name, withBooks: opts.withBooks });
+  const out = await encodeWithinLimit(snap);
+  if (!out) return null;
+  const ready = {
+    opts,
+    year: opts.year,
+    link: compareLink(`${location.origin}${location.pathname}`, out.param),
+    cut: snap.b ? snap.b.length - (out.snap.b?.length || 0) : 0,
+    kept: out.snap.b?.length || 0,
+  };
+  cmpLinkReady = ready;
+  return ready;
+}
+
+function sameOptions(a, b) {
+  return a && b && a.year === b.year && a.withBooks === b.withBooks && a.name === b.name && a.state === b.state;
+}
+
+async function shareCompare() {
+  const ready = sameOptions(cmpLinkReady?.opts, compareOptions()) ? cmpLinkReady : await prepareCompareLink();
+  if (!ready) {
+    toast('Não foi possível montar o link agora.');
+    return;
+  }
+  const { link, year } = ready;
+  if (ready.cut) toast(`A lista foi encurtada para ${ready.kept} livros, para o link não ficar grande demais.`, { duration: 5000 });
+  if (typeof navigator.share === 'function') {
+    try {
+      await navigator.share({ title: `Minhas leituras de ${year}`, text: `Compare as nossas leituras de ${year} no Leituras. No iPhone, abra o app e cole este link em Ajustes › Comparar com alguém:`, url: link });
+      return;
+    } catch (err) {
+      if (err?.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(link);
+    toast('Link copiado. Mande pelo WhatsApp ou e-mail para quem vai comparar.', { duration: 6000 });
+  } catch {
+    window.prompt('Copie o link e envie:', link);
+  }
+}
+
+// Import do Goodreads / StoryGraph: prévia no topo de Ajustes; só acrescenta livros.
+ui.grImport = null;
+let grUndo = null; // ids acrescentados pela última importação
+
+const IMPORT_ERRORS = {
+  vazio: 'O arquivo está vazio.',
+  formato: 'Esse arquivo não parece a planilha do Goodreads (Exportar biblioteca) nem a do StoryGraph.',
+  grande: 'Arquivo grande demais para importar de uma vez.',
+};
+
+async function importCsv(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file) return;
+  if (file.size > MAX_FILE_BYTES) {
+    toast(IMPORT_ERRORS.grande);
+    return;
+  }
+  let text;
+  try {
+    text = await file.text();
+  } catch {
+    toast('Não foi possível ler o arquivo.');
+    return;
+  }
+  const plan = planImport(state, text);
+  if (plan.error) {
+    toast(IMPORT_ERRORS[plan.error]);
+    return;
+  }
+  ui.grImport = { plan, fileName: file.name, includeDuplicates: false };
+  if (parseRoute().name !== 'ajustes') return;
+  render();
+  window.scrollTo(0, 0);
+}
+
+// Som ambiente do cronômetro: só neste aparelho (localStorage), fora do backup.
+const ambientPlayer = createAmbient();
+ui.ambient = readAmbientPref(localStorage);
+
+function ambientState() {
+  return { ...ui.ambient, playing: ambientPlayer.playing };
+}
+
+/** Deve tocar: há um som escolhido e o cronômetro corre (sem o formulário do Parar aberto). */
+function ambientWanted() {
+  return ui.ambient.sound !== 'off' && Boolean(ui.session) && !isPaused(ui.session) && !ui.timerStop;
+}
+
+/** Atualiza só o seletor (redesenhar a tela inteira mexeria no relógio e no foco). */
+function refreshAmbientUi() {
+  const el = root.querySelector('.amb');
+  if (el) el.outerHTML = ambientPicker(ambientState(), { paused: Boolean(ui.session && isPaused(ui.session)) });
+}
+
+/**
+ * Liga ou desliga o som conforme o cronômetro. gesture: chamado dentro de um toque (só aí o
+ * iPhone deixa o som começar). Fora da tela do cronômetro, só toca se o toque vai levar a ela.
+ */
+function syncAmbient({ gesture = false } = {}) {
+  const onTimer = parseRoute().name === 'ler';
+  if (!ambientWanted() || (!onTimer && !gesture)) {
+    if (ambientPlayer.playing) ambientPlayer.stop();
+  } else if (gesture && !ambientPlayer.playing) {
+    ambientPlayer.play(ui.ambient.sound, ui.ambient.volume);
+  }
+  refreshAmbientUi();
+}
+
+// Os botões do cronômetro (todos são toques) ligam ou desligam o som depois de fazer o seu trabalho.
+for (const name of ['start-timer', 'timer-toggle', 'timer-stop', 'timer-back', 'timer-cancel']) {
+  const original = actions[name];
+  actions[name] = (el) => {
+    original(el);
+    syncAmbient({ gesture: true });
+  };
+}
+
+Object.assign(actions, {
+  'share-compare'() { shareCompare(); },
+  'compare-books'() {
+    ui.cmpWithBooks = !ui.cmpWithBooks;
+    render();
+    prepareCompareLink();
+  },
+  'paste-compare'() {
+    const param = extractParam(document.querySelector('[data-comparelink]')?.value);
+    const snap = decodeSnapshot(param);
+    if (!snap) {
+      toast('Cole o link inteiro recebido (ele tem “comparar?d=” no meio).');
+      return;
+    }
+    ui.cmpPeer = { param, snap };
+    go('#/comparar');
+  },
+  'compare-save'() {
+    const peer = ui.cmpPeer;
+    if (!peer) return;
+    const old = ui.cmpSaved;
+    if (old && old.param !== peer.param
+      && !window.confirm(`Trocar a comparação guardada (${old.snap.n || 'Outra pessoa'} · ${old.snap.y}) por esta?`)) return;
+    if (!saveCompare(localStorage, peer.param, todayIso())) {
+      toast('Não foi possível guardar neste aparelho.');
+      return;
+    }
+    ui.cmpSaved = readSavedCompare(localStorage);
+    render();
+    toast('Guardada neste celular. Veja de novo em Ajustes › Comparar com alguém.', { duration: 5000 });
+  },
+  'compare-open-saved'() {
+    if (!ui.cmpSaved) return;
+    ui.cmpPeer = { param: ui.cmpSaved.param, snap: ui.cmpSaved.snap };
+    go('#/comparar');
+  },
+  'compare-forget'() {
+    removeSavedCompare(localStorage);
+    ui.cmpSaved = null;
+    if (parseRoute().name !== 'comparar') ui.cmpPeer = null;
+    render();
+    toast('Comparação guardada apagada.');
+  },
+  'gr-dups'() {
+    if (!ui.grImport?.plan) return;
+    ui.grImport.includeDuplicates = !ui.grImport.includeDuplicates;
+    render();
+  },
+  'gr-import'() {
+    const imp = ui.grImport;
+    if (!imp?.plan) return;
+    const { state: next, ids } = applyImport(state, imp.plan, { includeDuplicates: imp.includeDuplicates });
+    if (!ids.length) return;
+    grUndo = ids;
+    ui.grImport = { done: { count: ids.length } };
+    persist(next);
+    render();
+    window.scrollTo(0, 0);
+    toast(`${ids.length === 1 ? '1 livro importado' : `${ids.length} livros importados`}.`, { actionLabel: 'Desfazer', action: 'gr-undo', duration: 10000 });
+  },
+  'gr-undo'() {
+    if (!grUndo) return;
+    const ids = grUndo;
+    grUndo = null;
+    persist(undoImport(state, ids));
+    ui.grImport = null;
+    render();
+    toast('Importação desfeita.');
+  },
+  'gr-cancel'() {
+    ui.grImport = null;
+    render();
+    toast('Nada foi importado.');
+  },
+  'gr-close'() {
+    ui.grImport = null;
+    render();
+  },
+  'ambient-pick'(el) {
+    const sound = el.dataset.value;
+    ui.ambient = { ...ui.ambient, sound };
+    if (!saveAmbientPref(localStorage, ui.ambient)) toast('Não foi possível guardar o som neste aparelho; vale até fechar o app.');
+    if (sound === 'off' || !ambientWanted() || parseRoute().name !== 'ler') ambientPlayer.stop();
+    else ambientPlayer.play(sound, ui.ambient.volume);
+    refreshAmbientUi();
+    root.querySelector(`.amb-chip[data-value="${sound}"]`)?.focus({ preventScroll: true });
+  },
+});
+
+document.addEventListener('change', (e) => {
+  const t = e.target;
+  if ('importCsv' in t.dataset) importCsv(t);
+  else if ('compareYear' in t.dataset) {
+    ui.cmpYear = Number(t.value) || null;
+    prepareCompareLink();
+  } else if ('ambientVolume' in t.dataset) {
+    if (!saveAmbientPref(localStorage, ui.ambient)) toast('Não foi possível guardar o volume neste aparelho.');
+  }
+});
+
+document.addEventListener('input', (e) => {
+  if (!('ambientVolume' in e.target.dataset)) return;
+  ui.ambient = { ...ui.ambient, volume: Number(e.target.value) };
+  ambientPlayer.setVolume(ui.ambient.volume);
+});
+
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && 'comparelink' in e.target.dataset) {
+    e.preventDefault();
+    actions['paste-compare']();
+  }
+});
+
+// Voltar ao cronômetro pelo aviso do Início também é um toque: o som pode começar já.
+document.addEventListener('click', (e) => {
+  if (e.target.closest?.('a[href^="#/ler/"]') && ambientWanted()) ambientPlayer.play(ui.ambient.sound, ui.ambient.volume);
+}, true);
+
+// O iPhone interrompe o áudio (ligação, outro app, tela bloqueada): no próximo toque, volta.
+for (const type of ['touchend', 'click']) {
+  document.addEventListener(type, () => {
+    if (ambientPlayer.playing && ambientPlayer.state !== 'running') ambientPlayer.resume();
+  }, { capture: true, passive: true });
+}
+
+window.addEventListener('hashchange', () => {
+  const name = parseRoute().name;
+  if (name !== 'ajustes') ui.grImport = null;
+  if (name === 'ajustes') prepareCompareLink();
+  syncAmbient();
+});
+
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') ambientPlayer.resume();
+});
+
+document.addEventListener('submit', (e) => {
+  if (e.target.closest('[data-timer-form]')) queueMicrotask(() => syncAmbient());
 });
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
