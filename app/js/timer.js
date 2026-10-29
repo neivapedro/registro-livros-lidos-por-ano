@@ -110,3 +110,23 @@ export function sessionSummary({ minutes, unit, delta }) {
   }
   return parts.join(' · ');
 }
+
+/**
+ * Horário da sessão (1.6): os minutos lidos espalhados pelas horas do relógio a partir do início,
+ * { 'H': minutos } na hora local. Uma sessão das 21h50 com 30 min → { 21: 10, 22: 20 }.
+ * Pausas no meio não são conhecidas: a leitura conta como seguida desde o início.
+ */
+export function sessionHours(startedAt, minutes) {
+  const out = {};
+  let left = Math.min(1440, Math.round(Number(minutes) || 0));
+  if (!isTime(startedAt) || left <= 0) return null;
+  const at = new Date(startedAt);
+  for (let i = 0; left > 0 && i < 26; i += 1) {
+    const take = Math.min(left, 60 - at.getMinutes());
+    const h = at.getHours();
+    out[h] = Math.min(60, (out[h] || 0) + take);
+    left -= take;
+    at.setMinutes(at.getMinutes() + take, 0, 0);
+  }
+  return out;
+}

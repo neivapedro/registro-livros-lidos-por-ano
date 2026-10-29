@@ -15,6 +15,7 @@ import { cover, decimal, esc, formatChip, formatRating, icon, largeCoverUrl, num
 import { rhythmChart } from './rhythm.js';
 import { timerButton } from './timer.js';
 import { criteriaList, loanBadge, loanSection, moodChips, shopSection, synopsisSection } from './meta-ui.js';
+import { bookEstimateLine } from './speed.js';
 
 /** Endereço da edição: #/livro/:id/editar, com ?concluir=1 ou ?aba=diario|trechos. */
 export function editHref(id, query = '') {
@@ -169,7 +170,7 @@ function readingBlock(book, ui, today) {
     </section>`;
 }
 
-function wantBlock(state, book) {
+function wantBlock(state, book, today) {
   const queue = state.upNext || [];
   const pos = queue.indexOf(book.id);
   const added = String(book.createdAt || '').slice(0, 10);
@@ -179,6 +180,7 @@ function wantBlock(state, book) {
   return `
     <section class="ficha-card">
       ${isIsoDate(added) ? `<span class="ficha-eyebrow">Na lista desde ${esc(fullDate(added))}</span>` : ''}
+      ${bookEstimateLine(state, book, today)}
       <button type="button" class="btn-primary" data-action="start-reading" data-id="${esc(book.id)}">Começar a ler</button>
       ${next}
     </section>`;
@@ -268,7 +270,7 @@ export function bookDetailView({ state, ui, today, book }) {
   const statusBlock = {
     [STATUS.READ]: () => readBlock(book),
     [STATUS.READING]: () => readingBlock(book, ui, today),
-    [STATUS.WANT]: () => wantBlock(state, book),
+    [STATUS.WANT]: () => wantBlock(state, book, today),
     [STATUS.DROPPED]: () => droppedBlock(book),
   }[book.status]?.() || '';
   const heroStats = book.status === STATUS.READ ? statusBlock : '';

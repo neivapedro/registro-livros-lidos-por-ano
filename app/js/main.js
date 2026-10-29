@@ -47,9 +47,14 @@ import { curveMonthAt } from './views/scurve.js';
 import { addMinutes } from './journal.js';
 import {
   elapsedMs, formatElapsed, isPaused, loadSession, pauseSession, resumeSession, saveSession,
-  sessionMinutes, sessionSummary, startSession, wholeMinutes,
+  sessionHours, sessionMinutes, sessionSummary, startSession, wholeMinutes,
 } from './timer.js';
 import { timerView } from './views/timer.js';
+import {
+  CHALLENGE_TEMPLATES, challengeTitle, newlyCompleted, removeChallenge, restoreChallenge, saveChallenge, toggleChallengeBook,
+} from './challenges.js';
+import { challengeDetailSheet, challengeFormSheet, challengeNewSheet, targetUnit, valueField } from './views/challenges.js';
+import { autoTitle, RULE_VALUE } from './challenges.js';
 import { closeSheet, openSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
@@ -901,15 +906,19 @@ function saveBook() {
   // grava o mesmo livro de novo em vez de criar outro igual.
   d.id ||= newId();
   const booksBefore = state.books;
+  const stateBefore = state;
   const { state: next, book } = upsertBook(state, { ...d, journal: journalOnSave(d, ui.original, todayIso()) });
   let message = isNew ? 'Livro adicionado.' : 'Alterações salvas.';
   if (ui.finishing && book.status === STATUS.READ) message = 'Leitura concluída. Parabéns!';
   persist(next, message);
+  let milestone = false;
   if (book.status === STATUS.READ && ui.original?.status !== STATUS.READ) {
-    const milestone = celebrateMilestones(booksBefore, next.books);
+    milestone = celebrateMilestones(booksBefore, next.books);
     // Livro que estava em leitura (ou na fila) e foi concluído: festa ao voltar ao Início.
     if (ui.finishing || ui.original) queueFinishCelebration(book, milestone);
   }
+  // Desafio que este livro completou (1.6): um aviso, depois do de conclusão (ou do marco).
+  celebrateChallenges(stateBefore, next, milestone ? 5200 : 1800);
   if (book.status === STATUS.READ && book.endDate) ui.year = yearOf(book.endDate);
   leaveForm(ui.backHref);
 }
@@ -1760,6 +1769,7 @@ function saveTimerSession(raw) {
   const book = sessionBook();
   if (!book) return;
   const minutes = sessionMinutes(elapsedMs(ui.session, Date.now()));
+  const hours = sessionHours(ui.session.startedAt, minutes);
   const unit = unitOf(book);
   const before = book[positionField(unit)] ?? 0;
   const value = saveProgress(book.id, raw);
@@ -1769,7 +1779,7 @@ function saveTimerSession(raw) {
   // Sessão de menos de 1 minuto não soma minutos (a posição já foi salva).
   if (minutes) {
     const saved = state.books.find((b) => b.id === book.id);
-    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso()) }).state);
+    persist(upsertBook(state, { ...saved, journal: addMinutes(saved, minutes, todayIso(), hours) }).state);
   }
   // Fim do livro: saveProgress já abriu o Concluir; senão, volta ao Início.
   if (parseRoute().name === 'ler') go('#/inicio');
@@ -2793,3 +2803,175 @@ async function boot() {
 }
 
 boot();
+
+// ---------- Desafios de leitura (1.6) ----------
+// Cartão na Visão geral do Resumo; criar, editar, ver e excluir em folhas (views/challenges.js).
+
+let lastChallengeDeleted = null;
+let challengeToastTimer = null;
+
+/** Desafio completado por uma mudança nos livros: um aviso discreto (sem notificação), uma vez. */
+function celebrateChallenges(before, after, delay = 0) {
+  const done = newlyCompleted(before, after);
+  if (!done.length) return;
+  const message = done.length === 1
+    ? `Desafio concluído: ${challengeTitle(done[0])}. Parabéns!`
+    : `${done.length} desafios concluídos. Parabéns!`;
+  clearTimeout(challengeToastTimer);
+  challengeToastTimer = setTimeout(() => toast(message, { duration: 5000 }), delay);
+}
+
+/** Troca o conteúdo da folha aberta (sugestões → formulário → detalhe) sem fechá-la. */
+function swapSheet(html, focus = null) {
+  const body = document.querySelector('.sheet-layer .sheet-body');
+  if (!body) return false;
+  body.innerHTML = html;
+  body.scrollTop = 0;
+  const target = focus ? body.querySelector(focus) : null;
+  (target || body.closest('.sheet'))?.focus({ preventScroll: true });
+  return true;
+}
+
+function openChallengeSheet(html, opener, label, focus = null) {
+  openSheet({ id: 'challenge', cls: 'sheet-challenge', label: esc(label), html, opener, focus });
+}
+
+function challengeById(id) {
+  return (state.challenges || []).find((c) => c.id === id) || null;
+}
+
+function challengeDraftFrom(form) {
+  const data = new FormData(form);
+  return {
+    id: form.dataset.id || null,
+    year: Number(form.dataset.year),
+    type: String(data.get('type') || 'manual'),
+    value: String(data.get('value') ?? '').trim(),
+    target: String(data.get('target') ?? '').trim(),
+    title: String(data.get('title') ?? '').trim(),
+  };
+}
+
+/** Atualiza o que depende do tipo e da meta (campo do valor, palavra da meta e nome sugerido). */
+function syncChallengeForm(form, typeChanged) {
+  const d = challengeDraftFrom(form);
+  if (typeChanged) {
+    form.querySelector('[data-ch-value]').innerHTML = valueField(state, d.type, null);
+    d.value = String(form.querySelector('#ch-value')?.value ?? '').trim();
+  }
+  const n = Number(d.target) || 1;
+  const unit = form.querySelector('[data-ch-unit]');
+  if (unit) unit.textContent = targetUnit(d.type, n);
+  const value = d.type === 'pages' ? Number(d.value) || 500 : d.value || '…';
+  form.querySelector('#ch-title')?.setAttribute('placeholder', autoTitle({ type: d.type, value }, n));
+}
+
+function submitChallenge(form) {
+  const d = challengeDraftFrom(form);
+  const target = Number(d.target);
+  let error = '';
+  if (!Number.isInteger(target) || target < 1 || target > 1000) error = 'A meta vai de 1 a 1000.';
+  const kind = RULE_VALUE[d.type];
+  let value = d.value || null;
+  if (kind === 'number') {
+    value = Number(d.value);
+    if (!Number.isInteger(value) || value < 1 || value > 20000) error ||= 'Informe um número de páginas entre 1 e 20000.';
+  } else if (kind && d.type !== 'series' && !value) {
+    error ||= d.type === 'tag' ? 'Informe a etiqueta.' : d.type === 'author' ? 'Informe o autor.' : 'Escolha uma opção.';
+  }
+  if (error) {
+    const p = form.querySelector('.chs-error');
+    p.textContent = error;
+    p.hidden = false;
+    return;
+  }
+  const existing = d.id ? challengeById(d.id) : null;
+  const { state: next, challenge } = saveChallenge(state, {
+    ...(existing || {}), id: d.id || undefined, year: d.year, title: d.title, target, rule: { type: d.type, value },
+  });
+  if (!challenge) {
+    toast('Não foi possível salvar o desafio.');
+    return;
+  }
+  persist(next, existing ? 'Desafio salvo.' : 'Desafio criado.');
+  render();
+  // Criado do zero no modo "eu escolho": a folha já mostra os livros para marcar.
+  if (!existing && challenge.rule.type === 'manual') swapSheet(challengeDetailSheet(state, challenge));
+  else closeSheet();
+}
+
+Object.assign(actions, {
+  'challenge-new'(el) {
+    openChallengeSheet(challengeNewSheet(state, Number(el.dataset.year)), el, 'Novo desafio');
+  },
+  'challenge-template'(el) {
+    const t = CHALLENGE_TEMPLATES.find((x) => x.key === el.dataset.key);
+    if (!t) return;
+    const { state: next, challenge } = saveChallenge(state, { year: Number(el.dataset.year), title: t.title, target: t.target, rule: t.rule });
+    if (!challenge) return;
+    persist(next, `Desafio criado: ${t.title}.`);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    document.querySelector(`.ch-item[data-id="${CSS.escape(challenge.id)}"]`)?.focus({ preventScroll: true });
+  },
+  'challenge-custom'(el) {
+    swapSheet(challengeFormSheet(state, { id: null, year: Number(el.dataset.year), type: 'genre', value: null, target: 3, title: '' }), '#ch-type');
+  },
+  'challenge-open'(el) {
+    const c = challengeById(el.dataset.id);
+    if (c) openChallengeSheet(challengeDetailSheet(state, c), el, `Desafio: ${challengeTitle(c)}`);
+  },
+  'challenge-edit'(el) {
+    const c = challengeById(el.dataset.id);
+    if (c) swapSheet(challengeFormSheet(state, { ...c, type: c.rule.type, value: c.rule.value }), '#ch-type');
+  },
+  'challenge-step'(el) {
+    const form = el.closest('[data-challenge-form]');
+    const input = form?.querySelector('#ch-target');
+    if (!input) return;
+    input.value = String(Math.min(1000, Math.max(1, (Number(input.value) || 0) + Number(el.dataset.delta))));
+    syncChallengeForm(form, false);
+  },
+  'challenge-delete'(el) {
+    const { state: next, removed, index } = removeChallenge(state, el.dataset.id);
+    if (!removed) return;
+    lastChallengeDeleted = { challenge: removed, index };
+    persist(next);
+    closeSheet({ immediate: true, keepFocus: true });
+    render();
+    toast(`Desafio "${challengeTitle(removed)}" excluído.`, { actionLabel: 'Desfazer', action: 'undo-challenge-delete', duration: 7000 });
+  },
+  'undo-challenge-delete'() {
+    if (!lastChallengeDeleted) return;
+    persist(restoreChallenge(state, lastChallengeDeleted.challenge, lastChallengeDeleted.index), 'Desafio restaurado.');
+    lastChallengeDeleted = null;
+    render();
+  },
+  'challenge-pick'(el) {
+    const before = state;
+    const next = toggleChallengeBook(state, el.dataset.id, el.dataset.book);
+    if (next === state) return;
+    persist(next);
+    render();
+    const c = challengeById(el.dataset.id);
+    if (c) swapSheet(challengeDetailSheet(state, c), `[data-action="challenge-pick"][data-book="${CSS.escape(el.dataset.book)}"]`);
+    celebrateChallenges(before, state);
+  },
+});
+
+document.addEventListener('submit', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (!form) return;
+  e.preventDefault();
+  submitChallenge(form);
+});
+
+document.addEventListener('change', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (form) syncChallengeForm(form, e.target.id === 'ch-type');
+});
+
+document.addEventListener('input', (e) => {
+  const form = e.target.closest?.('[data-challenge-form]');
+  if (form && e.target.id !== 'ch-title') syncChallengeForm(form, false);
+});

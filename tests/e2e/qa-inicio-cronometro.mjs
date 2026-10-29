@@ -115,6 +115,12 @@ const shot = (name, fullPage = true) => page.screenshot({ path: join(SHOTS, `qa-
 const step = (msg) => console.log(`• ${msg}`);
 const onPage = (name) => page.waitForFunction((n) => document.getElementById('app').dataset.page === n, name);
 const book = (st, id) => st.books.find((b) => b.id === id);
+// 1.6: cada entrada com tempo guarda também o horário da sessão ({ hora: minutos }), que soma os minutos.
+const timeless = (entry) => {
+  const { hours, ...rest } = entry;
+  if (rest.minutes) assert.equal(Object.values(hours || {}).reduce((s, m) => s + m, 0), rest.minutes, 'horário soma os minutos');
+  return rest;
+};
 const overflow = () => page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
 const smallInputs = () => page.$$eval('input, select, textarea', (els) => els
   .filter((e) => e.type !== 'file' && e.type !== 'hidden' && parseFloat(getComputedStyle(e).fontSize) < 16)
@@ -225,7 +231,7 @@ try {
   await page.click('.timer-stop button[type="submit"]');
   await onPage('inicio');
   st = await waitState((s) => book(s, 'r1').journal.some((e) => e.date === TODAY && e.minutes === 25));
-  assert.deepEqual(book(st, 'r1').journal.at(-1), { date: TODAY, from: 120, to: 150, unit: 'page', note: '', minutes: 25 });
+  assert.deepEqual(timeless(book(st, 'r1').journal.at(-1)), { date: TODAY, from: 120, to: 150, unit: 'page', note: '', minutes: 25 });
   await page.click('.reading:has-text("Guerra dos Tronos") [data-action="update-page"]');
   assert.match(await page.textContent('.sheet-layer.is-open .psheet-head'), /Ritmo: 29 págs\.\/dia/);
   await page.keyboard.press('Escape');

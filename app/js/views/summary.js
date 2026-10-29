@@ -16,6 +16,8 @@ import { compactBar } from '../large-title.js';
 import { readerProfileCard } from './meta-ui.js';
 import { formatDuration, formatDurationShort, headphonesIcon, hoursValue } from '../audio.js';
 import { minutesListenedByMonth, minutesListenedPerDay } from '../journal.js';
+import { challengesCard } from './challenges.js';
+import { queueCard, speedCard } from './speed.js';
 
 export const SUMMARY_TABS = ['geral', 'ritmo', 'gostos'];
 const TAB_LABELS = { geral: 'Visão geral', ritmo: 'Ritmo', gostos: 'Gostos' };
@@ -105,6 +107,7 @@ function overview({ state, ui, year, today, s }) {
   return `
     ${kpis(state, s, year, today)}
     ${sCurveCard({ state, ui, year, today, goal: s.goal })}
+    ${challengesCard({ state, year })}
     ${favoriteCard(s)}
     ${s.count ? `<a class="btn-primary" href="#/retro/${year}">Ver retrospectiva ${icon('chevronRight', { size: 18, stroke: 2.4 })}</a>` : ''}`;
 }
@@ -215,7 +218,9 @@ function rhythm({ state, ui, year, today, s }) {
     ${calendarSection({ state, ui: ui || {}, year, today })}
     ${monthsCard({ state, ui, s, today, year, streak })}
     ${pagesPerDayCard(state, s, year)}
-    ${listenedCard(state, s, year)}`;
+    ${listenedCard(state, s, year)}
+    ${speedCard(state, year)}
+    ${queueCard(state, year, today)}`;
 }
 
 // ---------- Gostos ----------

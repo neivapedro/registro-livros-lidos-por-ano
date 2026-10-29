@@ -3102,3 +3102,182 @@ a.sug-title { text-decoration: none; }
 @media (prefers-reduced-motion: reduce) {
   .sug-skel::after { content: none; animation: none; }
 }
+
+/* ===== 1.6 Desafios e velocidade ===== */
+/* Desafios do ano (Visão geral do Resumo) e Velocidade de leitura / Previsão da fila (Ritmo).
+   Só tokens sólidos (sem color-mix): igual no iOS 16.0/16.1. */
+
+/* Cartão dos desafios */
+.ch-card { gap: 10px; }
+.ch-card .section-head { align-items: center; }
+.ch-count { margin-left: 6px; font-size: 13px; font-weight: 700; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ch-add {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin: -8px -10px -8px 0; padding: 0 10px;
+  border: 0; border-radius: 999px; background: transparent; color: var(--accent); font-size: 14px; font-weight: 800;
+}
+.ch-add:active { background: var(--surface-2); }
+.ch-list { list-style: none; margin: 0 -8px; padding: 0; display: flex; flex-direction: column; }
+.ch-list > li + li { border-top: 1px solid var(--line); }
+.ch-item {
+  width: 100%; min-height: 64px; padding: 10px 8px; border: 0; border-radius: 16px; background: transparent;
+  display: flex; align-items: center; gap: 12px; text-align: left; color: var(--text);
+}
+.ch-item:active { background: var(--surface-2); }
+.ch-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.ch-title { font-size: 15px; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere; }
+.ch-sub { font-size: 12.5px; color: var(--muted); line-height: 1.3; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.ch-item.is-done .ch-sub { color: var(--accent); font-weight: 700; }
+.ch-chev { flex-shrink: 0; color: var(--faint); }
+
+/* Anel de progresso */
+.ch-ring { position: relative; flex-shrink: 0; width: var(--ring, 48px); height: var(--ring, 48px); display: inline-flex; align-items: center; justify-content: center; }
+.ch-ring > svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+.ch-ring-track { fill: none; stroke: var(--track-warm); stroke-width: 4.5; }
+.ch-ring-fill { fill: none; stroke: var(--accent); stroke-width: 4.5; stroke-linecap: round; }
+.ch-ring-n { position: relative; font-size: 15px; font-weight: 800; letter-spacing: -0.3px; font-variant-numeric: tabular-nums; }
+.ch-ring-of { font-size: 11px; font-weight: 700; color: var(--muted); }
+/* Completo: um disco cheio com o visto (sem o anel por fora). */
+.ch-ring.is-done > svg { display: none; }
+.ch-ring-check {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: calc(var(--ring, 48px) - 6px); height: calc(var(--ring, 48px) - 6px); border-radius: 999px;
+  background: var(--accent); color: var(--on-accent);
+}
+
+/* Capas dos livros que contam (decorativas; a lista com links fica na folha) */
+.ch-covers { display: flex; align-items: center; margin-top: 4px; padding-left: 6px; }
+.ch-cover { margin-left: -6px; border-radius: 4px; box-shadow: 0 0 0 2px var(--surface); }
+.ch-cover .cover-xs { width: 24px; height: 36px; border-radius: 3px; display: block; }
+.ch-cover .cover-ini { display: none; }
+.ch-more { margin-left: 6px; font-size: 12px; font-weight: 800; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+/* Sem desafios no ano: três sugestões de um toque */
+.ch-intro { font-size: 13.5px; color: var(--text-soft); line-height: 1.4; }
+.ch-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.ch-chip {
+  display: inline-flex; align-items: center; gap: 6px; min-height: 44px; max-width: 100%; padding: 8px 14px;
+  border: 1px solid var(--line-strong); border-radius: 999px; background: var(--surface-2); color: var(--text);
+  font-size: 13.5px; font-weight: 700; text-align: left; line-height: 1.25;
+}
+.ch-chip .icon { flex-shrink: 0; color: var(--accent); }
+.ch-chip:active { border-color: var(--accent); }
+.ch-new-wide { min-height: 48px; }
+
+/* Folhas: sugestões, formulário e detalhe */
+.chs { display: flex; flex-direction: column; gap: 14px; }
+.chs-head { display: flex; align-items: center; gap: 12px; }
+.chs-head-text { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
+.chs-title {
+  font-family: var(--serif); font-size: 24px; line-height: 1.08;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere;
+}
+.chs-list { list-style: none; margin: 0; padding: 0; border-radius: 20px; background: var(--surface-2); overflow: hidden; }
+.chs-list > li + li { border-top: 1px solid var(--line-strong); }
+.chs-tpl {
+  width: 100%; min-height: 60px; padding: 10px 14px 10px 16px; border: 0; background: transparent; color: var(--text);
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.chs-tpl:active { background: var(--line-strong); }
+.chs-tpl-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.chs-tpl-title { font-size: 15px; font-weight: 700; line-height: 1.25; }
+.chs-tpl-rule { font-size: 12.5px; color: var(--muted); }
+.chs-tpl-add {
+  flex-shrink: 0; width: 32px; height: 32px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  background: var(--accent); color: var(--on-accent);
+}
+.chs-tpl.is-used { cursor: default; }
+.chs-tpl.is-used .chs-tpl-title { color: var(--muted); }
+.chs-tpl.is-used .chs-tpl-add { background: var(--track-warm); color: var(--accent); }
+.chs .btn-ghost .icon { color: var(--accent); flex-shrink: 0; }
+
+.chs-label { font-size: 12px; font-weight: 700; letter-spacing: 1.2px; text-transform: uppercase; color: var(--muted); margin-bottom: -6px; }
+.chs-optional { text-transform: none; letter-spacing: 0; font-weight: 600; color: var(--faint); }
+.chs-hint { font-size: 13.5px; color: var(--text-soft); line-height: 1.4; }
+.chs-value { display: flex; flex-direction: column; gap: 14px; }
+.chs-select { position: relative; }
+.chs-select select {
+  width: 100%; min-height: 50px; padding: 0 40px 0 14px; border-radius: 16px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--text); font-weight: 700;
+  -webkit-appearance: none; appearance: none;
+}
+.chs-select .icon { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); color: var(--muted); pointer-events: none; }
+.chs-input, .chs-field {
+  width: 100%; min-height: 50px; padding: 0 14px; border-radius: 16px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--text); font-weight: 700;
+}
+.chs-input::placeholder { color: var(--faint); font-weight: 500; }
+.chs-input:focus, .chs-select select:focus, .chs-field:focus-within, .chs-target:focus-within { outline: none; border-color: var(--accent); }
+.chs-field { display: flex; align-items: center; gap: 8px; }
+.chs-field input, .chs-target input {
+  flex: 1; min-width: 0; border: 0; outline: none; background: transparent; padding: 0; font-weight: 800;
+  font-variant-numeric: tabular-nums; -moz-appearance: textfield; appearance: textfield;
+}
+.chs-field input::-webkit-inner-spin-button, .chs-target input::-webkit-inner-spin-button,
+.chs-field input::-webkit-outer-spin-button, .chs-target input::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+.chs-suffix { font-size: 14px; font-weight: 700; color: var(--muted); white-space: nowrap; }
+.chs-stepper { display: grid; grid-template-columns: 50px minmax(0, 1fr) 50px; gap: 8px; }
+.chs-step {
+  min-height: 50px; border-radius: 16px; border: 1px solid var(--line-strong); background: var(--surface-2);
+  color: var(--accent); font-size: 22px; font-weight: 700; line-height: 1;
+}
+.chs-step:active { border-color: var(--accent); }
+.chs-target {
+  display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 50px; padding: 0 12px;
+  border-radius: 16px; border: 1px solid var(--line-strong); background: var(--surface-2);
+}
+.chs-target input { flex: 0 1 4ch; width: 4ch; text-align: right; font-size: 22px; }
+.chs-error { font-size: 13.5px; font-weight: 600; color: var(--danger-text); }
+.chs-actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.chs-actions .btn-ghost, .chs-actions .btn-primary { min-height: 52px; border-radius: 999px; padding: 0 12px; }
+.chs-delete { align-self: center; min-height: 44px; gap: 6px; }
+.chs-del, .chs .chs-del .icon { color: var(--danger); }
+
+/* Detalhe: progresso e livros */
+.chs-progress { display: flex; flex-direction: column; gap: 6px; }
+.chs-bar { display: block; height: 8px; border-radius: 999px; background: var(--track-warm); overflow: hidden; }
+.chs-bar-fill { display: block; height: 100%; border-radius: 999px; background: var(--accent); }
+.chs-progress-text { font-size: 14px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.chs-progress.is-done .chs-progress-text { color: var(--accent); }
+.chs-rule { font-size: 12.5px; color: var(--muted); }
+.chs-books { list-style: none; margin: 0; padding: 0; border-radius: 20px; background: var(--surface-2); overflow: hidden; }
+.chs-books > li + li { border-top: 1px solid var(--line-strong); }
+.chs-book {
+  width: 100%; min-height: 60px; padding: 8px 14px; border: 0; background: transparent; color: var(--text);
+  display: flex; align-items: center; gap: 12px; text-align: left;
+}
+.chs-book:active { background: var(--line-strong); }
+.chs-book-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.chs-book-title { font-family: var(--serif); font-size: 18px; line-height: 1.12; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
+.chs-book-sub { font-size: 12.5px; color: var(--muted); }
+.chs-check {
+  flex-shrink: 0; width: 26px; height: 26px; border-radius: 999px; display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid var(--line-strong); color: transparent;
+}
+.chs-book.is-on .chs-check { border-color: var(--accent); background: var(--accent); color: var(--on-accent); }
+
+/* Velocidade de leitura e previsão da fila (aba Ritmo) */
+.sp-card { gap: 12px; }
+.sp-main { display: flex; align-items: baseline; gap: 8px; }
+.sp-num { font-family: var(--serif); font-size: 48px; line-height: 0.9; color: var(--accent); font-variant-numeric: tabular-nums; }
+.sp-unit { font-size: 15px; font-weight: 700; color: var(--text-soft); }
+.sp-empty { display: flex; gap: 8px; align-items: flex-start; font-size: 13.5px; color: var(--text-soft); line-height: 1.4; }
+.sp-empty .icon { flex-shrink: 0; margin-top: 1px; color: var(--accent); }
+.sp-hours { display: flex; flex-direction: column; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.sp-hours-head { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+.sp-card > .sp-empty + .sp-empty, .sp-card > .muted + .sp-empty { padding-top: 12px; border-top: 1px solid var(--line); }
+.hr-chart { display: flex; flex-direction: column; gap: 6px; }
+.hr-bars { height: 72px; display: flex; align-items: flex-end; gap: 2px; border-bottom: 1px solid var(--line-strong); }
+.hr-bar { flex: 1 1 0; min-width: 0; height: var(--v); border-radius: 3px 3px 0 0; background: var(--bar-neutral); }
+.hr-bar.is-zero { height: 0; }
+.hr-bar.is-peak { background: var(--accent); }
+.hr-axis { position: relative; height: 14px; font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
+.hr-axis span { position: absolute; top: 0; }
+.sp-q { display: flex; flex-direction: column; border-radius: 16px; background: var(--surface-2); }
+.sp-q-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; padding: 10px 14px; }
+.sp-q-row + .sp-q-row { border-top: 1px solid var(--line-strong); }
+.sp-q-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.sp-q-days { flex-shrink: 0; font-size: 20px; font-weight: 800; letter-spacing: -0.4px; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Ficha de um livro da fila: "Você leva ~12 dias" */
+.ficha-estimate { display: flex; align-items: center; gap: 8px; margin-top: -4px; font-size: 13.5px; font-weight: 600; color: var(--text-soft); }
+.ficha-estimate .icon { flex-shrink: 0; color: var(--accent); }
