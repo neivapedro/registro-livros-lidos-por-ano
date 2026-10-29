@@ -2867,6 +2867,8 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
   background: linear-gradient(to bottom, transparent, var(--surface) 12px);
 }
 .sheet.has-detents .sheet-grab { cursor: grab; }
+/* Na média a régua ficaria cortada atrás dos botões: aparece na grande. */
+.sheet.has-detents:not(.is-large) .psheet-range { visibility: hidden; }
 
 /* --- Menu com prévia --- */
 /* Fundo desfocado e escurecido; a capa levantada (.ctx-preview) e o menu ficam onde o JS os
