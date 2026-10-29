@@ -369,7 +369,7 @@ try {
   assert.ok(csv.startsWith('﻿'), 'BOM para o Excel reconhecer os acentos');
   const lines = csv.slice(1).split('\r\n');
   assert.equal(lines[0], 'Título;Autor(es);Status;Formato;Gênero;Etiquetas;Série;Nº;Páginas;Duração;Início;Término;Nota;Favorito;Releitura;Abandonado por;ISBN;Anotações');
-  assert.ok(csv.includes('Duna;Autor;Lido;Físico;Ficção;clássico, ficção científica;Duna;1;300;01/03/2026;20/03/2026;4,5;;;;;'));
+  assert.ok(csv.includes('Duna;Autor;Lido;Físico;Ficção;clássico, ficção científica;Duna;1;300;;01/03/2026;20/03/2026;4,5;;;;;'));
   assert.ok(csv.includes('"Sapiens; uma breve história";'));
   assert.ok(csv.includes('"Muito bom.\nRelido ""trechos""."'));
   assert.ok(csv.includes('Duna: contos;;Lido;Físico;;;Duna;2,5;'));
