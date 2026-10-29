@@ -369,9 +369,12 @@ try {
   assert.equal(await text(page, '.profile-card h2'), 'Seu perfil de leitor');
   assert.equal(await text(page, '.profile-card .section-head .muted'), '4 de 5 livros');
   assert.equal(await text(page, '.profile-lead'), 'Em 2026, você leu mais livros emocionantes, reflexivos e tensos.');
-  const bars = await page.locator('.profile-bar .hbar-head').allInnerTexts();
+  const bars = await page.locator('.profile-bars .hbar-head').allInnerTexts();
   assert.deepEqual(bars.slice(0, 3).map((t) => t.replace(/\s+/g, ' ')), ['Emocionante 2 livros · 50%', 'Reflexivo 2 livros · 50%', 'Tenso 2 livros · 50%']);
-  assert.equal(bars.length, 6);
+  // 1.6.1: três à mostra e o resto em "Ver todos (9)" (antes só os seis primeiros).
+  assert.equal(bars.length, 9);
+  assert.equal(await text(page, ".profile-card .rb-open"), "Ver todos (9)");
+  assert.equal(await page.locator(".profile-card .rb-more > .rb-row").count(), 6);
   assert.equal(await page.getAttribute('.pace-split', 'aria-label'), 'Lento: 1 livro, Médio: 1 livro, Rápido: 2 livros');
   assert.deepEqual(await page.locator('.pace-key').evaluateAll((els) => els.map((e) => e.textContent.replace(/\s+/g, ' ').trim())), ['Lento 1', 'Médio 1', 'Rápido 2']);
   await page.locator('.profile-card').scrollIntoViewIfNeeded();

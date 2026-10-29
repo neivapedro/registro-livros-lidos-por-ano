@@ -197,7 +197,7 @@ test('perfil de leitor (Resumo): frase, barras e ritmo; convite quando não há 
   assert.match(html, /Seu perfil de leitor/);
   assert.match(html, /você leu mais livros <strong>tensos e inspiradores<\/strong>/);
   assert.match(html, /2 de 2 livros/);
-  assert.match(html, /Tenso<\/span><span class="muted">2 livros · 100%/);
+  assert.match(html, /Tenso<\/span><span class="muted rb-count">2 livros · 100%/);
   assert.match(html, /aria-label="Lento: 0 livros, Médio: 0 livros, Rápido: 1 livro"/);
   assert.match(readerProfileCard([base()], 2026), /is-empty[\s\S]*Marque o <strong>humor<\/strong>/);
   assert.equal(readerProfileCard([base()], 2024), '');

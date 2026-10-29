@@ -107,6 +107,7 @@ const SHELL = [
   './js/views/challenges.js',
   './js/views/speed.js',
   './js/views/charts.js',
+  './js/views/ranked-bars.js',
   './js/views/form.js',
   './js/views/home.js',
   './js/views/marcos.js',
