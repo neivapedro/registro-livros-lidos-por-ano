@@ -67,7 +67,7 @@ function geminiKeyCard(hasKey, used = 0) {
     : `Buscas com IA este mês: ${used} de ${AI_MONTHLY_LIMIT}`}</p>`
     : '';
   return group('aikey', 'Busca com IA (gratuita)', `
-        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” procura na internet e a IA do Google (Gemini) lê os resultados. Usa a cota gratuita do Google, sem cartão. Só roda quando você toca nele.</p>
+        <p class="muted small">Opcional: para o livro que a busca comum não acha (um lançamento, por exemplo), o botão “Buscar com IA” procura na internet e a IA do Google (Gemini) lê os resultados. Usa a cota gratuita do Google, sem cartão. Só roda quando você toca nele. A mesma chave liga o trecho por foto (em Trechos) e as sugestões de “O que ler a seguir” (no Início).</p>
         <div class="field">
           <label for="ai-key">Chave do Gemini</label>
           <input id="ai-key" type="password" autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false" placeholder="Cole a chave aqui (AQ… ou AIza…)" data-aikey>
@@ -86,7 +86,7 @@ function geminiKeyCard(hasKey, used = 0) {
             <li>Opcional: no <a href="https://console.cloud.google.com/apis/credentials" target="_blank" rel="noopener noreferrer">Google Cloud › Credenciais</a>, toque na chave e restrinja: em <em>Restrições de aplicativos</em>, “Sites” com <code>https://neivapedro.github.io/*</code>; em <em>Restrições de API</em>, só a “Generative Language API”.</li>
             <li>Volte aqui, cole a chave e toque em Salvar.</li>
           </ol>
-          <p class="muted small">A cota gratuita tem limite por minuto e por dia; se acabar, a busca avisa e volta a funcionar mais tarde. Cada busca usa um ou dois pedidos dela. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular.</p>
+          <p class="muted small">A cota gratuita tem limite por minuto e por dia; se acabar, a busca avisa e volta a funcionar mais tarde. Cada busca usa um ou dois pedidos dela. Este app faz no máximo ${AI_MONTHLY_LIMIT} buscas com IA por mês neste celular; cada foto lida e cada pedido de sugestões conta como uma.</p>
         </details>`, 'A chave fica só neste aparelho e não vai para o backup. Use uma chave separada da do Google Books, liberada só para a IA.', 'gkey');
 }
 

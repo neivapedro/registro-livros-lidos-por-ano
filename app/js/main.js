@@ -63,6 +63,12 @@ import { swapResults } from './empty-art.js';
 import { initLargeTitles, syncLargeTitle } from './large-title.js';
 import { AI_CONFIRM_TIMEOUT_MS, AI_TIMEOUT_MS, aiErrorMessage, aiSearch, enrichAiResults, isRetryable } from './ai-search.js';
 import { aiLimitReached, aiSearchesThisMonth, countAiSearch, decodeKeysParam, keysLink, readAiUsage, readGeminiKey, removeGeminiKey, saveGeminiKey } from './prefs.js';
+import {
+  OCR_MAX_SIDE, OCR_QUALITY, OCR_TIMEOUT_MS, SUGGEST_TIMEOUT_MS, extrasErrorMessage, keepSelection, ownsBook,
+  readPagePhoto, readSuggestions, saveSuggestions, suggestBooks,
+} from './ai-extras.js';
+import { resizePhoto } from './cover-photo.js';
+import { quotePhotoBlock, suggestionsView } from './views/ai-views.js';
 
 const root = document.getElementById('app');
 const nav = document.getElementById('nav');
@@ -325,6 +331,9 @@ function render() {
       break;
     case 'trechos':
       html = allQuotesView(ctx);
+      break;
+    case 'sugestoes':
+      html = suggestionsScreen(ctx);
       break;
     case 'ler':
       html = timerScreen(route.params[0]);
@@ -2459,6 +2468,220 @@ function saveLoan(form) {
   render();
 }
 
+// ---------- IA 1.6: trecho por foto e "O que ler a seguir" ----------
+// Mesma IA gratuita (chave deste aparelho) e mesmo limite do mês da busca com IA: cada foto
+// lida e cada pedido de sugestões conta um uso, só quando sai de fato para o Google.
+// O texto da foto vai para o campo do trecho; nada é salvo sem o toque em Salvar.
+
+ui.suggest = { mode: 'fila', cache: readSuggestions(localStorage), loading: null, error: null };
+let ocrAbort = null;
+let ocrPhoto = null; // última foto já reduzida, para o "Tentar de novo"
+let quoteSelection = null; // última seleção feita no campo do trecho
+let suggestAbort = null;
+
+/** Ainda dentro do limite do mês? (outra aba pode ter contado também) */
+function aiAllowed() {
+  const stored = readAiUsage(localStorage);
+  if (aiSearchesThisMonth(stored, todayIso()) > aiSearchesThisMonth(ui.aiUsage, todayIso())) ui.aiUsage = stored;
+  return !aiLimitReached(ui.aiUsage, todayIso());
+}
+
+function countAiUse() {
+  ui.aiUsage = countAiSearch(localStorage, todayIso(), ui.aiUsage);
+}
+
+/** Redesenha só o bloco da foto (a tela inteira apagaria o que está sendo digitado). */
+function renderOcr() {
+  const el = document.getElementById('quote-ocr');
+  if (!el || !ui.quoteForm) return;
+  el.outerHTML = quotePhotoBlock(ui.quoteForm.ocr, { hasKey: Boolean(ui.geminiKey), limitReached: aiLimitReached(ui.aiUsage, todayIso()) });
+}
+
+function cancelOcr() {
+  ocrAbort?.abort();
+  ocrAbort = null;
+}
+
+async function readQuotePhoto(input) {
+  const file = input.files?.[0];
+  input.value = '';
+  const form = ui.quoteForm;
+  if (!file || !form || !ui.geminiKey) return;
+  try {
+    ocrPhoto = await resizePhoto(file, { maxW: OCR_MAX_SIDE, maxH: OCR_MAX_SIDE, quality: OCR_QUALITY });
+  } catch {
+    ocrPhoto = null;
+    form.ocr = { status: 'error', code: 'image', message: extrasErrorMessage('ocr', 'image'), retry: false };
+    renderOcr();
+    return;
+  }
+  runOcr(form);
+}
+
+/** Texto lido: entra no campo (depois do que já estava escrito) e a página, se o campo está vazio. */
+function applyOcrText(form, { text, page }) {
+  const area = document.getElementById('q-text');
+  const pos = document.getElementById('q-pos');
+  const current = area ? area.value.trim() : '';
+  const value = (current ? `${current}\n\n${text}` : text).slice(0, 5000);
+  const position = pos && !pos.value && page ? String(page) : pos?.value ?? '';
+  if (area) {
+    area.value = value;
+    // O campo cresce para mostrar o texto lido (até um limite; depois rola).
+    area.style.height = 'auto';
+    area.style.height = `${Math.min(area.scrollHeight + 2, 420)}px`;
+  }
+  if (pos) pos.value = position;
+  form.prefill = { text: value, position };
+  form.ocr = { status: 'done', page };
+  quoteSelection = null;
+}
+
+async function runOcr(form) {
+  if (!ui.geminiKey || !ocrPhoto || ui.quoteForm !== form) return;
+  if (!aiAllowed()) {
+    form.ocr = null;
+    renderOcr();
+    return;
+  }
+  cancelOcr();
+  const ctrl = new AbortController();
+  ocrAbort = ctrl;
+  form.ocr = { status: 'loading', timeoutMs: OCR_TIMEOUT_MS };
+  renderOcr();
+  const book = state.books.find((b) => b.id === ui.draft?.id);
+  const stale = () => ctrl.signal.aborted || ui.quoteForm !== form;
+  try {
+    const out = await readPagePhoto(ocrPhoto, { key: ui.geminiKey, signal: ctrl.signal, maxPage: book?.pages || null, onSend: countAiUse });
+    if (stale()) return;
+    applyOcrText(form, out);
+  } catch (err) {
+    if (stale() || err?.code === 'cancelled') return;
+    const code = err?.code || 'server';
+    form.ocr = { status: 'error', code, message: extrasErrorMessage('ocr', code), retry: isRetryable(code) && code !== 'image' };
+  } finally {
+    if (ocrAbort === ctrl) ocrAbort = null;
+  }
+  renderOcr();
+  document.getElementById('q-text')?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+}
+
+/** Deixa no campo só o que a pessoa selecionou. */
+function keepQuoteSelection() {
+  const area = document.getElementById('q-text');
+  if (!area) return;
+  let start = area.selectionStart;
+  let end = area.selectionEnd;
+  // Ao tocar no botão o campo perde o foco; vale a última seleção feita nele.
+  if (start === end && quoteSelection?.value === area.value) ({ start, end } = quoteSelection);
+  const picked = keepSelection(area.value, start, end);
+  if (!picked || picked === area.value.trim()) {
+    toast('Selecione o trecho no texto (toque duas vezes numa palavra e arraste) e toque de novo.', { duration: 5000 });
+    return;
+  }
+  area.value = picked;
+  if (ui.quoteForm?.prefill) ui.quoteForm.prefill.text = picked;
+  quoteSelection = null;
+  toast('Ficou só o trecho selecionado. Confira e toque em Salvar.');
+}
+
+document.addEventListener('selectionchange', () => {
+  const area = document.activeElement;
+  if (area?.id !== 'q-text' || area.selectionStart === area.selectionEnd) return;
+  quoteSelection = { start: area.selectionStart, end: area.selectionEnd, value: area.value };
+});
+
+document.addEventListener('change', (e) => {
+  if ('ocrPhoto' in e.target.dataset) readQuotePhoto(e.target);
+});
+
+// O texto lido continua no campo se a tela for redesenhada (com o que a pessoa já apagou).
+document.addEventListener('input', (e) => {
+  const prefill = ui.quoteForm?.prefill;
+  if (!prefill) return;
+  if (e.target.id === 'q-text') prefill.text = e.target.value;
+  else if (e.target.id === 'q-pos') prefill.position = e.target.value;
+});
+
+// Trocar de trecho, de aba ou cancelar: a leitura em andamento deixa de valer.
+for (const name of ['quote-new', 'quote-edit', 'quote-cancel', 'book-tab']) {
+  const original = actions[name];
+  actions[name] = (el) => {
+    cancelOcr();
+    return original(el);
+  };
+}
+
+// ---------- O que ler a seguir (#/sugestoes) ----------
+
+function suggestionsScreen(ctx) {
+  const used = aiSearchesThisMonth(ui.aiUsage, ctx.today);
+  return suggestionsView({ ...ctx, hasKey: Boolean(ui.geminiKey), used, limitReached: aiLimitReached(ui.aiUsage, ctx.today) });
+}
+
+function renderSuggest() {
+  if (parseRoute().name === 'sugestoes') render();
+}
+
+function cancelSuggest() {
+  suggestAbort?.abort();
+  suggestAbort = null;
+  ui.suggest.loading = null;
+}
+
+async function runSuggest() {
+  const sg = ui.suggest;
+  const mode = sg.mode;
+  if (!ui.geminiKey || sg.loading?.mode === mode) return;
+  if (sg.loading) cancelSuggest();
+  if (!aiAllowed()) {
+    renderSuggest();
+    return;
+  }
+  const ctrl = new AbortController();
+  suggestAbort = ctrl;
+  sg.loading = { mode, stage: 'ask', timeoutMs: SUGGEST_TIMEOUT_MS };
+  sg.error = null;
+  renderSuggest();
+  // Conferir os livros sugeridos na busca de sempre: só os achados aparecem, com os dados de lá.
+  const search = (q) => {
+    if (sg.loading?.mode === mode && sg.loading.stage !== 'verify' && !ctrl.signal.aborted) {
+      sg.loading = { mode, stage: 'verify', timeoutMs: 20000 };
+      renderSuggest();
+    }
+    return searchBooks(q, { signal: ctrl.signal, googleKey: googleBooksKey() });
+  };
+  try {
+    const out = await suggestBooks(mode, state.books, { key: ui.geminiKey, signal: ctrl.signal, onSend: countAiUse, search });
+    if (ctrl.signal.aborted) return;
+    sg.cache = saveSuggestions(localStorage, mode, out.items, todayIso());
+    sg.loading = null;
+  } catch (err) {
+    if (ctrl.signal.aborted) return;
+    const code = err?.code || 'server';
+    sg.loading = null;
+    sg.error = { mode, code, message: extrasErrorMessage('suggest', code), retry: isRetryable(code) };
+  } finally {
+    if (suggestAbort === ctrl) suggestAbort = null;
+  }
+  renderSuggest();
+}
+
+/** Livro sugerido (já conferido na busca) entra na fila "Quero ler". */
+function addSuggestion(index) {
+  const r = ui.suggest.cache?.novos?.items?.[index];
+  if (!r) return;
+  if (ownsBook(state.books, r)) {
+    toast('Esse livro já está nos seus livros.');
+    return;
+  }
+  const { state: next } = upsertBook(state, {
+    ...blankDraft(STATUS.WANT), title: r.title, authors: r.authors, pages: r.pages, cover: r.cover, isbn: r.isbn,
+  });
+  persist(next, `“${r.title}” entrou na fila Quero ler.`);
+  render();
+}
+
 Object.assign(actions, {
   'toggle-mood'(el) {
     if (!ui.draft) return;
@@ -2520,6 +2743,38 @@ document.addEventListener('submit', (e) => {
   if (!form) return;
   e.preventDefault();
   saveLoan(form);
+});
+
+Object.assign(actions, {
+  'ocr-nokey'() {
+    if (!ui.quoteForm) return;
+    ui.quoteForm.ocr = { status: 'nokey' };
+    renderOcr();
+  },
+  'ocr-cancel'() {
+    cancelOcr();
+    if (ui.quoteForm) ui.quoteForm.ocr = null;
+    renderOcr();
+  },
+  'ocr-retry'() { runOcr(ui.quoteForm); },
+  'ocr-keep-selection'() { keepQuoteSelection(); },
+  'suggest-mode'(el) {
+    const mode = el.dataset.value === 'novos' ? 'novos' : 'fila';
+    if (ui.suggest.mode === mode) return;
+    ui.suggest.mode = mode;
+    render();
+  },
+  'suggest-run'() { runSuggest(); },
+  'suggest-cancel'() {
+    cancelSuggest();
+    render();
+  },
+  'suggest-add'(el) { addSuggestion(Number(el.dataset.index)); },
+});
+
+window.addEventListener('hashchange', () => {
+  cancelOcr();
+  if (parseRoute().name !== 'sugestoes' && ui.suggest.loading) cancelSuggest();
 });
 
 // Os dados vêm do IndexedDB (assíncrono): a primeira tela espera por eles.
