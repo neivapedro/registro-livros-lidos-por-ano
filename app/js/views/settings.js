@@ -1,10 +1,12 @@
 import { daysSince, formatBR, yearOf } from '../dates.js';
 import { getGoal } from '../store.js';
-import { monthlyTarget } from '../stats.js';
+import { monthlyTarget, yearsWithData } from '../stats.js';
 import { decimal, esc, icon, plural } from '../ui.js';
 import { pageGoalSettings } from './charts.js';
 import { AI_MONTHLY_LIMIT, aiSearchesThisMonth } from '../prefs.js';
 import { ACCENTS, validAccent } from '../accent.js';
+import { compareCard } from './compare.js';
+import { importCsvButton, importPreviewCard } from './importar.js';
 
 export const APP_VERSION = '1.5.0';
 
@@ -174,12 +176,14 @@ export function settingsView({ state, ui, today }) {
       <span class="icon-btn-spacer"></span>
     </header>
 ${keyImportCard(ui?.keyImport, { googleBooksKey: ui?.googleKey, geminiKey: ui?.geminiKey })}
+${importPreviewCard(ui?.grImport)}
 ${nameCard(ui?.userName || '')}
 ${group('meta', 'Meta de leitura', `
         ${stepper(`Meta de ${year}`, goal, 'goal-year', `${plural(monthlyTarget(goal), 'livro', 'livros')} por mês para manter a sequência`)}
         ${stepper('Meta para os próximos anos', state.defaultGoal, 'goal-default', 'Vale para cada ano novo')}
         ${pageGoalSettings(state, year)}`)}
 ${appearanceCard(ui?.themePref, ui?.accent)}
+${compareCard({ years: yearsWithData(state.books, year), year: ui?.cmpYear || year, withBooks: ui?.cmpWithBooks !== false, saved: ui?.cmpSaved })}
 ${group('backup', 'Backup dos dados', `
         <p class="muted small">Seus livros ficam guardados só neste celular. Exporte um backup de vez em quando e guarde no Google Drive, e-mail ou WhatsApp. Se trocar de celular, é só importar.</p>
         <p class="small strong-ish">${last} ${plural(state.books.length, 'livro registrado', 'livros registrados')}.</p>
@@ -188,7 +192,8 @@ ${group('backup', 'Backup dos dados', `
           <button type="button" class="btn-primary" data-action="export-backup">${icon('download', { size: 18, stroke: 2 })}Exportar backup</button>
           <label class="btn-ghost file-btn">${icon('upload', { size: 18, stroke: 2 })}Importar backup<input type="file" accept="application/json,.json" data-import class="sr-only"></label>
           <button type="button" class="btn-ghost" data-action="export-csv">${icon('download', { size: 18, stroke: 2 })}Exportar planilha (CSV)</button>
-        </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup.')}
+          ${importCsvButton()}
+        </div>`, 'A planilha abre no Excel, Numbers ou Google Planilhas. Para restaurar os dados, use o backup. Do Goodreads ou do StoryGraph, os livros entram junto com os seus (os repetidos ficam de fora).')}
 ${googleKeyCard(Boolean(ui?.googleKey))}
 ${geminiKeyCard(Boolean(ui?.geminiKey), aiSearchesThisMonth(ui?.aiUsage, today))}
 ${keysTransferCard(Boolean(ui?.googleKey || ui?.geminiKey))}

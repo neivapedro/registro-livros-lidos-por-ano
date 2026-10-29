@@ -3,6 +3,7 @@
 import { STATUS } from '../store.js';
 import { elapsedMs, formatElapsed, isPaused, wholeMinutes } from '../timer.js';
 import { cover, esc, icon } from '../ui.js';
+import { ambientPicker } from './ambient.js';
 
 /** Formulário do "Parar": onde parou, já preenchido com a posição atual. */
 function stopForm(book) {
@@ -22,7 +23,7 @@ function stopForm(book) {
     </form>`;
 }
 
-export function timerView({ book, session, now, stopping }) {
+export function timerView({ book, session, now, stopping, ambient = null }) {
   const paused = isPaused(session);
   const controls = stopping ? stopForm(book) : `
     <div class="timer-actions">
@@ -45,7 +46,7 @@ export function timerView({ book, session, now, stopping }) {
       <p class="timer-clock" role="timer" aria-label="Tempo de leitura" data-timer-elapsed>${formatElapsed(elapsedMs(session, now))}</p>
       <span class="timer-state">${stopping ? 'Tempo da sessão' : paused ? 'Pausado' : 'Lendo · a tela fica acesa'}</span>
     </section>
-    <section class="timer-controls">${controls}</section>`;
+    <section class="timer-controls">${controls}</section>${ambient && !stopping ? ambientPicker(ambient, { paused }) : ''}`;
 }
 
 // Triângulo desenhado (o caractere ▶ vira emoji no iPhone).

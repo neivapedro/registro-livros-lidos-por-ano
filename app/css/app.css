@@ -2796,3 +2796,101 @@ body [data-theme] { color: var(--text); }
   .empty-art :is(.f, .p) { fill: var(--surface-2); }
   .grid-cover.is-celebrated::after { box-shadow: 0 0 0 2px var(--accent); }
 }
+
+/* ===== 1.6 Comparar, importar e sons ===== */
+/* Comparar com alguém (Ajustes e #/comparar), prévia da importação do Goodreads/StoryGraph
+   e o seletor de som ambiente do cronômetro. Só tokens; nada de color-mix(). */
+
+/* Interruptor dentro de um cartão (sem moldura própria). */
+.vs-toggle { display: flex; border: 0; background: transparent; padding: 4px 0; min-height: 52px; width: 100%; color: inherit; font: inherit; }
+.vs-year { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.vs-year label { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+.vs-select { position: relative; display: inline-flex; align-items: center; }
+.vs-select select {
+  -webkit-appearance: none; appearance: none; min-height: 44px; padding: 0 36px 0 14px; border-radius: 14px;
+  border: 1px solid var(--line-strong); background: var(--surface-2); color: var(--text); font-weight: 700;
+}
+.vs-select .icon { position: absolute; right: 12px; pointer-events: none; color: var(--muted); }
+.vs-saved {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 8px;
+  padding-top: 14px; border-top: 1px solid var(--line);
+}
+.vs-saved-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; overflow-wrap: anywhere; }
+.vs-saved-btn { width: auto; min-height: 44px; padding: 0 14px; border-radius: 14px; display: inline-flex; align-items: center; justify-content: center; }
+
+.app[data-page="comparar"] { gap: 16px; }
+.vs-title h1 { overflow-wrap: anywhere; }
+.vs-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; font-size: 13px; font-weight: 700; color: var(--text-soft); }
+.vs-dot { width: 10px; height: 10px; border-radius: 999px; flex-shrink: 0; background: var(--accent); }
+.vs-dot.is-them { margin-left: 8px; background: var(--bar-neutral); }
+.vs-section { gap: 12px; }
+.vs-metric { display: flex; flex-direction: column; gap: 6px; }
+.vs-metric + .vs-metric { padding-top: 12px; border-top: 1px solid var(--line); }
+.vs-metric-label { font-size: 12px; font-weight: 700; letter-spacing: .4px; text-transform: uppercase; color: var(--muted); }
+.vs-bar { display: grid; grid-template-columns: minmax(0, 5.5em) minmax(0, 1fr) auto; align-items: center; gap: 10px; font-size: 13px; }
+.vs-bar-who { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--text-soft); }
+.vs-track { height: 10px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.vs-fill { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
+.vs-bar.is-them .vs-fill { background: var(--bar-neutral); }
+.vs-val { min-width: 3.2em; text-align: right; font-weight: 800; font-variant-numeric: tabular-nums; }
+.vs-months { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 4px; height: 132px; }
+.vs-month { display: flex; flex-direction: column; align-items: stretch; gap: 6px; min-width: 0; }
+.vs-cols { flex: 1; display: flex; align-items: flex-end; justify-content: center; gap: 2px; border-bottom: 1px solid var(--line-strong); }
+.vs-col { flex: 1; max-width: 9px; min-height: 0; border-radius: 3px 3px 0 0; background: var(--accent); }
+.vs-col.is-them { background: var(--bar-neutral); }
+.vs-month-l { text-align: center; font-size: 11px; font-weight: 700; color: var(--muted); }
+.vs-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.vs-gcol { display: flex; flex-direction: column; gap: 6px; min-width: 0; overflow-wrap: anywhere; }
+.vs-gname { font-size: 12px; font-weight: 800; color: var(--muted); }
+.vs-gcol:first-child .vs-gname { color: var(--accent); }
+.vs-glist { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; font-size: 14px; }
+.vs-glist li > span:first-child { margin-right: 6px; }
+.vs-fav { font-size: 19px; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.vs-common { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.vs-common-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; }
+.vs-common-row + .vs-common-row { border-top: 1px solid var(--line); }
+.vs-common-book { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.vs-common-rates { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.vs-rate { display: inline-flex; align-items: center; gap: 3px; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 800; background: var(--surface-2); }
+.vs-rate.is-me { color: var(--accent); }
+.vs-rate.is-them { color: var(--text-soft); }
+.vs-actions { display: flex; flex-direction: column; gap: 10px; text-align: center; }
+.vs-saved-note { display: inline-flex; align-items: center; justify-content: center; gap: 6px; font-weight: 700; color: var(--accent); }
+.vs-when { text-align: center; }
+.vs-empty { gap: 12px; }
+
+/* Prévia da importação: mesma moldura do pedido de confirmação das chaves. */
+.gr-import { border: 1px solid var(--accent); gap: 12px; }
+.gr-import h2 { font-size: 17px; display: flex; align-items: center; gap: 6px; }
+.gr-import.is-done h2 { color: var(--accent); }
+.gr-file { overflow-wrap: anywhere; margin-top: -6px; }
+.gr-counts { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.gr-counts li { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border-radius: 14px; background: var(--surface-2); }
+.gr-n { font-family: var(--serif); font-size: 30px; line-height: 1; }
+.gr-dups { display: flex; flex-direction: column; gap: 6px; padding: 12px 0 0; border-top: 1px solid var(--line); }
+.gr-dup-list summary { min-height: 44px; display: flex; align-items: center; font-size: 14px; font-weight: 700; color: var(--accent); cursor: pointer; }
+.gr-dup-list ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; max-height: 240px; overflow-y: auto; overflow-wrap: anywhere; }
+
+/* Som ambiente do cronômetro. */
+.amb { display: flex; flex-direction: column; gap: 10px; padding-top: 4px; }
+.amb-title { font-size: 11px; font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); text-align: center; }
+.amb-chips { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.amb-chip {
+  min-height: 44px; padding: 0 14px; border-radius: 999px; border: 1px solid var(--line-strong);
+  background: transparent; color: var(--text-soft); font-size: 13px; font-weight: 700; white-space: nowrap;
+}
+.amb-chip.is-on { background: var(--surface-warm); color: var(--accent); border-color: var(--accent); }
+.amb[data-ambient-playing="true"] .amb-chip.is-on::before {
+  content: ''; display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 999px; vertical-align: 1px;
+  background: var(--accent); animation: timer-pulse 1.6s ease-in-out infinite;
+}
+.amb-volume { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 0 6px; color: var(--muted); }
+.amb-volume input { flex: 1; min-width: 0; height: 44px; margin: 0; accent-color: var(--accent); background: transparent; }
+.amb-hint { text-align: center; }
+@media (max-width: 359px) {
+  .amb-chip { padding: 0 11px; }
+  .vs-bar { grid-template-columns: minmax(0, 4.5em) minmax(0, 1fr) auto; gap: 8px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .amb[data-ambient-playing="true"] .amb-chip.is-on::before { animation: none; }
+}
