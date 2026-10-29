@@ -55,7 +55,7 @@ import {
 } from './challenges.js';
 import { challengeDetailSheet, challengeFormSheet, challengeNewSheet, targetUnit, valueField } from './views/challenges.js';
 import { autoTitle, RULE_VALUE } from './challenges.js';
-import { closeSheet, openSheet } from './sheet.js';
+import { closeSheet, openSheet, remeasureSheet } from './sheet.js';
 import { initLongPress } from './longpress.js';
 import { closeSwipe, initSwipe } from './swipe.js';
 import { celebrateFinish, confettiColors, introMotion } from './motion.js';
@@ -3235,6 +3235,7 @@ function swapSheet(html, focus = null) {
   if (!body) return false;
   body.innerHTML = html;
   body.scrollTop = 0;
+  remeasureSheet();
   const target = focus ? body.querySelector(focus) : null;
   (target || body.closest('.sheet'))?.focus({ preventScroll: true });
   return true;

@@ -276,7 +276,10 @@ try {
   await page.click('.timer-stop .btn-primary');
   await toastHas(/20 min · 30 min ouvidos/);
   s = await waitState((st) => bookIn(st, 'a2').currentMin === 435);
-  assert.deepEqual(bookIn(s, 'a2').journal.at(-1), { date: '2026-10-27', from: 300, to: 435, unit: 'minute', note: '', minutes: 20 });
+  const noHours = ({ hours, ...rest }) => rest;
+  const sessionHoursOf = bookIn(s, 'a2').journal.at(-1).hours;
+  assert.equal(Object.values(sessionHoursOf || {}).reduce((a, b) => a + b, 0), 20, 'as horas do dia somam os 20 min da sessão');
+  assert.deepEqual(noHours(bookIn(s, 'a2').journal.at(-1)), { date: '2026-10-27', from: 300, to: 435, unit: 'minute', note: '', minutes: 20 });
 
   // ---------- 5. Terminar ----------
   step('Terminei o livro: o diário fecha na duração (12h)');
@@ -290,7 +293,7 @@ try {
   s = await waitState((st) => bookIn(st, 'a2').status === 'lido');
   assert.equal(bookIn(s, 'a2').currentMin, null);
   assert.equal(bookIn(s, 'a2').durationMin, 720);
-  assert.deepEqual(bookIn(s, 'a2').journal.at(-1), { date: '2026-10-27', from: 300, to: 720, unit: 'minute', note: '', minutes: 20 });
+  assert.deepEqual(noHours(bookIn(s, 'a2').journal.at(-1)), { date: '2026-10-27', from: 300, to: 720, unit: 'minute', note: '', minutes: 20 });
 
   // ---------- 6. Estatísticas ----------
   step('Início: horas ouvidas no bloco das páginas (930 + 720 min = 27,5 h)');

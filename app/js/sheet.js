@@ -167,6 +167,8 @@ export function openSheetInfo() {
 /** Mede o conteúdo e, se ele não cabe na média, a folha nasce na média. */
 function setupDetents(cur) {
   const { panel } = cur;
+  const again = cur.focusBound;
+  cur.focusBound = true;
   const body = panel.querySelector('.sheet-body');
   const grab = panel.querySelector('.sheet-grab');
   const natural = (grab?.offsetHeight || 0) + (body?.scrollHeight || 0) + 2;
@@ -176,11 +178,25 @@ function setupDetents(cur) {
   panel.classList.add('has-detents');
   setDetent(cur, list[0]);
   // Tab (ou o leitor de tela) chegou num campo escondido embaixo da média: abre a grande.
+  if (again) return;
   panel.addEventListener('focusin', (e) => {
     if (!cur.detents || panel.classList.contains('is-large')) return;
     const r = e.target.getBoundingClientRect();
     if (r.bottom > panel.getBoundingClientRect().bottom - 4) setDetent(cur, cur.detents[cur.detents.length - 1]);
   });
+}
+
+/** O conteúdo da folha aberta mudou (swap): mede de novo e refaz os tamanhos. */
+export function remeasureSheet() {
+  const cur = current;
+  if (!cur || cur.ctx || !cur.panel.isConnected) return;
+  const { panel } = cur;
+  panel.classList.remove('has-detents', 'is-large');
+  panel.style.height = '';
+  delete panel.dataset.detent;
+  cur.detents = null;
+  cur.height = null;
+  setupDetents(cur);
 }
 
 function setDetent(cur, height) {

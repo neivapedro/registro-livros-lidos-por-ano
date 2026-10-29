@@ -185,7 +185,7 @@ export function challengeFormSheet(state, draft, error = '') {
       <label class="chs-label" for="ch-title">Nome <span class="chs-optional">(opcional)</span></label>
       <input class="chs-input" id="ch-title" name="title" type="text" maxlength="80" value="${esc(draft.title || '')}" placeholder="${esc(autoTitle({ type: draft.type, value: draft.value || (draft.type === 'pages' ? 500 : '…') }, Number(draft.target) || 1))}" autocomplete="off" autocapitalize="sentences" enterkeyhint="done">
       <p class="chs-error" role="alert"${error ? '' : ' hidden'}>${esc(error)}</p>
-      <div class="chs-actions">
+      <div class="chs-actions" data-sheet-footer>
         <button type="button" class="btn-ghost" data-sheet-close>Cancelar</button>
         <button type="submit" class="btn-primary">${isEdit ? 'Salvar' : 'Criar desafio'}</button>
       </div>
@@ -233,7 +233,7 @@ export function challengeDetailSheet(state, c) {
         <span class="chs-rule">${esc(ruleText(c.rule))}</span>
       </div>
       ${body}
-      <div class="chs-actions">
+      <div class="chs-actions" data-sheet-footer>
         <button type="button" class="btn-ghost" data-action="challenge-edit" data-id="${esc(c.id)}">${icon('sliders', { size: 18 })}Editar</button>
         <button type="button" class="btn-ghost chs-del" data-action="challenge-delete" data-id="${esc(c.id)}">${icon('trash', { size: 18 })}Excluir</button>
       </div>
