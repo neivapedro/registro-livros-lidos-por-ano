@@ -12,9 +12,10 @@ import { FORMAT_LABELS, FORMATS, getGoal, getPageGoal } from '../store.js';
 import { formatShares, yearStats, yearsWithData } from '../stats.js';
 import { ratingWindow } from '../trend.js';
 import { decimal, esc, formatRating, icon, num, plural } from '../ui.js';
+import { rankedBars } from './ranked-bars.js';
 
 /** Atributos do toque que leva à busca filtrada. */
-function tapAttrs(year, kind, value, label) {
+export function tapAttrs(year, kind, value, label) {
   return `data-action="chart-filter" data-year="${year}" data-kind="${kind}" data-value="${esc(value)}" aria-label="${esc(label)}"`;
 }
 
@@ -140,18 +141,12 @@ export function ratingChart(s) {
 export function lengthChart(s) {
   if (!s.count) return '';
   const { rows, unknown } = lengthDistribution(s.books);
-  const max = Math.max(...rows.map((r) => r.count), 1);
-  const top = Math.max(...rows.map((r) => r.count));
-  const html = rows.map((r) => {
-    const inner = `
-      <span class="hbar-head"><span class="strong-ish">${r.label}</span><span class="muted">${plural(r.count, 'livro', 'livros')}</span></span>
-      <span class="hbar-track"><span class="hbar-fill${r.count && r.count === top ? ' is-top' : ''}" style="width:${(r.count / max) * 100}%"></span></span>`;
-    return r.count
-      ? `<button type="button" class="hbar hbar-btn" ${tapAttrs(s.year, 'length', r.key, `${r.label}: ${plural(r.count, 'livro', 'livros')}. Ver livros`)}>${inner}</button>`
-      : `<div class="hbar hbar-btn is-empty">${inner}</div>`;
-  }).join('');
+  // As quatro faixas seguem a ordem natural (do curto ao longo): todas à mostra, só o líder em destaque.
+  const html = rankedBars(rows.map((r) => ({
+    label: r.label, count: r.count, attrs: tapAttrs(s.year, 'length', r.key, `${r.label}: ${plural(r.count, 'livro', 'livros')}. Ver livros`),
+  })), { limit: rows.length });
   const note = unknown ? `<p class="muted small">${plural(unknown, 'livro', 'livros')} sem nº de páginas ${unknown === 1 ? 'ficou' : 'ficaram'} de fora.</p>` : '';
-  return `<section class="card"><h2>Tamanho dos livros</h2><div class="hbar-list">${html}</div>${note}</section>`;
+  return `<section class="card"><h2>Tamanho dos livros</h2>${html}${note}</section>`;
 }
 
 // ---------- Buscar: chip do filtro vindo do gráfico ----------

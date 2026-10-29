@@ -191,13 +191,13 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 
 .card {
   background: var(--surface);
-  border: 1px solid var(--line);
-  border-radius: var(--radius);
-  padding: 18px;
+  border: var(--card-border);
+  border-radius: var(--card-radius);
+  padding: var(--card-pad);
   display: flex; flex-direction: column; gap: 14px;
   color: var(--text);
 }
-.card.soft { background: transparent; border-style: dashed; border-color: var(--line-strong); }
+.card.soft { background: transparent; border: var(--row-border); border-radius: var(--row-radius); }
 
 .hero { flex-direction: row; align-items: center; gap: 20px; border-radius: 28px; padding: 22px; }
 .ring { position: relative; width: 132px; height: 132px; flex-shrink: 0; }
@@ -331,7 +331,7 @@ body.no-nav .toast { bottom: calc(24px + var(--safe-b)); }
 
 .empty {
   display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
-  padding: 28px 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius);
+  padding: 28px 20px; border: var(--row-border); border-radius: var(--card-radius);
 }
 .empty-title { font-weight: 700; font-size: calc(15px * var(--type-scale, 1)); }
 .empty-text { color: var(--muted); font-size: calc(13px * var(--type-scale, 1)); max-width: 280px; }
@@ -689,8 +689,8 @@ textarea::placeholder { color: var(--faint); }
 .quote-list { display: flex; flex-direction: column; gap: 12px; }
 .quote-card {
   position: relative; display: flex; flex-direction: column; gap: 10px;
-  padding: 20px 18px 14px 22px; border-radius: var(--radius);
-  background: var(--surface); border: 1px solid var(--line); color: var(--text);
+  padding: 20px var(--card-pad) 14px 22px; border-radius: var(--card-radius);
+  background: var(--surface); border: var(--card-border); color: var(--text);
 }
 /* Filete caramelo à esquerda, como numa citação impressa. */
 .quote-card::before { content: ''; position: absolute; left: -1px; top: 22px; bottom: 22px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
@@ -701,7 +701,7 @@ textarea::placeholder { color: var(--faint); }
 .quote-actions { display: flex; flex-wrap: wrap; align-items: center; margin: 0 -8px -8px; padding-top: 4px; border-top: 1px solid var(--line); }
 .quote-actions .btn-text { min-height: 44px; padding: 0 8px; gap: 6px; }
 .quote-form { gap: 12px; border-color: var(--accent); }
-.quote-form.card { padding: 16px; }
+.quote-form.card { padding: var(--card-pad); }
 .quote-hint { font-size: calc(12px * var(--type-scale, 1)); line-height: 1.45; color: var(--muted); }
 .quote-link .quote-text { display: -webkit-box; -webkit-line-clamp: 7; -webkit-box-orient: vertical; overflow: hidden; }
 .quote-link:active { border-color: var(--accent); }
@@ -1900,8 +1900,8 @@ body.sheet-open { overflow: hidden; }
 
 /* Lendo, Quero ler, Abandonado: cartão com o estado e as ações. */
 .ficha-card {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 16px; display: flex; flex-direction: column; gap: 12px;
+  background: var(--surface); border: var(--card-border); border-radius: var(--card-radius);
+  padding: var(--card-pad); display: flex; flex-direction: column; gap: 12px;
 }
 .ficha-eyebrow { font-size: calc(11px * var(--type-scale, 1)); font-weight: 700; letter-spacing: 1.4px; text-transform: uppercase; color: var(--muted); }
 .ficha-progress { display: flex; flex-direction: column; gap: 10px; }
@@ -1921,8 +1921,8 @@ p.ficha-progress-label { text-align: left; }
 
 /* Gráfico do ritmo: barras na escala do tempo (dia sem leitura = traço no chão). */
 .rchart {
-  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
-  padding: 16px 16px 12px; display: flex; flex-direction: column; gap: 10px;
+  background: var(--surface); border: var(--card-border); border-radius: var(--card-radius);
+  padding: 16px var(--card-pad) 14px; display: flex; flex-direction: column; gap: 10px;
   --plot-h: 72px;
 }
 .rchart.is-tall { --plot-h: 104px; }
@@ -1968,8 +1968,8 @@ p.ficha-progress-label { text-align: left; }
 .ficha-section .section-head .link { min-height: 44px; display: inline-flex; align-items: center; }
 .ficha-quote {
   position: relative; display: flex; flex-direction: column; gap: 10px;
-  padding: 20px 18px 16px 22px; border-radius: var(--radius);
-  background: var(--surface); border: 1px solid var(--line); color: var(--text);
+  padding: 20px var(--card-pad) 16px 22px; border-radius: var(--card-radius);
+  background: var(--surface); border: var(--card-border); color: var(--text);
 }
 .ficha-quote::before { content: ''; position: absolute; left: -1px; top: 22px; bottom: 22px; width: 3px; border-radius: 0 3px 3px 0; background: var(--accent); }
 .ficha-quote blockquote {
@@ -1981,11 +1981,11 @@ p.ficha-progress-label { text-align: left; }
 .ficha-quote:active { border-color: var(--accent); }
 .ficha-row {
   display: flex; justify-content: space-between; align-items: center; min-height: 56px; padding: 0 18px;
-  border-radius: 18px; border: 1px dashed var(--line-strong); color: var(--text-soft); font-size: calc(14px * var(--type-scale, 1)); font-weight: 700;
+  border-radius: var(--row-radius); border: var(--row-border); color: var(--text-soft); font-size: calc(14px * var(--type-scale, 1)); font-weight: 700;
 }
 .ficha-row .icon { color: var(--accent); }
 .ficha-notes {
-  padding: 16px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line);
+  padding: var(--card-pad); border-radius: var(--card-radius); background: var(--surface); border: var(--card-border);
   font-size: calc(15px * var(--type-scale, 1)); line-height: 1.55; color: var(--text-soft); white-space: pre-line; overflow-wrap: anywhere;
 }
 .ficha-details { display: flex; flex-direction: column; gap: 10px; padding-bottom: 8px; }
@@ -2487,7 +2487,7 @@ body [data-theme] { color: var(--text); }
 .ficha-row.ficha-rhythm-empty .icon { flex-shrink: 0; color: var(--muted); }
 
 /* Trechos como citação impressa: aspa grande em caramelo, texto serifado, página num selo. */
-.quote-card, .ficha-quote { gap: 10px; padding: 16px 18px 14px; }
+.quote-card, .ficha-quote { gap: 10px; padding: 16px var(--card-pad) 14px; }
 .quote-link, .ficha-quote { padding-bottom: 16px; }
 .quote-card::before, .ficha-quote::before { content: none; }
 .quote-mark {
@@ -2877,7 +2877,7 @@ body [data-theme] { color: var(--text); }
 /* Ficha: sinopse (4 linhas e "Ler mais"). */
 .ficha-syn-card {
   display: flex; flex-direction: column; align-items: flex-start; gap: 2px;
-  padding: 16px 16px 6px; border-radius: 18px; background: var(--surface); border: 1px solid var(--line);
+  padding: var(--card-pad) var(--card-pad) 6px; border-radius: var(--card-radius); background: var(--surface); border: var(--card-border);
 }
 .ficha-syn-text {
   font-size: calc(15px * var(--type-scale, 1)); line-height: 1.55; color: var(--text-soft); white-space: pre-line; overflow-wrap: anywhere;
@@ -2908,7 +2908,7 @@ body [data-theme] { color: var(--text); }
 button.ficha-row { width: 100%; background: transparent; text-align: left; }
 .ficha-loan-card {
   display: flex; flex-wrap: wrap; align-items: center; gap: 10px; padding: 12px 12px 12px 14px;
-  border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line);
+  border-radius: var(--card-radius); background: var(--surface); border: var(--card-border);
 }
 .ficha-loan-info {
   flex: 999 1 180px; min-width: 0; min-height: 48px; padding: 0; border: 0; background: transparent; color: var(--text);
@@ -3827,3 +3827,72 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
 .ficha-crit-wrap .ficha-crit dt { overflow-wrap: normal; }
 .ficha-crit-wrap .ficha-crit-bar { min-width: 36px; }
 .ficha-crit-wrap .ficha-crit dt { font-size: calc(12px * var(--type-scale, 1)); }
+
+/* ===== 1.6.1 Resumo e cartões ===== */
+/* Três níveis de cartão, com valores compartilhados:
+   (a) cartão de destaque (.card-hero: degradê/vidro; Início "Lendo agora" e o anel),
+   (b) cartão padrão (.card, .ficha-card…: borda fina de 1px, mesmo raio e mesmo respiro),
+   (c) linha informativa (.info-row: tracejada e compacta; "Guardar um trecho", dicas vazias). */
+:root {
+  --card-radius: var(--radius);
+  --card-pad: 18px;
+  --card-border: 1px solid var(--line);
+  --hero-radius: 28px;
+  --hero-pad: 22px;
+  --row-radius: 18px;
+  --row-pad: 12px 18px;
+  --row-border: 1px dashed var(--line-strong);
+}
+.card-hero { border-radius: var(--hero-radius); padding: var(--hero-pad); }
+.info-row {
+  display: flex; align-items: center; gap: 12px; min-height: 44px; padding: var(--row-pad);
+  border: var(--row-border); border-radius: var(--row-radius); background: transparent; box-shadow: none;
+}
+.card.info-row { flex-direction: column; align-items: stretch; gap: 8px; }
+[data-theme="light"] .card.info-row { box-shadow: none; }
+
+/* Lista de barras ranqueadas: líder (e empates) no destaque, o resto neutro; mesma altura e tipografia. */
+.rb-list { gap: 2px; }
+.rb-row { min-height: 48px; }
+.rb-row .hbar-head { align-items: baseline; font-size: calc(14px * var(--type-scale, 1)); }
+.rb-label { font-weight: 600; }
+.rb-count { font-size: calc(13px * var(--type-scale, 1)); font-variant-numeric: tabular-nums; flex-shrink: 0; }
+.rb-row.is-lead .rb-label { font-weight: 800; }
+.rb-row.is-lead .hbar-fill { background: var(--accent); }
+.rb-row:not(.is-lead) .hbar-fill { background: var(--bar-neutral); }
+.rb-more { display: flex; flex-direction: column; gap: 2px; }
+.rb-more > summary {
+  list-style: none; display: flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 44px; margin-top: 2px; border-top: 1px solid var(--line); cursor: pointer;
+  color: var(--text-soft); font-size: calc(14px * var(--type-scale, 1)); font-weight: 700;
+  -webkit-tap-highlight-color: transparent;
+}
+.rb-more > summary::-webkit-details-marker { display: none; }
+.rb-more > summary::after {
+  content: ''; width: 7px; height: 7px; margin-top: -3px; border-right: 2px solid var(--accent); border-bottom: 2px solid var(--accent);
+  transform: rotate(45deg); transition: transform .2s ease;
+}
+.rb-more[open] > summary { order: 99; margin-top: 4px; }
+.rb-more[open] > summary::after { margin-top: 3px; transform: rotate(-135deg); }
+.rb-more > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 10px; }
+.rb-close, .rb-more[open] .rb-open { display: none; }
+.rb-more[open] .rb-close { display: inline; }
+@media (prefers-reduced-motion: reduce) { .rb-more > summary::after { transition: none; } }
+
+/* Autores e etiquetas: dois cartões compactos lado a lado (a partir de 390px); empilham abaixo disso. */
+.rs-pair { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
+.rs-mini { gap: 10px; }
+.rs-mini .rank-row { gap: 10px; padding: 2px 0; }
+.rs-mini .rank-n { font-size: calc(22px * var(--type-scale, 1)); width: 18px; }
+.rs-mini .rank-name { font-size: calc(14px * var(--type-scale, 1)); overflow-wrap: anywhere; }
+.rs-mini .chips-wrap { gap: 6px; }
+@media (min-width: 390px) {
+  .rs-pair { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: stretch; }
+  .rs-pair .rs-mini { padding: 14px; }
+  .rs-pair .rank-row { flex-wrap: wrap; row-gap: 0; }
+  .rs-pair .rank-row > .muted { flex-basis: 100%; padding-left: 28px; margin-top: -2px; }
+}
+/* Texto bem ampliado: o par empilha de novo para as colunas não ficarem espremidas. */
+:is([data-text-size="grande"], [data-text-size="enorme"]) .rs-pair { grid-template-columns: minmax(0, 1fr); }
+.rs-dropped { padding: 12px 16px; }
+.rs-dropped .dropped-row { padding: 6px 0; }
