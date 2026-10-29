@@ -3512,6 +3512,7 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
   body.nav-compact .nav { scale: none; translate: none; }
   body.nav-compact .nav-label { opacity: 1; transform: none; }
   body.nav-compact .nav a svg { transform: none; }
+}
 
 /* ===== 1.6 Texto, contraste e telas largas ===== */
 /* Tamanho do texto: os font-size do arquivo são calc(Npx * var(--type-scale, 1))
