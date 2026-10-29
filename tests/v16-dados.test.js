@@ -205,6 +205,7 @@ test('perfil de leitor (Resumo): frase, barras e ritmo; convite quando não há 
 
 // ---------- Telas ----------
 
+const detailOpen = (b) => bookDetailView({ state: { books: [b], upNext: [] }, ui: { detailBack: '#/estante', session: null, critOpen: b.id }, today: TODAY, book: b });
 const detail = (b, state = { books: [b], upNext: [] }) => bookDetailView({ state, ui: { detailBack: '#/estante', session: null }, today: TODAY, book: b });
 
 test('ficha: chips de humor e ritmo, critérios com barras, sinopse escapada com "Ler mais"', () => {
@@ -215,6 +216,11 @@ test('ficha: chips de humor e ritmo, critérios com barras, sinopse escapada com
   const html = detail(b);
   assert.match(html, /<div class="ficha-moods" aria-label="Humor e ritmo"><span class="ficha-chip is-mood">Emocionante<\/span><span class="ficha-chip is-mood">Sombrio<\/span><span class="ficha-chip is-pace">/);
   assert.match(html, /Ritmo médio/);
+  // 1.6.1: critérios recolhidos (<details>) junto às estrelas; humor abaixo da sinopse.
+  assert.match(html, /<details class="ficha-crit-wrap" data-id="b1">\s*<summary class="ficha-crit-toggle"><span class="crit-closed">Ver critérios<\/span><span class="crit-opened">Ocultar critérios<\/span>/);
+  assert.ok(html.indexOf('ficha-crit-wrap') < html.indexOf('ficha-syn"'), 'critérios antes da sinopse');
+  assert.ok(html.indexOf('ficha-syn"') < html.indexOf('ficha-moods'), 'humor depois da sinopse');
+  assert.match(detailOpen(b), /<details class="ficha-crit-wrap" open /);
   assert.match(html, /<dt>Personagens<\/dt>[\s\S]*width:100%[\s\S]*<dt>Escrita<\/dt>[\s\S]*width:70%/);
   assert.doesNotMatch(html, /<dt>Enredo/);
   assert.match(html, /Texto &lt;img src=x onerror=alert\(1\)&gt; &amp; mais/);
@@ -224,10 +230,11 @@ test('ficha: chips de humor e ritmo, critérios com barras, sinopse escapada com
   assert.doesNotMatch(html, /ficha-shop/, 'livro lido: sem "Onde comprar"');
 });
 
-test('ficha: emprestado mostra o selo e o cartão com "Devolvido"; Quero ler tem "Onde comprar"', () => {
+test('ficha: emprestado mostra só o cartão com "Devolvido" (sem selo no topo); Quero ler tem "Onde comprar"', () => {
   const b = normalizeBook(base({ status: 'quero', endDate: null, isbn: '9788576573135', loan: { to: 'Ana <b>', since: '2026-10-03' } }), NOW);
   const html = detail(b);
-  assert.match(html, /class="ficha-loan">[\s\S]*<span>com Ana &lt;b&gt; desde 3 out<\/span>/);
+  assert.doesNotMatch(html, /class="ficha-loan"/, 'o selo "com Ana desde…" saiu do topo');
+  assert.equal((html.match(/Ana &lt;b&gt;/g) || []).length >= 1, true);
   assert.match(html, /<strong>Ana &lt;b&gt;<\/strong><span class="ficha-loan-when">Desde 3 out 2026 · há 13 dias<\/span>/);
   assert.match(html, /data-action="loan-return" data-id="b1">[\s\S]*Devolvido/);
   assert.match(html, /<a class="ficha-shop-link" href="https:\/\/www\.amazon\.com\.br\/s\?k=9788576573135" target="_blank" rel="noopener noreferrer"/);

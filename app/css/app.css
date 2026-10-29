@@ -3765,3 +3765,65 @@ body.nav-compact .nav .nav-add svg { transform: scale(.88); }
 
 .chs-foot { display: flex; flex-direction: column; gap: 10px; }
 .chs-foot .chs-error[hidden] { display: none; }
+
+/* ===== 1.6.1 Ficha e cronômetro ===== */
+/* Ficha: critérios recolhidos junto às estrelas (<details> nativo). */
+.ficha-crit-wrap { align-self: stretch; display: flex; flex-direction: column; align-items: center; margin-top: -8px; }
+.ficha-crit-toggle {
+  list-style: none; cursor: pointer; min-height: 44px; padding: 0 14px; border-radius: 999px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 4px;
+  font-size: calc(13px * var(--type-scale, 1)); font-weight: 700; color: var(--accent);
+  -webkit-tap-highlight-color: transparent;
+}
+.ficha-crit-toggle::-webkit-details-marker { display: none; }
+.ficha-crit-toggle .crit-opened { display: none; }
+.ficha-crit-wrap[open] .ficha-crit-toggle .crit-opened { display: inline; }
+.ficha-crit-wrap[open] .ficha-crit-toggle .crit-closed { display: none; }
+.ficha-crit-chev { flex-shrink: 0; transition: transform 0.2s ease; }
+.ficha-crit-wrap[open] .ficha-crit-chev { transform: rotate(180deg); }
+.ficha-crit-wrap .ficha-crit { margin: 2px 0 6px; }
+.ficha-crit-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ficha-mood-section .ficha-moods { justify-content: flex-start; }
+
+/* Cronômetro: título uma vez só, bem quebrado. */
+.timer-book .serif-title { text-wrap: balance; overflow-wrap: anywhere; }
+.timer .cover-ini { font-size: 30px; font-size: 38cqw; }
+
+/* Som ambiente: uma fileira que rola, com borda esmaecida (sem quebrar linha). */
+.amb-chips {
+  flex-wrap: nowrap; justify-content: flex-start; overflow-x: auto; overscroll-behavior-x: contain;
+  scroll-snap-type: x proximity; scrollbar-width: none; -webkit-overflow-scrolling: touch;
+  margin-inline: -18px; padding-inline: 18px;
+  -webkit-mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+  mask-image: linear-gradient(to right, transparent 0, #000 18px, #000 calc(100% - 18px), transparent 100%);
+}
+.amb-chips::-webkit-scrollbar { display: none; }
+.amb-chips > .amb-chip { flex: 0 0 auto; scroll-snap-align: center; }
+.amb-chips > .amb-chip:first-child { margin-left: auto; }
+.amb-chips > .amb-chip:last-child { margin-right: auto; }
+
+/* Volume: trilha preenchida até o botão (--p vai de 0 a 1, atualizado ao arrastar). */
+.amb-volume input[type="range"] {
+  -webkit-appearance: none; appearance: none; background: transparent; accent-color: var(--accent);
+  --thumb: 28px; --track: 6px;
+}
+.amb-volume input[type="range"]::-webkit-slider-runnable-track {
+  height: var(--track); border-radius: 999px;
+  background: linear-gradient(to right, var(--accent) 0, var(--accent) calc(var(--thumb) / 2 + (100% - var(--thumb)) * var(--p, 0.6)), var(--line-strong) 0);
+}
+.amb-volume input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; box-sizing: border-box;
+  width: var(--thumb); height: var(--thumb); margin-top: calc((var(--track) - var(--thumb)) / 2);
+  border-radius: 999px; background: var(--surface); border: 3px solid var(--accent);
+  box-shadow: 0 1px 4px var(--cover-shadow);
+}
+.amb-volume input[type="range"]::-moz-range-track { height: var(--track); border-radius: 999px; background: var(--line-strong); }
+.amb-volume input[type="range"]::-moz-range-progress { height: var(--track); border-radius: 999px; background: var(--accent); }
+.amb-volume input[type="range"]::-moz-range-thumb {
+  box-sizing: border-box; width: var(--thumb); height: var(--thumb); border-radius: 999px; background: var(--surface); border: 3px solid var(--accent);
+}
+.ficha-crit-wrap .ficha-crit { width: min(100%, 340px); }
+.ficha-crit-wrap .ficha-crit-row { grid-template-columns: calc(80px * var(--type-scale, 1)) minmax(0, 1fr); }
+.ficha-crit-wrap .ficha-crit dt { overflow-wrap: normal; }
+.ficha-crit-wrap .ficha-crit-bar { min-width: 36px; }
+.ficha-crit-wrap .ficha-crit dt { font-size: calc(12px * var(--type-scale, 1)); }

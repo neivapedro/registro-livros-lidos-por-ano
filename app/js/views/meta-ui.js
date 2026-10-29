@@ -88,18 +88,22 @@ export function criteriaBlock(ui) {
 
 // ---------- Ficha ----------
 
-/** Humor e ritmo em chips discretos, no topo da ficha. */
+/** Humor e ritmo em chips discretos, na seção logo abaixo da sinopse. */
 export function moodChips(book) {
   const moods = (book.moods || []).filter((m) => MOOD_LABELS[m]);
   const pace = PACE_LABELS[book.pace];
   if (!moods.length && !pace) return '';
   const chips = moods.map((m) => `<span class="ficha-chip is-mood">${esc(MOOD_LABELS[m])}</span>`);
   if (pace) chips.push(`<span class="ficha-chip is-pace">${META_GLYPHS.pace(13)}Ritmo ${esc(pace.toLowerCase())}</span>`);
-  return `<div class="ficha-moods" aria-label="Humor e ritmo">${chips.join('')}</div>`;
+  return `
+    <section class="ficha-section ficha-mood-section">
+      <h2>Humor</h2>
+      <div class="ficha-moods" aria-label="Humor e ritmo">${chips.join('')}</div>
+    </section>`;
 }
 
 /** Notas por critério: nome, barrinha e número (só livro lido com alguma nota). */
-export function criteriaList(book) {
+export function criteriaList(book, ui = {}) {
   const crit = book.criteria || {};
   if (book.status !== 'lido' || !hasCriteria(crit)) return '';
   const rows = CRITERIA.filter((c) => crit[c.id]).map((c) => `
@@ -107,7 +111,14 @@ export function criteriaList(book) {
         <dt>${esc(c.label)}</dt>
         <dd><span class="ficha-crit-bar" aria-hidden="true"><span style="width:${(crit[c.id] / 5) * 100}%"></span></span><span class="ficha-crit-n"><span class="sr-only">${esc(ratingLabel(crit[c.id]))}</span><span aria-hidden="true">${formatRating(crit[c.id])}</span></span></dd>
       </div>`).join('');
-  return `<dl class="ficha-crit" aria-label="Avaliação por critérios">${rows}</dl>`;
+  // <details> nativo, sem JS: "Ver critérios" abre, "Ocultar critérios" fecha. O main.js só lembra
+  // que está aberto (ui.critOpen) para o redesenho da ficha (ex.: tocar no coração) não fechar.
+  const open = ui.critOpen === book.id;
+  return `
+    <details class="ficha-crit-wrap"${open ? ' open' : ''} data-id="${esc(book.id)}">
+      <summary class="ficha-crit-toggle"><span class="crit-closed">Ver critérios</span><span class="crit-opened">Ocultar critérios</span>${icon('chevronDown', { size: 16, stroke: 2.2, cls: 'ficha-crit-chev' })}</summary>
+      <dl class="ficha-crit" aria-label="Avaliação por critérios">${rows}</dl>
+    </details>`;
 }
 
 /** Sinopse recolhida em ~4 linhas, com "Ler mais" (main.js esconde o botão se couber tudo). */

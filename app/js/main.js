@@ -3158,8 +3158,16 @@ document.addEventListener('change', (e) => {
 document.addEventListener('input', (e) => {
   if (!('ambientVolume' in e.target.dataset)) return;
   ui.ambient = { ...ui.ambient, volume: Number(e.target.value) };
+  e.target.style.setProperty('--p', String(ui.ambient.volume / 100)); // só o preenchimento da trilha
   ambientPlayer.setVolume(ui.ambient.volume);
 });
+
+// "Ver critérios" da ficha (<details>): lembra aberto/fechado enquanto a ficha se redesenha.
+document.addEventListener('toggle', (e) => {
+  const d = e.target;
+  if (!d.classList?.contains('ficha-crit-wrap')) return;
+  ui.critOpen = d.open ? d.dataset.id : (ui.critOpen === d.dataset.id ? null : ui.critOpen);
+}, true);
 
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && 'comparelink' in e.target.dataset) {

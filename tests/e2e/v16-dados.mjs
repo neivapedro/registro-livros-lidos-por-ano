@@ -157,11 +157,13 @@ try {
   let page = await newPage();
   await open(page, '#/livro/torto', 'livro');
 
-  step('ficha: humor e ritmo em chips discretos no topo');
+  step('ficha: humor e ritmo em chips, na seção abaixo da sinopse');
   assert.deepEqual(await page.locator('.ficha-moods .ficha-chip').allInnerTexts(), ['Emocionante', 'Reflexivo', 'Sombrio', 'Triste', 'Ritmo médio']);
 
   step('ficha: critérios sob as estrelas, com barrinhas; a nota principal continua a das estrelas');
   assert.equal(await page.getAttribute('.ficha-stars', 'aria-label'), 'Nota 4,5 de 5');
+  assert.equal(await page.locator('.ficha-crit').isVisible(), false, 'critérios recolhidos');
+  await page.click('.ficha-crit-toggle');
   assert.deepEqual(await page.locator('.ficha-crit dt').allInnerTexts(), ['Personagens', 'Enredo', 'Escrita', 'Emoção']);
   assert.deepEqual(await page.locator('.ficha-crit-n [aria-hidden]').allInnerTexts(), ['5', '4,5', '5', '4']);
   const widths = await page.locator('.ficha-crit-bar > span').evaluateAll((els) => els.map((e) => e.style.width));
@@ -207,7 +209,7 @@ try {
   let saved = await waitBook(page, 'torto', (b) => b.loan);
   assert.deepEqual(saved.loan, { to: 'Ana Paula', since: '2026-10-03' });
   assert.equal(saved.rating, 4.5, 'nota principal intacta');
-  assert.equal(await text(page, '.ficha-loan'), 'com Ana Paula desde 3 out');
+  assert.equal(await page.locator('.ficha-loan').count(), 0, 'o selo do topo saiu: o empréstimo aparece só no cartão');
   assert.match((await page.innerText('.ficha-loan-card')).replace(/\s+/g, ' '), /^Emprestado para Ana Paula Desde 3 out 2026 · há 13 dias Devolvido$/i);
   await page.locator('.ficha-loan-card').scrollIntoViewIfNeeded();
   await page.screenshot({ path: shot('ficha-emprestado-390-escuro'), fullPage: true });
@@ -253,13 +255,15 @@ try {
   await layout(page, 'ficha quero');
   await open(page, '#/livro/quero2', 'livro');
   assert.equal(await page.getAttribute('.ficha-shop a[data-shop="amazon"]', 'href'), 'https://www.amazon.com.br/s?k=O%20Avesso%20da%20Pele%20Jeferson%20Ten%C3%B3rio');
-  assert.equal(await text(page, '.ficha-loan'), 'com Karoline desde 28 set');
+  assert.equal(await page.locator('.ficha-loan').count(), 0);
+  assert.match(await text(page, '.ficha-loan-card'), /KarolineDesde 28 set 2026/);
   await page.screenshot({ path: shot('ficha-quero-390-escuro'), fullPage: true });
   await open(page, '#/livro/duna', 'livro');
   assert.equal(await page.locator('.ficha-shop').count(), 0, 'livro lido não tem "Onde comprar"');
+  await page.click('.ficha-crit-toggle');
   assert.deepEqual(await page.locator('.ficha-crit dt').allInnerTexts(), ['Enredo']);
   await open(page, '#/livro/semdados', 'livro');
-  assert.equal(await page.locator('.ficha-moods, .ficha-crit, .ficha-syn, .ficha-loan').count(), 0, 'livro sem os dados novos: nada novo no topo');
+  assert.equal(await page.locator('.ficha-moods, .ficha-crit-wrap, .ficha-syn, .ficha-loan').count(), 0, 'livro sem os dados novos: nada novo na ficha');
 
   step('menu rápido (Estante → Quero ler): "Emprestei para…" e "Devolvido"');
   await open(page, '#/estante?aba=quero', 'estante');
