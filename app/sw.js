@@ -1,7 +1,7 @@
 // Service worker: guarda o app no celular para abrir rápido e funcionar offline.
 // Ao publicar uma versão nova, aumente VERSION para os aparelhos baixarem os arquivos novos.
 
-const VERSION = 'v1.6.0';
+const VERSION = 'v1.6.1';
 const CACHE = `leituras-${VERSION}`;
 
 // Capas dos livros (Google Books, Open Library, BrasilAPI...): ficam num cache próprio, que

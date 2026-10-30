@@ -9,7 +9,7 @@ import { compareCard } from './compare.js';
 import { importCsvButton, importPreviewCard } from './importar.js';
 import { TEXT_OPTIONS } from '../text-scale.js';
 
-export const APP_VERSION = '1.6.0';
+export const APP_VERSION = '1.6.1';
 
 function stepper(label, value, action, hint) {
   return `
