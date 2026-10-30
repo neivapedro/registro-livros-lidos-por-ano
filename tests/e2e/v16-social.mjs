@@ -378,7 +378,7 @@ try {
   await onPage(owner, 'inicio');
   await owner.click('[data-action="start-timer"][data-id="r1"]');
   await onPage(owner, 'ler');
-  assert.equal(await owner.$$eval('.amb-chip', (els) => els.map((e) => e.textContent).join('|')), 'Desligado|Chuva|Café|Lareira|Ruído marrom');
+  assert.equal(await owner.$$eval('.amb-chip', (els) => els.map((e) => e.textContent).join('|')), 'Desligado|Chuva|Café|Lareira|Marrom');
   assert.equal(await owner.getAttribute('.amb-chip[data-value="off"]', 'aria-pressed'), 'true');
   assert.equal(await owner.evaluate(() => window.__audio.made), 0, 'sem som escolhido, nada de áudio');
   await tapTargets(owner, '.amb-chip', 'sons');

@@ -8,6 +8,7 @@ import {
   CRITERIA, MAX_DESCRIPTION, MAX_LOAN_NAME, MOODS, MOOD_LABELS, PACES, PACE_LABELS, hasCriteria, loanLabel, moodProfile, shopLinks,
 } from '../book-meta.js';
 import { cover, esc, formatRating, icon, plural, ratingLabel, starIcon } from '../ui.js';
+import { rankedBars } from './ranked-bars.js';
 
 const svg = (inner, size = 18, stroke = 1.9) => `<svg class="icon" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${stroke}" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${inner}</svg>`;
 
@@ -88,18 +89,22 @@ export function criteriaBlock(ui) {
 
 // ---------- Ficha ----------
 
-/** Humor e ritmo em chips discretos, no topo da ficha. */
+/** Humor e ritmo em chips discretos, na seção logo abaixo da sinopse. */
 export function moodChips(book) {
   const moods = (book.moods || []).filter((m) => MOOD_LABELS[m]);
   const pace = PACE_LABELS[book.pace];
   if (!moods.length && !pace) return '';
   const chips = moods.map((m) => `<span class="ficha-chip is-mood">${esc(MOOD_LABELS[m])}</span>`);
   if (pace) chips.push(`<span class="ficha-chip is-pace">${META_GLYPHS.pace(13)}Ritmo ${esc(pace.toLowerCase())}</span>`);
-  return `<div class="ficha-moods" aria-label="Humor e ritmo">${chips.join('')}</div>`;
+  return `
+    <section class="ficha-section ficha-mood-section">
+      <h2>Humor</h2>
+      <div class="ficha-moods" aria-label="Humor e ritmo">${chips.join('')}</div>
+    </section>`;
 }
 
 /** Notas por critério: nome, barrinha e número (só livro lido com alguma nota). */
-export function criteriaList(book) {
+export function criteriaList(book, ui = {}) {
   const crit = book.criteria || {};
   if (book.status !== 'lido' || !hasCriteria(crit)) return '';
   const rows = CRITERIA.filter((c) => crit[c.id]).map((c) => `
@@ -107,7 +112,14 @@ export function criteriaList(book) {
         <dt>${esc(c.label)}</dt>
         <dd><span class="ficha-crit-bar" aria-hidden="true"><span style="width:${(crit[c.id] / 5) * 100}%"></span></span><span class="ficha-crit-n"><span class="sr-only">${esc(ratingLabel(crit[c.id]))}</span><span aria-hidden="true">${formatRating(crit[c.id])}</span></span></dd>
       </div>`).join('');
-  return `<dl class="ficha-crit" aria-label="Avaliação por critérios">${rows}</dl>`;
+  // <details> nativo, sem JS: "Ver critérios" abre, "Ocultar critérios" fecha. O main.js só lembra
+  // que está aberto (ui.critOpen) para o redesenho da ficha (ex.: tocar no coração) não fechar.
+  const open = ui.critOpen === book.id;
+  return `
+    <details class="ficha-crit-wrap"${open ? ' open' : ''} data-id="${esc(book.id)}">
+      <summary class="ficha-crit-toggle"><span class="crit-closed">Ver critérios</span><span class="crit-opened">Ocultar critérios</span>${icon('chevronDown', { size: 16, stroke: 2.2, cls: 'ficha-crit-chev' })}</summary>
+      <dl class="ficha-crit" aria-label="Avaliação por critérios">${rows}</dl>
+    </details>`;
 }
 
 /** Sinopse recolhida em ~4 linhas, com "Ler mais" (main.js esconde o botão se couber tudo). */
@@ -225,16 +237,11 @@ export function readerProfileCard(books, year) {
       </div>
     </section>`;
   }
-  const top = p.moods.slice(0, 6);
+  const top = p.moods;
   const lead = top.length
     ? `<p class="profile-lead">Em ${year}, você leu mais livros <strong>${esc(joinAnd(top.slice(0, 3).map((m) => moodPlural(m.label))))}</strong>.</p>`
     : '';
-  const max = top[0]?.count || 1;
-  const bars = top.map((m) => `
-      <div class="hbar profile-bar">
-        <span class="hbar-head"><span class="strong-ish">${esc(m.label)}</span><span class="muted">${plural(m.count, 'livro', 'livros')} · ${m.pct}%</span></span>
-        <span class="hbar-track"><span class="hbar-fill${m.count === max ? ' is-top' : ''}" style="width:${(m.count / max) * 100}%"></span></span>
-      </div>`).join('');
+  const bars = rankedBars(top.map((m) => ({ label: m.label, count: m.count, pct: m.pct })), { cls: 'profile-bars' });
   const paceTotal = p.withPace;
   const paceBlock = paceTotal ? `
       <div class="profile-pace">
@@ -250,7 +257,7 @@ export function readerProfileCard(books, year) {
     <section class="card profile-card">
       <div class="section-head"><h2>Seu perfil de leitor</h2><span class="muted small">${p.withAny} de ${plural(p.read, 'livro', 'livros')}</span></div>
       ${lead}
-      ${bars ? `<div class="hbar-list profile-bars">${bars}</div>` : '<p class="muted small">Nenhum humor marcado ainda.</p>'}
+      ${bars || '<p class="muted small">Nenhum humor marcado ainda.</p>'}
       ${paceBlock}
     </section>`;
 }

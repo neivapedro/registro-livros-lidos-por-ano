@@ -494,7 +494,8 @@ test('som ambiente: seletor com os cinco sons, volume e o aviso do modo silencio
   assert.doesNotMatch(off, /data-ambient-volume/);
   const on = ambientPicker({ sound: 'chuva', volume: 40, playing: true });
   assert.match(on, /data-value="chuva" aria-pressed="true"/);
-  assert.match(on, /value="40" data-ambient-volume/);
+  assert.match(on, /value="40" style="--p:0.4" data-ambient-volume/);
+  assert.match(on, /aria-label="Ruído marrom">Marrom</);
   assert.match(on, /Sem som\? Confira o modo silencioso/);
   assert.match(on, /data-ambient-playing="true"/);
   assert.match(ambientPicker({ sound: 'chuva', volume: 40, playing: false }, { paused: true }), /O som volta quando você continuar/);

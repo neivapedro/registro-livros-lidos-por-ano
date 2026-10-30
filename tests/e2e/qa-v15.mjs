@@ -410,13 +410,16 @@ try {
       return {
         tonal: cs('#app .reading[data-id="r2"] .btn-tonal').backgroundColor,
         nav: cs('#nav').backgroundColor,
-        card: cs('#app .reading[data-id="r2"]').backgroundImage,
+        card: cs('#app .reading[data-id="r2"]').backgroundColor,
+        glow: getComputedStyle(document.querySelector('#app .reading[data-id="r2"]'), '::before').backgroundImage,
         heat: ['--heat-1', '--heat-2', '--heat-3', '--surface-warm', '--bar-partial', '--skel'].map((v) => getComputedStyle(document.documentElement).getPropertyValue(v)),
       };
     });
     assert.ok(!transparent(home.tonal), `botão tonal sem fundo (${home.tonal})`);
     assert.ok(!transparent(home.nav), `barra de baixo transparente sobre o texto (${home.nav})`);
-    assert.notEqual(home.card, 'none', 'cartão "Lendo agora" sem fundo');
+    // 1.6.1: o cartão é neutro (superfície) e a cor da capa vira um brilho redondo, sem color-mix.
+    assert.ok(!transparent(home.card), 'cartão "Lendo agora" sem fundo');
+    assert.match(home.glow, /radial-gradient/, 'cartão "Lendo agora" sem o brilho da capa');
     for (const v of home.heat) assert.doesNotMatch(v, /color-mix/, `token ainda com color-mix: ${v}`);
     await shot(page, `sem-color-mix-inicio-${tag}`);
     await go(page, '#/livro/a6', 'livro');

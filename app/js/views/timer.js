@@ -59,7 +59,7 @@ export function timerView({ book, session, now, stopping, ambient = null }) {
       <span class="icon-btn-spacer" aria-hidden="true"></span>
     </header>
     <section class="timer${paused ? ' is-paused' : ''}">
-      ${cover(book, { size: 'xl' })}
+      ${cover(book, { size: 'xl', showText: false })}
       <div class="timer-book">
         <span class="serif-title lg">${esc(book.title)}</span>
         <span class="muted small">${esc(book.authors || 'Autor não informado')}</span>

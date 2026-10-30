@@ -9,6 +9,7 @@ import { cover, decimal, esc, icon, num, plural, stars } from '../ui.js';
 import { emptyScene } from '../empty-art.js';
 import { calendarSection } from './calendar.js';
 import { formatCard, lengthChart, monthChartToggle, pagesMonthChart, pagesMonthLegend, ratingChart } from './charts.js';
+import { rankedBars } from './ranked-bars.js';
 import { yearSelect } from './home.js';
 import { deltaLine, kpiTile, sparkline } from './kpi.js';
 import { sCurveCard } from './scurve.js';
@@ -227,13 +228,10 @@ function rhythm({ state, ui, year, today, s }) {
 
 function genreBars(s) {
   if (!s.genres.length) return '';
-  const max = s.genres[0].count;
-  const rows = s.genres.slice(0, 6).map((g, i) => `
-    <button type="button" class="hbar hbar-btn" data-action="chart-filter" data-year="${s.year}" data-kind="genre" data-value="${esc(g.label)}">
-      <span class="hbar-head"><span class="strong-ish">${esc(g.label)}</span><span class="muted">${plural(g.count, 'livro', 'livros')}</span></span>
-      <span class="hbar-track"><span class="hbar-fill${i === 0 ? ' is-top' : ''}" style="width:${(g.count / max) * 100}%"></span></span>
-    </button>`).join('');
-  return `<section class="card"><h2>Gêneros mais lidos</h2><div class="hbar-list">${rows}</div></section>`;
+  const rows = s.genres.map((g) => ({
+    label: g.label, count: g.count, attrs: `data-action="chart-filter" data-year="${s.year}" data-kind="genre" data-value="${esc(g.label)}"`,
+  }));
+  return `<section class="card"><h2>Gêneros mais lidos</h2>${rankedBars(rows)}</section>`;
 }
 
 /** Autores: só quem tem mais de um livro no ano; se ninguém repete, uma linha discreta. */
@@ -243,7 +241,7 @@ function authorRank(s) {
   if (!list.length) return `<p class="rs-hint muted small">Nenhum autor repetido em ${s.year}: ${plural(s.authors.length, 'autor diferente', 'autores diferentes')}.</p>`;
   const rows = list.slice(0, 5).map((a, i) => `
     <div class="rank-row"><span class="rank-n${i === 0 ? ' is-top' : ''}">${i + 1}</span><span class="rank-name">${esc(a.label)}</span><span class="muted small">${plural(a.count, 'livro', 'livros')}</span></div>`).join('');
-  return `<section class="card"><h2>Autores mais lidos</h2>${rows}</section>`;
+  return `<section class="card rs-mini"><h2>Autores mais lidos</h2>${rows}</section>`;
 }
 
 function droppedCard(state, year) {
@@ -254,7 +252,7 @@ function droppedCard(state, year) {
       <span class="strong-ish">${esc(b.title)}</span>
       ${b.dropReason ? `<span class="muted small">${esc(b.dropReason)}</span>` : ''}
     </a>`).join('');
-  return `<section class="card"><div class="section-head"><h2>Abandonados</h2><span class="muted small">${plural(list.length, 'livro', 'livros')} · não contam na meta</span></div>${rows}</section>`;
+  return `<section class="card info-row rs-dropped"><div class="section-head"><h2>Abandonados</h2><span class="muted small">${plural(list.length, 'livro', 'livros')} · não contam na meta</span></div>${rows}</section>`;
 }
 
 // Etiquetas dos livros lidos no ano (as criadas pela própria pessoa).
@@ -262,11 +260,15 @@ function tagsCard(state, year) {
   const list = topTagsInYear(state.books, year);
   if (!list.length) return '';
   const chips = list.map((t) => `<span class="tag-count"><span class="tag-count-name">${esc(t.label)}</span><span class="tag-count-n">${t.count}</span></span>`).join('');
-  return `<section class="card"><h2>Etiquetas mais usadas</h2><div class="chips-wrap" aria-label="Etiquetas e quantidade de livros">${chips}</div></section>`;
+  return `<section class="card rs-mini"><h2>Etiquetas mais usadas</h2><div class="chips-wrap" aria-label="Etiquetas e quantidade de livros">${chips}</div></section>`;
 }
 
 function tastes({ state, year, s }) {
-  const body = [genreBars(s), readerProfileCard(state.books, year), ratingChart(s), lengthChart(s), formatCard(state, s), authorRank(s), tagsCard(state, year), droppedCard(state, year)].join('');
+  // Autores e etiquetas, quando os dois cartões existem, ficam lado a lado (empilham em telas estreitas).
+  const authors = authorRank(s);
+  const tags = tagsCard(state, year);
+  const pair = authors.startsWith('<section') && tags ? `<div class="rs-pair">${authors}${tags}</div>` : authors + tags;
+  const body = [genreBars(s), readerProfileCard(state.books, year), ratingChart(s), lengthChart(s), formatCard(state, s), pair, droppedCard(state, year)].join('');
   return body.trim() || emptyScene('resumo', `Nenhum livro lido em ${year}`, `Os gostos de ${year} (gêneros, notas, autores) aparecem quando houver livros lidos no ano.`);
 }
 

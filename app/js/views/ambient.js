@@ -5,6 +5,8 @@ import { esc } from '../ui.js';
 
 const SPEAKER = '<svg class="icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16.5 8.5a5 5 0 0 1 0 7"/></svg>';
 
+const SHORT = { marrom: 'Marrom' };
+
 /**
  * amb: { sound, volume, playing }; paused: cronômetro pausado (o som espera o Continuar).
  */
@@ -12,7 +14,10 @@ export function ambientPicker(amb, { paused = false } = {}) {
   const sound = amb?.sound || 'off';
   const chips = SOUNDS.map(([id, label]) => {
     const on = id === sound;
-    return `<button type="button" class="amb-chip${on ? ' is-on' : ''}" data-action="ambient-pick" data-value="${id}" aria-pressed="${on}">${esc(label)}</button>`;
+    // "Ruído marrom" aparece como "Marrom" (cabe na fileira); o nome inteiro fica no aria-label.
+    const shown = SHORT[id] || label;
+    const aria = shown === label ? '' : ` aria-label="${esc(label)}"`;
+    return `<button type="button" class="amb-chip${on ? ' is-on' : ''}" data-action="ambient-pick" data-value="${id}" aria-pressed="${on}"${aria}>${esc(shown)}</button>`;
   }).join('');
   let status = '';
   if (sound !== 'off') {
@@ -22,7 +27,7 @@ export function ambientPicker(amb, { paused = false } = {}) {
   const volume = sound === 'off' ? '' : `
       <label class="amb-volume">
         <span class="sr-only">Volume do som</span>${SPEAKER}
-        <input type="range" min="0" max="100" step="1" value="${Number(amb.volume) || 0}" data-ambient-volume aria-label="Volume do som">
+        <input type="range" min="0" max="100" step="1" value="${Number(amb.volume) || 0}" style="--p:${(Number(amb.volume) || 0) / 100}" data-ambient-volume aria-label="Volume do som">
       </label>
       <p class="faint small amb-hint">${status ? `${esc(status)} ` : ''}Sem som? Confira o modo silencioso.</p>`;
   return `
