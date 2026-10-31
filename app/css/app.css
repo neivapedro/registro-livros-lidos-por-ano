@@ -4028,7 +4028,7 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
 /* Ornamentos novos das capas desenhadas. */
 /* 5 · faixa diagonal */
 .cover-d5 .cover-deco {
-  opacity: 0.2;
+  opacity: 0.1;
   background: linear-gradient(135deg, transparent 0 56%, currentColor 56% 72%, transparent 72% 78%, currentColor 78% 80%, transparent 80%);
 }
 /* 6 · círculo vazado ao centro */
