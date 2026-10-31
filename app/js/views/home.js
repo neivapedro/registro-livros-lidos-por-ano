@@ -58,20 +58,20 @@ function ringTile(stats, streak, isCurrentYear) {
 function pagesTile(state, stats, today) {
   const goal = getPageGoal(state, stats.year);
   const value = stats.pages ? `<span class="tile-value" data-count="${Math.round(stats.pages)}">${num(stats.pages)}</span>` : '<span class="tile-value">—</span>';
-  // Audiolivros: as horas ouvidas numa linha discreta sob as páginas.
+  // Audiolivros: as horas ouvidas, junto do ritmo, numa única linha discreta no pé.
   const listened = minutesListenedInYear(state.books, stats.year);
   const heard = listened ? `<span class="bento-heard" aria-label="${esc(`${formatDuration(listened)} ouvidas`)}">${headphonesIcon(12)}${hoursText(listened)} h ouvidas</span>` : '';
-  if (!goal) return `<div class="tile bento-pages">${value}<span class="tile-label">páginas</span>${heard}</div>`;
+  if (!goal) return `<div class="tile bento-pages">${value}<span class="tile-label">páginas</span>${heard ? `<span class="bento-note">${heard}</span>` : ''}</div>`;
   const p = pageGoalProgress(stats.pages, goal, stats.year, today);
-  const note = p.met ? 'meta batida' : p.projection ? `ritmo de ~${num(p.projection)}` : '';
+  const pace = p.met ? 'meta batida' : p.projection ? `ritmo ~${num(p.projection)}` : '';
+  const note = [pace && `<span>${esc(pace)}</span>`, heard].filter(Boolean).join('');
   return `
     <div class="tile bento-pages">
       ${value}<span class="tile-label">de ${num(goal)} págs.</span>
       <div class="hero-pages">
         <span class="hero-pages-track" role="img" aria-label="${esc(pageGoalLine(p))}"><span class="hero-pages-fill" style="width:${(p.progress * 100).toFixed(1)}%"></span></span>
-        ${note ? `<span class="hero-pages-text">${esc(note)}</span>` : ''}
       </div>
-      ${heard}
+      ${note ? `<span class="bento-note">${note}</span>` : ''}
     </div>`;
 }
 
@@ -140,7 +140,7 @@ function readingCard(b, session, today, primary = true) {
   return `
     <article class="card reading" data-tint="${esc(b.cover || '')}" data-tint-title="${esc(b.title)}" data-longpress data-id="${esc(b.id)}">
       <div class="rn-top">
-        <span class="rn-cover">${cover(b, { size: 'md' })}${p?.pct != null ? progressRing(p.pct) : ''}</span>
+        <span class="rn-cover">${cover(b, { size: 'md', showText: false })}${p?.pct != null ? progressRing(p.pct) : ''}</span>
         <div class="rn-text">
           <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}"><span class="serif-title">${esc(b.title)}</span></a>
           <span class="rn-author">${esc(b.authors || 'Autor não informado')}</span>
@@ -170,7 +170,7 @@ function nextUpCard(state) {
       <div class="section-head"><h2>Próxima leitura</h2><a class="link" href="#/estante?aba=quero">Ver fila</a></div>
       <article class="card reading next-up" data-tint="${esc(b.cover || '')}" data-tint-title="${esc(b.title)}" data-longpress data-id="${esc(b.id)}">
         <div class="rn-top">
-          <span class="rn-cover">${cover(b, { size: 'md' })}</span>
+          <span class="rn-cover">${cover(b, { size: 'md', showText: false })}</span>
           <div class="rn-text">
             <a class="reading-link" href="#/livro/${encodeURIComponent(b.id)}"><span class="serif-title">${esc(b.title)}</span></a>
             <span class="rn-author">${esc(b.authors || 'Autor não informado')}</span>
@@ -201,10 +201,9 @@ function readGrid(stats) {
 function wantTeaser(books) {
   const want = books.filter((b) => b.status === STATUS.WANT);
   if (!want.length) {
-    return `<a class="card teaser" href="#/novo?status=quero"><span class="teaser-plus">${icon('plus', { size: 20 })}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">Monte a fila dos próximos livros</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
+    return `<a class="card teaser list-row" href="#/novo?status=quero"><span class="teaser-plus">${icon('plus', { size: 20 })}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">Monte a fila dos próximos livros</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
   }
-  const stack = want.slice(0, 3).map((b) => cover(b, { size: 'xs', showText: false })).join('');
-  return `<a class="card teaser" href="#/estante?aba=quero"><span class="stack">${stack}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">${plural(want.length, 'livro', 'livros')} na fila</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
+  return `<a class="card teaser list-row" href="#/estante?aba=quero"><span class="teaser-plus">${icon('queue', { size: 20 })}</span><span class="teaser-text"><span class="teaser-title">Quero ler</span><span class="muted small">${plural(want.length, 'livro', 'livros')} na fila</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
 }
 
 // ---------- Saudação (v1.5) ----------

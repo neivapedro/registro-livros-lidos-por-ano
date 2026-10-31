@@ -71,7 +71,7 @@ export function quotePhotoBlock(ocr, { hasKey = false, limitReached = false } = 
 
 /** Entrada no Início, logo abaixo do "Quero ler". */
 export function suggestTeaser() {
-  return `<a class="card teaser sug-teaser" href="#/sugestoes"><span class="teaser-plus">${icon('sparkle', { size: 20 })}</span><span class="teaser-text"><span class="teaser-title">O que ler a seguir</span><span class="muted small">Sugestões da IA para a sua fila e livros novos</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
+  return `<a class="card teaser list-row sug-teaser" href="#/sugestoes"><span class="teaser-plus">${icon('sparkle', { size: 20 })}</span><span class="teaser-text"><span class="teaser-title">O que ler a seguir</span><span class="muted small">Sugestões da IA para a sua fila e livros novos</span></span>${icon('chevronRight', { cls: 'muted' })}</a>`;
 }
 
 const MODE_TEXT = {

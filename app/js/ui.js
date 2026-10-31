@@ -44,6 +44,7 @@ const PATHS = {
   trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 12a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-12M9 7V4h6v3"/>',
   phone: '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
   book: '<path d="M4 5a2 2 0 0 1 2-2h13v16H6a2 2 0 0 0-2 2z"/><path d="M4 21a2 2 0 0 1 2-2h13v2z"/>',
+  queue: '<path d="M9 6h11M9 12h11M9 18h11"/><circle cx="4.5" cy="6" r="1"/><circle cx="4.5" cy="12" r="1"/><circle cx="4.5" cy="18" r="1"/>',
   sparkle: '<path d="M11 3l1.9 5.6L18.5 10.5l-5.6 1.9L11 18l-1.9-5.6L3.5 10.5l5.6-1.9z"/><path d="M18.5 15.5l.8 2 2 .8-2 .8-.8 2-.8-2-2-.8 2-.8z"/>',
 };
 const FILLED = {
@@ -72,8 +73,8 @@ export const COVER_PALETTE = [
   ['#9C4A2F', '#FBEFE3', '#F0C99A'], ['#2E3136', '#ECE6DD', '#C6A46E'], ['#555A2C', '#F2EEDB', '#D9C38A'],
   ['#E7DBC4', '#2B2118', '#8E5A2B'], ['#B9BFA6', '#20261C', '#55603F'], ['#6B4A32', '#F4EADF', '#DDB27C'],
 ];
-/** Quantos desenhos de ornamento existem (classes .cover-d0 … .cover-d4 no CSS). */
-export const COVER_DECOS = 5;
+/** Quantos desenhos de ornamento existem (classes .cover-d0 … .cover-d7 no CSS). */
+export const COVER_DECOS = 8;
 
 export function hash(str) {
   let h = 0;
@@ -81,11 +82,32 @@ export function hash(str) {
   return Math.abs(h);
 }
 
-/** Cores [fundo, texto, filete] e ornamento da capa desenhada deste título (sempre os mesmos). */
-export function coverStyle(title) {
+/**
+ * Mistura boa (FNV-1a + acabamento do murmur3) para escolher o ornamento: títulos parecidos
+ * ("Leitura 3", "Leitura 4"…) não caem no mesmo desenho.
+ */
+export function mixHash(str) {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x85ebca6b);
+  h ^= h >>> 13;
+  h = Math.imul(h, 0xc2b2ae35);
+  h ^= h >>> 16;
+  return h >>> 0;
+}
+
+/**
+ * Cores [fundo, texto, filete] e ornamento da capa desenhada (sempre os mesmos para o mesmo livro).
+ * A cor de fundo vem só do título (estável: tintas e lombadas usam a mesma); o ornamento, do título e do autor.
+ */
+export function coverStyle(title, author = '') {
   const h = hash(title || '');
   const [bg, fg, acc] = COVER_PALETTE[h % COVER_PALETTE.length];
-  return { bg, fg, acc, deco: Math.floor(h / COVER_PALETTE.length) % COVER_DECOS };
+  return { bg, fg, acc, deco: mixHash(`${title || ''}\u0001${author || ''}`) % COVER_DECOS };
 }
 
 /** Cor de fundo da capa desenhada deste título (a mesma usada em cover()). */
@@ -115,8 +137,8 @@ export function titleInitials(title) {
  * ornamento fixos por título; sem espaço para o texto (showText: false), mostra as iniciais.
  */
 export function cover(book, { size = 'md', showText = true } = {}) {
-  const { bg, fg, acc, deco } = coverStyle(book.title);
   const author = (book.authors || '').split(',')[0].trim();
+  const { bg, fg, acc, deco } = coverStyle(book.title, author);
   const text = showText
     ? `<span class="cover-title">${esc(book.title)}</span><span class="cover-author">${esc(author)}</span>`
     : `<span class="cover-ini" aria-hidden="true">${esc(titleInitials(book.title))}</span>`;
