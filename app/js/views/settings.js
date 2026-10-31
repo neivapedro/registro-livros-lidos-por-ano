@@ -46,6 +46,26 @@ function group(id, title, body, foot = '', cls = '') {
     </section>`;
 }
 
+/** App já aberto pela Tela de Início (iPhone ou instalado): decidido na hora de desenhar. */
+function isStandalone() {
+  try {
+    return globalThis.navigator?.standalone === true
+      || (typeof globalThis.matchMedia === 'function' && globalThis.matchMedia('(display-mode: standalone)').matches);
+  } catch {
+    return false;
+  }
+}
+
+/** "Instalar no celular": só no navegador; instalado, a explicação some. */
+function installGroup() {
+  if (isStandalone()) return '';
+  return group('instalar', 'Instalar no celular', `
+        <div class="howto">
+          <p class="howto-row"><span class="howto-chip">${icon('phone', { size: 14, stroke: 2 })}iPhone · Safari</span><span class="howto-text">Toque em Compartilhar e escolha Adicionar à Tela de Início.</span></p>
+          <p class="howto-row"><span class="howto-chip">${icon('phone', { size: 14, stroke: 2 })}Android · Chrome</span><span class="howto-text">Abra o menu de três pontos e escolha Instalar app ou Adicionar à tela inicial.</span></p>
+        </div>`, 'Instalado, o Leituras abre como um app e funciona sem internet (só a busca de livros precisa de conexão).');
+}
+
 /** Chave opcional do Google Books (guardada fora do backup; veja prefs.js). */
 function googleKeyCard(hasKey) {
   return group('gkey', 'Busca de livros', `
@@ -209,11 +229,7 @@ ${group('backup', 'Backup dos dados', `
 ${googleKeyCard(Boolean(ui?.googleKey))}
 ${geminiKeyCard(Boolean(ui?.geminiKey), aiSearchesThisMonth(ui?.aiUsage, today))}
 ${keysTransferCard(Boolean(ui?.googleKey || ui?.geminiKey))}
-${group('instalar', 'Instalar no celular', `
-        <div class="howto">
-          <p><strong>Android (Chrome):</strong> menu ⋮ → <em>Adicionar à tela inicial</em> ou <em>Instalar app</em>.</p>
-          <p><strong>iPhone (Safari):</strong> botão Compartilhar → <em>Adicionar à Tela de Início</em>.</p>
-        </div>`, 'Instalado, o Leituras abre como um app e funciona sem internet (só a busca de livros precisa de conexão).')}
+${installGroup()}
 ${group('sobre', 'Sobre', `
         <p class="muted small">Leituras ${APP_VERSION} · Busca de livros via BrasilAPI e Open Library (e Google Books e Gemini, com as chaves).</p>
         <button type="button" class="btn-danger" data-action="wipe-data">${icon('trash', { size: 18 })}Apagar todos os dados</button>`)}`;

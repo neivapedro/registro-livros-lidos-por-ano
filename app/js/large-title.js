@@ -23,6 +23,9 @@ let frame = 0;
 
 function update() {
   frame = 0;
+  // Faixa da barra de status: lisa no alto da página; com o conteúdo rolando por baixo, ganha o véu (CSS: html.is-scrolled).
+  const scrolled = (window.scrollY || document.documentElement.scrollTop || 0) > 2;
+  if (document.documentElement.classList.contains('is-scrolled') !== scrolled) document.documentElement.classList.toggle('is-scrolled', scrolled);
   const bar = document.querySelector('[data-cbar]');
   if (!bar) return;
   const title = document.querySelector('[data-large-title]');
@@ -45,7 +48,7 @@ export function initLargeTitles() {
 export function syncLargeTitle() {
   if (frame) cancelAnimationFrame(frame);
   const bar = document.querySelector('[data-cbar]');
-  if (!bar) return;
+  if (!bar) { update(); return; }
   bar.style.transition = 'none';
   update();
   // Volta à transição do CSS no próximo quadro.

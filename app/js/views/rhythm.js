@@ -40,7 +40,7 @@ function barTip(bar, s, today) {
  * title (texto do cabeçalho), tall (altura maior, na aba Diário), hint (linha de baixo com a dica de
  * tocar, em vez do resumo), footer (HTML extra no rodapé).
  */
-export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = false, hint = false, footer = '' } = {}) {
+export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = false, hint = false, footer = '', headLink = '' } = {}) {
   const s = rhythmSeries(book);
   if (!s) return '';
   const unitWord = { [UNITS.PERCENT]: '% lidos', [UNITS.MINUTE]: 'tempo ouvido' }[s.unit] || 'páginas';
@@ -59,10 +59,13 @@ export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = fa
   const label = `${s.step === 'week' ? 'Por semana' : 'Por dia'}, ${unitWord} de ${range}: ${summaryLine(s)}. Máximo de ${amountText(s.max, s.unit)} ${s.step === 'week' ? 'numa semana' : 'num dia'}.`;
   // Na aba Diário os totais já estão nos cartões logo abaixo: a linha só convida a tocar.
   const readout = hint ? `Toque numa barra para ver ${s.step === 'week' ? 'a semana' : 'o dia'}` : summaryLine(s);
-  return `
-    <section class="rchart${tall ? ' is-tall' : ''}" data-rchart>
+  // headLink (ficha): o título sai do cartão e fica na linha de cima, como em Trechos, com a ação à direita.
+  const outside = Boolean(headLink);
+  const tag = outside ? 'div' : 'section';
+  const card = `
+    <${tag} class="rchart${tall ? ' is-tall' : ''}${outside ? ' is-outside' : ''}" data-rchart>
       <div class="rchart-head">
-        <h2 class="rchart-title">${esc(title)}</h2>
+        ${outside ? '' : `<h2 class="rchart-title">${esc(title)}</h2>`}
         <span class="rchart-range">${{ [UNITS.PERCENT]: '%', [UNITS.MINUTE]: 'min' }[s.unit] || 'págs.'} por ${s.step === 'week' ? 'semana' : 'dia'}</span>
       </div>
       <div class="rchart-plot" role="img" aria-label="${esc(label)}">
@@ -72,5 +75,10 @@ export function rhythmChart(book, today, { title = 'Ritmo da leitura', tall = fa
       <div class="rchart-axis" aria-hidden="true"><span>${esc(dayLabel(s.first, today))}</span>${s.first !== s.last ? `<span>${esc(dayLabel(s.last, today))}</span>` : ''}</div>
       <p class="rchart-readout" aria-live="polite" data-default="${esc(readout)}">${esc(readout)}</p>
       ${footer}
+    </${tag}>`;
+  if (!outside) return card;
+  return `
+    <section class="ficha-section ficha-rhythm">
+      <div class="section-head"><h2>${esc(title)}</h2>${headLink}</div>${card}
     </section>`;
 }
