@@ -437,7 +437,7 @@ try {
   await shots('ficha-trecho', () => scrollTo('.ficha-quote', 160));
 
   step('aba Trechos: aspa em caramelo, texto serifado, página em versalete, data apagada');
-  await page.click('.ficha-section .section-head .link');
+  await page.click('.ficha-section:has(.ficha-quote) .section-head .link');
   await page.waitForSelector('.book-tab.is-on[data-tab="trechos"]');
   const look = await page.evaluate(() => {
     const card = document.querySelector('.quote-card');
