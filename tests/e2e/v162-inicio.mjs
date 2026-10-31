@@ -1,8 +1,8 @@
-// Teste de ponta a ponta da 1.6.1 (visual): "Lendo agora" com cartão neutro e só um brilho suave da cor
-// da capa (contraste AA em cada cor de destaque × tema), engrenagem de Ajustes no Início e na barra
-// compacta, barra de baixo de vidro que esconde o que passa por baixo (medido em pixels) com o fim
-// de cada tela livre, e piso de 12 px × escala nos textos de apoio (320/390/430, escala 1 e 1,3).
-// Uso: node tests/e2e/v161-inicio.mjs   (capturas em tests/e2e/screens/v161-inicio-*.png)
+// Teste de ponta a ponta da 1.6.2 (visual): capa pequena do "Lendo agora" só com iniciais e anel de %
+// que não cobre texto; Início com dois tratamentos de cartão (destaque × linha de lista); "Quero ler" com
+// ícone em caixa de 44px; cartão de páginas enxuto; capas desenhadas com ornamentos variados
+// (320/390/430, claro/escuro, 3 cores de destaque, escala 1 e 1,3).
+// Uso: node tests/e2e/v162-inicio.mjs   (capturas em tests/e2e/screens/v162-inicio-*.png)
 
 import { execSync } from 'node:child_process';
 import { createServer } from 'node:http';
@@ -355,20 +355,181 @@ const shotTo = async (page, name, full = false) => {
   await page.screenshot({ path: join(SHOTS, `v162-inicio-${name}.png`), fullPage: full });
 };
 
+const SESSION = JSON.stringify({ bookId: 'r1', startedAt: new Date(NIGHT).getTime() - 600000, pausedAt: null, pausedMs: 0 });
+
+// Seis livros sem imagem, com títulos em sequência: a grade do Início tem de mostrar ornamentos variados.
+const seqSeed = {
+  ...seed,
+  books: [
+    ...Array.from({ length: 6 }, (_, i) => read(`s${i}`, `Leitura ${i + 3}`, 'Autora Comum', `2026-0${i + 1}-15`)),
+    ...seed.books.filter((b) => b.status !== 'lido'),
+  ],
+};
+
+const setScale = (page, s) => page.evaluate((v) => {
+  const st = document.documentElement.style;
+  st.setProperty('--type-scale', String(v));
+  st.setProperty('--type-scale-ui', String(Math.min(v, 1.3)));
+  st.setProperty('--type-scale-nav', String(Math.min(v, 1.2)));
+  st.setProperty('--type-scale-lg', String(1 + (v - 1) * 0.5));
+}, s);
+
+const boxOf = (page, sel) => page.evaluate((s) => {
+  const el = document.querySelector(s);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { x: r.x, y: r.y, w: r.width, h: r.height, r: r.right, b: r.bottom };
+}, sel);
+const hit = (a, b) => a.x < b.r && b.x < a.r && a.y < b.b && b.y < a.b;
+
 try {
+  // ---------- 1. Capa pequena do "Lendo agora": só iniciais; o anel nunca cobre texto ----------
+  step('Lendo agora: capa só com iniciais, anel de % ≥ 36px fora das iniciais (320/390/430, claro/escuro, escala 1,3)');
   for (const scheme of ['dark', 'light']) {
-    for (const width of [390, 320]) {
-      const { context, page } = await newPage({ scheme, width, reducedMotion: 'reduce' });
-      await page.evaluate(() => localStorage.setItem('leituras:sessao', JSON.stringify({ bookId: 'r1', startedAt: Date.now() - 600000, pausedAt: null, pausedMs: 0 })));
+    for (const width of [320, 390, 430]) {
+      for (const scale of [1, 1.3]) {
+        const { context, page } = await newPage({ scheme, width, reducedMotion: 'reduce', dsf: 1 });
+        await setScale(page, scale);
+        await page.waitForTimeout(250);
+        const cards = await page.$$eval('#app .card.reading', (els) => els.map((c) => c.dataset.id));
+        assert.deepEqual(cards, ['r1', 'r2', 'r3', 'r4', 'r5']);
+        for (const id of cards) {
+          const sel = `#app .reading[data-id="${id}"]`;
+          const info = await page.evaluate((s) => {
+            const c = document.querySelector(s);
+            const cv = c.querySelector('.rn-cover .cover');
+            return {
+              text: cv.querySelectorAll('.cover-title, .cover-author').length,
+              ini: cv.querySelector('.cover-ini')?.textContent || '',
+              ring: c.querySelector('.cov-ring')?.textContent.replace(/\s/g, '') || '',
+            };
+          }, sel);
+          assert.equal(info.text, 0, `${id}: capa pequena sem título/autor`);
+          assert.ok(info.ini.length >= 1 && info.ini.length <= 2, `${id}: iniciais "${info.ini}"`);
+          if (id === 'r2') {
+            assert.equal(info.ring, '', 'sem total de páginas, sem anel');
+            continue;
+          }
+          assert.match(info.ring, /^\d+%$/, `${id}: anel com a unidade %`);
+          const ring = await boxOf(page, `${sel} .cov-ring`);
+          const ini = await boxOf(page, `${sel} .cover-ini`);
+          const card = await boxOf(page, sel);
+          assert.ok(ring.w >= 36 && ring.h >= 36, `${id}: anel ${ring.w}×${ring.h}`);
+          assert.ok(!hit(ring, ini), `${id}: o anel cobre as iniciais em ${width}px`);
+          assert.ok(ring.r <= card.r && ring.b <= card.b + 0.5, `${id}: anel cortado pelo cartão`);
+        }
+        assert.ok((await overflow(page)) <= 0, `Início sobrando em ${width}px`);
+        if (width === 390 && scale === 1) {
+          await page.evaluate(() => document.querySelector('#app .reading[data-id="r4"]').scrollIntoView({ block: 'center' }));
+          await shotTo(page, `lendo-${scheme}-390`);
+        }
+        if (width === 320 && scale === 1.3 && scheme === 'light') {
+          await page.evaluate(() => document.querySelector('#app .reading[data-id="r5"]').scrollIntoView({ block: 'center' }));
+          await shotTo(page, 'lendo-320-1.3');
+        }
+        await context.close();
+      }
+    }
+  }
+
+  // ---------- 2 e 3. Dois tratamentos de cartão; Quero ler com ícone ----------
+  step('Início: cartão de destaque × linha de lista (borda contínua), aviso do cronômetro sem contorno colorido, ícones de 44px');
+  for (const [scheme, accent] of [['dark', 'terracota'], ['light', 'petroleo'], ['dark', 'vinho']]) {
+    for (const width of [320, 390, 430]) {
+      const { context, page } = await newPage({ scheme, accent, width, reducedMotion: 'reduce', dsf: 1 });
+      await page.evaluate((s) => localStorage.setItem('leituras:sessao', s), SESSION);
       await page.reload();
-      await page.waitForSelector('#app[data-page="inicio"]');
-      await page.waitForTimeout(500);
-      await page.screenshot({ path: join(SHOTS, `v162-inicio-tmp-${scheme}-${width}.png`), fullPage: true });
+      await page.waitForSelector('#app[data-page="inicio"] .timer-banner');
+      await page.waitForTimeout(300);
+      const look = (sel) => page.evaluate((s) => {
+        const cs = getComputedStyle(document.querySelector(s));
+        return { style: cs.borderTopStyle, w: cs.borderTopWidth, color: cs.borderTopColor, radius: cs.borderTopLeftRadius, bg: cs.backgroundColor };
+      }, sel);
+      const hero = [await look('.bento-ring'), await look('.bento .tile:not(.bento-ring)'), await look('.card.reading')];
+      for (const h of hero) {
+        assert.equal(h.style, 'solid');
+        assert.equal(h.w, '1px');
+        assert.equal(h.radius, '24px');
+        assert.equal(h.color, hero[0].color, 'mesma borda nos cartões de destaque');
+      }
+      const rows = [await look('.timer-banner'), await look('.teaser:not(.sug-teaser)'), await look('.sug-teaser')];
+      for (const r of rows) {
+        assert.equal(r.style, 'solid', 'linha de lista sem tracejado');
+        assert.equal(r.w, '1px');
+        assert.equal(r.color, rows[0].color, 'mesma borda nas linhas');
+        assert.equal(r.radius, rows[0].radius);
+        assert.equal(r.bg, rows[0].bg);
+      }
+      assert.equal(rows[0].color, hero[0].color, 'linha e cartão com a mesma cor de borda (nada de contorno colorido)');
+      // Aviso do cronômetro: bolinha de destaque + "Voltar".
+      assert.ok(await boxOf(page, '.timer-banner .timer-dot'));
+      assert.equal((await page.textContent('.timer-banner-go')).trim(), 'Voltar');
+      const go = await boxOf(page, '.timer-banner-go');
+      assert.ok(go.h >= 44 - 0.5, `"Voltar" com ${go.h}px de altura`);
+      // Quero ler e "O que ler a seguir": mesma caixa de ícone de 44px, sem pilha de capas.
+      const q = await boxOf(page, '.teaser:not(.sug-teaser) .teaser-plus');
+      const s = await boxOf(page, '.sug-teaser .teaser-plus');
+      assert.deepEqual([q.w, q.h, s.w, s.h], [44, 44, 44, 44]);
+      assert.equal(await page.locator('.teaser .cover, .teaser .stack').count(), 0, 'sem iniciais ilegíveis na linha Quero ler');
+      assert.equal(await page.locator('.teaser:not(.sug-teaser) .teaser-plus svg').count(), 1);
+      assert.match(await page.textContent('.teaser:not(.sug-teaser) .teaser-text'), /Quero ler\s*3 livros na fila/);
+      for (const sel of ['.timer-banner', '.teaser:not(.sug-teaser)', '.sug-teaser']) {
+        assert.ok((await boxOf(page, sel)).h >= 44, `${sel} com menos de 44px`);
+      }
+      assert.ok((await overflow(page)) <= 0);
+      if (width !== 430) {
+        await page.evaluate(() => scrollTo(0, 0));
+        await shotTo(page, `topo-${accent}-${scheme}-${width}`);
+        await page.evaluate(() => scrollTo(0, document.body.scrollHeight));
+        await shotTo(page, `pe-${accent}-${scheme}-${width}`);
+      }
       await context.close();
     }
   }
+
+  // ---------- 4. Cartão de páginas: valor + legenda + barra (+ uma linha discreta) ----------
+  step('Números: cada bloco com valor e uma legenda; páginas sem "ritmo" dentro da barra, numa única linha final');
+  for (const width of [320, 390, 430]) {
+    const { context, page } = await newPage({ scheme: 'dark', width, reducedMotion: 'reduce', dsf: 1 });
+    const parts = await page.$$eval('.bento-pages > *', (els) => els.map((e) => e.className));
+    assert.deepEqual(parts, ['tile-value', 'tile-label', 'hero-pages', 'bento-note']);
+    assert.equal(await page.locator('.bento-pages .hero-pages-text').count(), 0);
+    assert.match(await page.textContent('.bento-pages .tile-label'), /^de 5\.000 págs\.$/);
+    assert.match(await page.textContent('.bento-pages .bento-note'), /^ritmo ~[\d.]+$|^ritmo ~[\d.]+\s*·?\s*[\d,]+ h ouvidas$/);
+    for (const sel of ['.bento .tile:nth-child(3)', '.bento .tile:nth-child(4)']) {
+      assert.deepEqual(await page.$$eval(`${sel} > *`, (els) => els.map((e) => e.className.split(' ')[0])), ['tile-value', 'tile-label']);
+    }
+    const tiles = await page.$$eval('.bento > .tile:not(.bento-ring)', (els) => els.map((e) => e.getBoundingClientRect().width));
+    assert.ok(tiles.every((w) => Math.abs(w - tiles[0]) < 1), 'tiles da coluna com a mesma largura');
+    if (width === 320) {
+      await setScale(page, 1.3);
+      await page.waitForTimeout(250);
+      assert.ok((await overflow(page)) <= 0);
+      await page.evaluate(() => scrollTo(0, 0));
+      await shotTo(page, 'numeros-320-1.3');
+    }
+    await context.close();
+  }
+
+  // ---------- 5. Capas desenhadas variadas ----------
+  step('Capas desenhadas: títulos em sequência não repetem o mesmo ornamento (grade do Início)');
+  for (const scheme of ['dark', 'light']) {
+    const { context, page } = await newPage({ scheme, data: seqSeed, reducedMotion: 'reduce', dsf: 2 });
+    const decos = await page.$$eval('#app .book-grid .cover', (els) => els.map((e) => (e.className.match(/cover-d(\d)/) || [])[1]));
+    assert.equal(decos.length, 6);
+    assert.ok(new Set(decos).size >= 4, `ornamentos ${decos}`);
+    const again = await page.$$eval('#app .book-grid .cover', (els) => els.map((e) => (e.className.match(/cover-d(\d)/) || [])[1]));
+    assert.deepEqual(again, decos, 'determinístico');
+    await page.evaluate(() => document.querySelector('#app .book-grid').scrollIntoView({ block: 'center' }));
+    await shotTo(page, `capas-${scheme}`);
+    await context.close();
+  }
+
+  assert.deepEqual(errors, [], `erros no console:\n${errors.join('\n')}`);
+  console.log('\nTudo certo. Capturas em tests/e2e/screens/v162-inicio-*.png');
 } catch (err) {
-  console.error(err);
+  console.error(`\nFALHOU: ${err.message}`);
+  if (errors.length) console.error(errors.join('\n'));
   process.exitCode = 1;
 } finally {
   await browser.close();

@@ -306,7 +306,7 @@ try {
   await page.waitForSelector('.hero-pages');
   const projection = Math.round((PAGES_2026 / 289) * 365 / 100) * 100;
   assert.equal(await page.getAttribute('.hero-pages-track', 'aria-label'), `${fmt(PAGES_2026)} de 6.000 págs. · no ritmo de ~${fmt(projection)}`);
-  assert.match(await page.textContent('.bento-pages'), new RegExp(`de 6\\.000 págs\\.\\s*ritmo de ~${fmt(projection).replace('.', '\\.')}`));
+  assert.match(await page.textContent('.bento-pages'), new RegExp(`de 6\\.000 págs\\.\\s*ritmo ~${fmt(projection).replace('.', '\\.')}`));
   assert.doesNotMatch(await page.textContent('.bento'), /atrasad/i);
   await shot('inicio-meta-paginas');
   await checkNarrow('início com meta de páginas');

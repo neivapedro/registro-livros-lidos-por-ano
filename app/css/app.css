@@ -4044,3 +4044,7 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   -webkit-mask-image: linear-gradient(to right, transparent, #000 70%);
   mask-image: linear-gradient(to right, transparent, #000 70%);
 }
+
+/* Texto muito grande em tela estreita: os botões do cartão quebram de linha em vez de ficar cortados. */
+.rn-actions { flex-wrap: wrap; }
+.rn-main { flex: 1 1 calc(130px * var(--type-scale, 1)); min-width: 0; }
