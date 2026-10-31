@@ -232,7 +232,8 @@ try {
   assert.match(await page.evaluate(() => getComputedStyle(document.querySelector('.ficha-quote blockquote')).fontFamily), /Instrument Serif/);
   assert.equal(await page.locator('.ficha-quote .quote-mark').count(), 1);
   assert.equal(await text('.ficha-quote .quote-page'), 'p. 27');
-  assert.equal(await text('.ficha-section .section-head .link'), 'Ver todos (2)');
+  assert.equal(await text('.ficha-section:has(.ficha-quote) .section-head .link'), 'Ver todos (2)');
+  assert.match(await text('.ficha-rhythm .section-head .link'), /^Ver diário \(\d+\)$/);
   assert.match(await page.innerText('.ficha-notes'), /Sistemas > metas\.\nRever o capítulo 4\./);
   assert.deepEqual(await page.locator('.ficha-chip').allTextContents(), ['Desenvolvimento pessoal', 'Físico', 'indicação', 'trabalho']);
   assert.equal(await text('.ficha-isbn'), 'ISBN 9788550807560');
@@ -251,7 +252,7 @@ try {
   assert.equal(await page.locator('.cover-viewer').count(), 0);
 
   step('Ver todos (2) → aba Trechos; Voltar → ficha');
-  await page.click('.ficha-section .section-head .link');
+  await page.click('.ficha-section:has(.ficha-quote) .section-head .link');
   await page.waitForSelector('.book-tab.is-on[data-tab="trechos"]');
   assert.equal(await page.locator('.quote-card').count(), 2);
   await page.click('.form-top >> text=Voltar');

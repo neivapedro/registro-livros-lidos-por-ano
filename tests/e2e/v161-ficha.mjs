@@ -124,7 +124,7 @@ try {
     assert.equal(await page.locator('.ficha-crit').isVisible(), false);
     assert.equal(await page.locator('.ficha-crit-toggle').innerText(), 'Ver critérios');
     const [rate, summary, stats, syn, mood, loan] = await order(page, ['.ficha-rate', '.ficha-crit-toggle', '.ficha-stats', '.ficha-syn', '.ficha-mood-section', '.ficha-loan-card']);
-    assert.ok(rate < summary && summary < stats && stats < syn && syn < mood && mood < loan, `ordem: ${[rate, summary, stats, syn, mood, loan]}`);
+    assert.ok(rate <= summary && summary < stats && stats < syn && syn < mood && mood < loan, `ordem: ${[rate, summary, stats, syn, mood, loan]}`);
     await noOverflow(page, `ficha ${tag}`);
     await shot(page, `${tag}-fechada`);
 

@@ -1447,12 +1447,13 @@ body:not(.no-nav)::after {
   height: calc(var(--nav-space) + 28px);
   background: linear-gradient(to bottom, transparent, var(--scrim) 55%, var(--bar-bg));
 }
-/* Barra de status do iPhone (app instalado): o conteúdo rola por baixo de um vidro. */
+/* Barra de status do iPhone (app instalado): lisa no alto da página (a cor do fundo); o véu
+   com leve desfoque só aparece com o conteúdo rolando por baixo (html.is-scrolled, 1.6.2). */
 body::before {
   content: ''; position: fixed; left: 0; right: 0; top: 0; z-index: 9; pointer-events: none;
   height: var(--safe-t);
-  background: var(--bar-bg);
-  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  background: transparent;
+  transition: background-color .2s ease;
 }
 .toast { z-index: 50; bottom: calc(var(--nav-space) + 14px); }
 body.sheet-open .toast { top: calc(var(--safe-t) + 12px); bottom: auto; transform: translate(-50%, -16px); }
@@ -1955,12 +1956,6 @@ p.ficha-progress-label { text-align: left; }
 .rchart-axis:has(> span:only-child) { justify-content: center; }
 .rchart-axis { display: flex; justify-content: space-between; gap: 12px; margin-top: -4px; font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .rchart-readout { min-height: 18px; font-size: calc(13px * var(--type-scale, 1)); font-weight: 600; color: var(--text-soft); font-variant-numeric: tabular-nums; }
-.ficha-more {
-  display: flex; justify-content: space-between; align-items: center; min-height: 48px;
-  margin: 0 -16px -12px; padding: 0 16px; border-top: 1px solid var(--line);
-  color: var(--text); font-size: calc(14px * var(--type-scale, 1)); font-weight: 700;
-}
-.ficha-more .icon { color: var(--muted); }
 
 .ficha-section { display: flex; flex-direction: column; gap: 10px; }
 .ficha-section > h2, .ficha-section .section-head h2 { font-size: calc(17px * var(--type-scale, 1)); }
@@ -2118,10 +2113,6 @@ body [data-theme] { color: var(--text); }
 /* Calendário: o número sobre a capa fica num selo de papel. */
 [data-theme="light"] .cal-cell.has-book .cal-num { background: color-mix(in srgb, var(--surface) 86%, transparent); }
 
-/* Barra de status do iPhone (app instalado): com o estilo "black-translucent" o relógio e a
-   bateria são sempre brancos, então no claro a faixa sob eles fica escura, como a moldura.
-   (No Safari, fora da Tela de Início, essa faixa tem altura zero.) */
-[data-theme="light"] body::before { background: rgb(30 25 21 / 0.92); }
 
 /* Texto que ainda usava o tom "faint" passa para "muted" (AA nos dois temas). */
 .kpi-note, .kpi-caption, .ppd-sub, .sc-readout, .ficha-isbn, .medal.is-off { color: var(--muted); }
@@ -3989,4 +3980,120 @@ body.no-nav .app[data-page="retro"] { padding-bottom: 0; }
   :is([data-text-size="grande"], [data-text-size="enorme"]) .greet-row { flex-wrap: wrap; row-gap: 0; }
   :is([data-text-size="grande"], [data-text-size="enorme"]) .greet-row > .greet-date { flex: 1 1 100%; white-space: normal; overflow-wrap: normal; }
   :is([data-text-size="grande"], [data-text-size="enorme"]) .greet-row > .top-actions { margin-left: auto; }
+}
+
+/* ===== 1.6.2 Ficha, topo e Ajustes ===== */
+/* Topo (barra de status do iPhone): no alto da página a faixa é o próprio fundo (sem cinza nem
+   desfoque); rolando, ganha um véu leve do fundo e um degradê curto para o texto que passa por baixo. */
+html.is-scrolled body::before { background: var(--bg); }
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) and (background: color-mix(in srgb, red 50%, transparent)) {
+  html.is-scrolled body::before {
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  }
+}
+html::after {
+  content: ''; position: fixed; left: 0; right: 0; top: var(--safe-t); height: 24px; z-index: 2; pointer-events: none;
+  background: linear-gradient(to bottom, var(--bg), transparent);
+  opacity: 0; transition: opacity .2s ease;
+}
+html.is-scrolled::after { opacity: 1; }
+/* Com a barra compacta ou uma folha aberta, o degradê não cobre o que já tem vidro próprio. */
+html.is-scrolled:has(.cbar.is-on)::after, html:has(body.sheet-open)::after, html:has(body.viewer-open)::after { opacity: 0; }
+@media (prefers-reduced-motion: reduce) {
+  html::after, body::before { transition: none; }
+}
+
+/* Ficha: "Ritmo da leitura" com o título fora do cartão e "Ver diário" à direita, como Trechos. */
+.ficha-rhythm > .section-head { align-items: center; }
+.ficha-rhythm > .section-head h2 { font-size: calc(17px * var(--type-scale, 1)); }
+.ficha-rhythm .section-head .link { min-height: 44px; display: inline-flex; align-items: center; }
+.rchart.is-outside { padding-top: 14px; }
+.rchart.is-outside .rchart-head { justify-content: flex-start; }
+
+/* Ficha: estrelas, coração e "Ver critérios" na mesma linha; quebra quando não cabe. */
+.ficha-rate-block { align-self: stretch; display: flex; flex-wrap: wrap; justify-content: center; align-items: center; column-gap: 2px; }
+.ficha-rate-block .ficha-rate { gap: 8px; }
+.ficha-rate-block .ficha-crit-wrap { align-self: auto; flex: 0 0 auto; margin-top: 0; }
+.ficha-rate-block .ficha-crit-wrap[open] { flex: 1 1 100%; }
+.ficha-rate-block .ficha-crit-toggle { padding: 0 8px; gap: 2px; border-radius: 10px; }
+.ficha-rate-block .ficha-crit-wrap[open] .ficha-crit-toggle { align-self: center; }
+
+/* Ajustes → Instalar no celular: duas linhas curtas, cada uma com a etiqueta da plataforma. */
+.howto-row { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin: 0; }
+.howto-row + .howto-row { padding-top: 10px; border-top: 1px solid var(--line); }
+.howto-chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px 4px 8px; border-radius: 999px;
+  background: var(--fill-soft); color: var(--text); font-size: calc(12.5px * var(--type-scale, 1)); font-weight: 700;
+}
+.howto-chip .icon { color: var(--accent); }
+.howto-text { font-size: calc(14px * var(--type-scale, 1)); line-height: 1.4; color: var(--text-soft); }
+
+/* Legendas terciárias (ISBN, fonte da sugestão, linhas extras das listas): texto "muted" legível,
+   discretas pelo peso e pela posição, não pelo contraste. */
+.ficha-isbn { font-size: calc(13px * var(--type-scale, 1)); font-weight: 600; color: var(--muted); letter-spacing: 0.2px; }
+.sug-source { font-size: calc(12.5px * var(--type-scale, 1)); font-weight: 600; color: var(--muted); }
+.li-extra { font-size: calc(12.5px * var(--type-scale, 1)); color: var(--muted); opacity: 1; }
+
+/* ===== 1.6.2 Início e capas ===== */
+/* Dois tratamentos no Início: cartão de destaque (anel da meta, números, "Lendo agora": superfície,
+   borda fina e raio de 24px) e linha de lista (aviso do cronômetro, "Quero ler", "O que ler a seguir":
+   superfície, borda fina contínua e caixa de ícone de 44px). */
+.bento .bento-ring { background: var(--surface); border-radius: 24px; }
+.bento .tile { border-radius: 24px; }
+.card.reading { border-color: var(--line); border-radius: 24px; }
+
+.list-row, .card.list-row {
+  display: flex; flex-direction: row; align-items: center; gap: 14px; min-height: 64px;
+  padding: 10px 16px 10px 10px; border-radius: var(--row-radius);
+  background: var(--surface); border: var(--card-border); box-shadow: none; color: var(--text);
+}
+.timer-banner.list-row { padding: 10px 10px 10px 18px; min-height: 60px; }
+.timer-banner-go {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px;
+  border-radius: 999px; background: var(--surface-warm); color: var(--accent);
+}
+.list-row .teaser-plus { flex-shrink: 0; }
+
+/* Números: dois níveis (valor + legenda); a barra de páginas e uma única linha discreta no pé. */
+.bento-pages .bento-note {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 2px;
+  font-size: calc(12px * var(--type-scale, 1)); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.bento-pages .bento-note > * + *::before { content: '·'; margin-right: 6px; color: var(--muted); }
+.bento-pages .bento-heard { margin-top: 0; color: var(--text-soft); }
+
+/* Capa pequena do "Lendo agora": só as iniciais; o anel de % fica no canto, fora do miolo. */
+.cov-ring { width: 40px; height: 40px; right: -12px; bottom: -12px; }
+.cov-ring-pct { font-size: 11.5px; }
+.cov-ring-unit { font-size: 8px; }
+.cov-ring-pct.is-full { font-size: 10px; }
+
+/* Ornamentos novos das capas desenhadas. */
+/* 5 · faixa diagonal */
+.cover-d5 .cover-deco {
+  opacity: 0.1;
+  background: linear-gradient(135deg, transparent 0 56%, currentColor 56% 72%, transparent 72% 78%, currentColor 78% 80%, transparent 80%);
+}
+/* 6 · círculo vazado ao centro */
+.cover-d6 .cover-deco {
+  inset: auto; top: 50%; left: 50%; width: 72cqw; height: 72cqw; transform: translate(-50%, -50%);
+  border: 1px solid; border-radius: 50%; opacity: 0.35;
+}
+.cover-d6 .cover-deco::after { content: ''; position: absolute; inset: 9%; border: 1px solid; border-radius: 50%; opacity: 0.6; }
+/* 7 · fileiras de filetes na borda direita */
+.cover-d7 .cover-deco {
+  opacity: 0.3;
+  background: repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px 5px) 100% 0 / 26% 100% no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 70%);
+  mask-image: linear-gradient(to right, transparent, #000 70%);
+}
+
+/* Texto muito grande em tela estreita: os botões do cartão quebram de linha em vez de ficar cortados. */
+.rn-actions { flex-wrap: wrap; }
+.rn-main { flex: 1 1 calc(130px * var(--type-scale, 1)); min-width: 0; }
+
+/* Mais contraste / menos transparência: o véu da barra de status é opaco e sem desfoque (1.6.2). */
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  html.is-scrolled body::before { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }

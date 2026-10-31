@@ -76,6 +76,13 @@ function ratingRow(book) {
   return `<div class="ficha-rate">${starsHtml}${fav}</div>`;
 }
 
+/** Estrelas, coração e "Ver critérios" na mesma linha (quebra só quando não cabe). */
+function ratingBlock(book, ui) {
+  const rate = ratingRow(book);
+  const crit = criteriaList(book, ui);
+  return rate || crit ? `<div class="ficha-rate-block">${rate}${crit}</div>` : '';
+}
+
 function seriesChip(state, book) {
   if (!book.series || !String(book.series).trim()) return '';
   const s = seriesInfo(state.books, book);
@@ -207,8 +214,8 @@ function droppedBlock(book) {
 
 function rhythmSection(book, today) {
   const count = (book.journal || []).length;
-  const footer = `<a class="ficha-more" href="${editHref(book.id, 'aba=diario')}">Ver diário (${count})${icon('chevronRight', { size: 16, stroke: 2.2 })}</a>`;
-  const chart = rhythmChart(book, today, { footer });
+  const headLink = `<a class="link ficha-more" href="${editHref(book.id, 'aba=diario')}">Ver diário (${count})</a>`;
+  const chart = rhythmChart(book, today, { headLink });
   if (chart) return chart;
   if (book.status === STATUS.WANT || book.status === STATUS.DROPPED) return '';
   // Sem diário: uma linha discreta (como "Guardar um trecho"), não um cartão vazio.
@@ -289,8 +296,7 @@ export function bookDetailView({ state, ui, today, book }) {
         <p class="ficha-author">${esc(authorLine)}</p>
       </div>
       ${seriesChip(state, book)}
-      ${ratingRow(book)}
-      ${criteriaList(book, ui)}
+      ${ratingBlock(book, ui)}
       ${heroStats}
     </section>
     ${book.status === STATUS.READ ? '' : statusBlock}

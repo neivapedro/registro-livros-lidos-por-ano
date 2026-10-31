@@ -89,7 +89,7 @@ export function timerBanner(books, session, now = Date.now()) {
   const audio = book.format === FORMATS.AUDIO;
   const label = isPaused(session) ? (audio ? 'Audiolivro pausado' : 'Leitura pausada') : (audio ? 'Ouvindo' : 'Leitura em andamento');
   return `
-    <a class="timer-banner" href="#/ler/${encodeURIComponent(book.id)}">
+    <a class="timer-banner list-row" href="#/ler/${encodeURIComponent(book.id)}">
       <span class="timer-dot${isPaused(session) ? ' is-paused' : ''}" aria-hidden="true"></span>
       <span class="timer-banner-text">
         <span>${label}: <strong data-timer-minutes>${wholeMinutes(elapsedMs(session, now))} min</strong></span>

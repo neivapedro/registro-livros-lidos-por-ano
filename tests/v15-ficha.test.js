@@ -51,7 +51,10 @@ test('ritmo sem diário: linha discreta (lendo e lido), nada para Quero ler e Ab
   assert.doesNotMatch(view(book({ status: 'abandonado' })), /Ritmo da leitura/);
   // Com diário, o cartão do gráfico continua.
   const withDiary = view(book({ journal: [{ date: '2026-10-02', from: 0, to: 40, unit: 'page', note: '' }] }));
-  assert.match(withDiary, /class="rchart"/);
+  assert.match(withDiary, /class="rchart is-outside"/);
+  // 1.6.2: o título fica fora do cartão, na linha de cima, com "Ver diário" à direita (como Trechos).
+  assert.match(withDiary, /<section class="ficha-section ficha-rhythm">\s*<div class="section-head"><h2>Ritmo da leitura<\/h2><a class="link ficha-more" href="#\/livro\/b1\/editar\?aba=diario">Ver diário \(1\)<\/a><\/div>/);
+  assert.doesNotMatch(withDiary, /rchart-title/);
   assert.doesNotMatch(withDiary, /ficha-rhythm-empty/);
 });
 
