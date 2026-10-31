@@ -158,7 +158,7 @@ try {
   step('Início: páginas e meta de páginas');
   assert.match(await text('.ring-center'), /^6 de 6$/);
   assert.equal(await page.getAttribute('.hero svg', 'aria-label'), '6 de 6 livros da meta');
-  assert.equal(await text('.bento-pages'), `${fmt(P[2026])} de 3.000 págs. ritmo de ~2.000`);
+  assert.equal(await text('.bento-pages'), `${fmt(P[2026])} de 3.000 págs. ritmo ~2.000`);
   assert.equal(await page.getAttribute('.hero-pages-track', 'aria-label'), `${fmt(P[2026])} de 3.000 págs. · no ritmo de ~2.000`);
   assert.doesNotMatch(await text('.bento'), /atrasad/i);
   await shot('inicio');

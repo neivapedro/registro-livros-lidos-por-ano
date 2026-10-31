@@ -4034,3 +4034,61 @@ html.is-scrolled:has(.cbar.is-on)::after, html:has(body.sheet-open)::after, html
 .ficha-isbn { font-size: calc(13px * var(--type-scale, 1)); font-weight: 600; color: var(--muted); letter-spacing: 0.2px; }
 .sug-source { font-size: calc(12.5px * var(--type-scale, 1)); font-weight: 600; color: var(--muted); }
 .li-extra { font-size: calc(12.5px * var(--type-scale, 1)); color: var(--muted); opacity: 1; }
+
+/* ===== 1.6.2 Início e capas ===== */
+/* Dois tratamentos no Início: cartão de destaque (anel da meta, números, "Lendo agora": superfície,
+   borda fina e raio de 24px) e linha de lista (aviso do cronômetro, "Quero ler", "O que ler a seguir":
+   superfície, borda fina contínua e caixa de ícone de 44px). */
+.bento .bento-ring { background: var(--surface); border-radius: 24px; }
+.bento .tile { border-radius: 24px; }
+.card.reading { border-color: var(--line); border-radius: 24px; }
+
+.list-row, .card.list-row {
+  display: flex; flex-direction: row; align-items: center; gap: 14px; min-height: 64px;
+  padding: 10px 16px 10px 10px; border-radius: var(--row-radius);
+  background: var(--surface); border: var(--card-border); box-shadow: none; color: var(--text);
+}
+.timer-banner.list-row { padding: 10px 10px 10px 18px; min-height: 60px; }
+.timer-banner-go {
+  display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 14px;
+  border-radius: 999px; background: var(--surface-warm); color: var(--accent);
+}
+.list-row .teaser-plus { flex-shrink: 0; }
+
+/* Números: dois níveis (valor + legenda); a barra de páginas e uma única linha discreta no pé. */
+.bento-pages .bento-note {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 2px 6px; margin-top: 2px;
+  font-size: calc(12px * var(--type-scale, 1)); color: var(--muted); font-variant-numeric: tabular-nums;
+}
+.bento-pages .bento-note > * + *::before { content: '·'; margin-right: 6px; color: var(--muted); }
+.bento-pages .bento-heard { margin-top: 0; color: var(--text-soft); }
+
+/* Capa pequena do "Lendo agora": só as iniciais; o anel de % fica no canto, fora do miolo. */
+.cov-ring { width: 40px; height: 40px; right: -12px; bottom: -12px; }
+.cov-ring-pct { font-size: 11.5px; }
+.cov-ring-unit { font-size: 8px; }
+.cov-ring-pct.is-full { font-size: 10px; }
+
+/* Ornamentos novos das capas desenhadas. */
+/* 5 · faixa diagonal */
+.cover-d5 .cover-deco {
+  opacity: 0.1;
+  background: linear-gradient(135deg, transparent 0 56%, currentColor 56% 72%, transparent 72% 78%, currentColor 78% 80%, transparent 80%);
+}
+/* 6 · círculo vazado ao centro */
+.cover-d6 .cover-deco {
+  inset: auto; top: 50%; left: 50%; width: 72cqw; height: 72cqw; transform: translate(-50%, -50%);
+  border: 1px solid; border-radius: 50%; opacity: 0.35;
+}
+.cover-d6 .cover-deco::after { content: ''; position: absolute; inset: 9%; border: 1px solid; border-radius: 50%; opacity: 0.6; }
+/* 7 · fileiras de filetes na borda direita */
+.cover-d7 .cover-deco {
+  opacity: 0.3;
+  background: repeating-linear-gradient(to right, currentColor 0 1px, transparent 1px 5px) 100% 0 / 26% 100% no-repeat;
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 70%);
+  mask-image: linear-gradient(to right, transparent, #000 70%);
+}
+
+/* Texto muito grande em tela estreita: os botões do cartão quebram de linha em vez de ficar cortados. */
+.rn-actions { flex-wrap: wrap; }
+.rn-main { flex: 1 1 calc(130px * var(--type-scale, 1)); min-width: 0; }
