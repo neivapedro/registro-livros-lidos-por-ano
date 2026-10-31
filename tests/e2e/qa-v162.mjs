@@ -159,6 +159,21 @@ try {
     await page.context().close();
   }
 
+  step('mais contraste: o véu rolado é opaco e sem desfoque');
+  {
+    const page = await newPage({ scheme: 'light' });
+    await page.emulateMedia({ contrast: 'more' });
+    await open(page, '#/estante?aba=lido', 'estante');
+    await scrollTo(page, 400);
+    const v = await page.evaluate(() => {
+      const cs = getComputedStyle(document.body, '::before');
+      return { bg: cs.backgroundColor, blur: cs.backdropFilter };
+    });
+    assert.match(v.bg, /^rgb\(/, `véu opaco: ${v.bg}`);
+    assert.equal(v.blur, 'none');
+    await page.context().close();
+  }
+
   step('rolar e trocar de rota/voltar: o véu acompanha a posição da nova tela');
   {
     const page = await newPage({ scheme: 'light' });
@@ -282,6 +297,48 @@ try {
         if (label === 'ficha-lendo' && width === 320 && scale === 1.6) await shot(page, `ficha-lendo-320-16-${scheme}`);
       }
       await page.context().close();
+    }
+  }
+
+  step('contraste AA dos componentes novos: 5 acentos x claro/escuro (cor do texto contra as camadas de fundo opacas/translúcidas)');
+  {
+    const audit = (sels) => sels.flatMap((sel) => [...document.querySelectorAll(sel)].filter((el) => el.checkVisibility()).map((el) => {
+      const cv = document.createElement('canvas');
+      cv.width = 1; cv.height = 1;
+      const ctx = cv.getContext('2d', { willReadFrequently: true });
+      const rgba = (c) => { ctx.clearRect(0, 0, 1, 1); ctx.fillStyle = '#000'; ctx.fillStyle = c; ctx.fillRect(0, 0, 1, 1); const d = ctx.getImageData(0, 0, 1, 1).data; return [d[0], d[1], d[2], d[3] / 255]; };
+      const over = (t, u) => [0, 1, 2].map((i) => t[i] * t[3] + u[i] * (1 - t[3])).concat(1);
+      const layers = [];
+      for (let n = el; n && n.nodeType === 1; n = n.parentElement) {
+        const c = rgba(getComputedStyle(n).backgroundColor);
+        if (c[3] > 0) layers.push(c);
+        if (c[3] >= 1) break;
+      }
+      let bg = [255, 255, 255, 1];
+      const page = rgba(getComputedStyle(document.body).backgroundColor);
+      bg = over(page, bg);
+      for (const l of layers.reverse()) bg = over(l, bg);
+      const fgc = rgba(getComputedStyle(el).color);
+      const fg = over([fgc[0], fgc[1], fgc[2], fgc[3] * Number(getComputedStyle(el).opacity)], bg);
+      const lum = (c) => { const [r, g, b] = c.slice(0, 3).map((v) => { const s = v / 255; return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4; }); return 0.2126 * r + 0.7152 * g + 0.0722 * b; };
+      const [hi, lo] = [lum(fg), lum(bg)].sort((a, b) => b - a);
+      return { sel, text: el.textContent.trim().slice(0, 24), ratio: (hi + 0.05) / (lo + 0.05), size: parseFloat(getComputedStyle(el).fontSize) };
+    }));
+    const INICIO = ['.cov-ring-pct', '.cov-ring-unit', '.bento-note', '.bento-note span', '.list-row .teaser-title', '.list-row .muted', '.timer-banner-go', '.rn-author'];
+    const FICHA = ['.ficha-isbn', '.ficha-crit-toggle', '.ficha-rhythm .section-head .link', '.ficha-rhythm .section-head h2', '.rchart-readout', '.sug-source'];
+    const AJ = ['.howto-chip', '.howto-text'];
+    for (const accent of ['terracota', 'oliva', 'petroleo', 'vinho', 'grafite']) {
+      for (const scheme of ['light', 'dark']) {
+        const page = await newPage({ scheme, accent, session: true });
+        for (const [hash, name, sels] of [['#/inicio', 'inicio', INICIO], ['#/livro/c1', 'livro', FICHA], ['#/ajustes', 'ajustes', AJ]]) {
+          await open(page, hash, name);
+          const res = await page.evaluate(`(${audit.toString()})(${JSON.stringify(sels)})`);
+          assert.ok(res.length > 0, `${hash}: nada medido`);
+          const bad = res.filter((r) => r.ratio < (r.size >= 18 ? 3 : 4.5));
+          assert.deepEqual(bad, [], `${accent}/${scheme} ${hash}: contraste`);
+        }
+        await page.context().close();
+      }
     }
   }
 

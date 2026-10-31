@@ -4092,3 +4092,8 @@ html.is-scrolled:has(.cbar.is-on)::after, html:has(body.sheet-open)::after, html
 /* Texto muito grande em tela estreita: os botões do cartão quebram de linha em vez de ficar cortados. */
 .rn-actions { flex-wrap: wrap; }
 .rn-main { flex: 1 1 calc(130px * var(--type-scale, 1)); min-width: 0; }
+
+/* Mais contraste / menos transparência: o véu da barra de status é opaco e sem desfoque (1.6.2). */
+@media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
+  html.is-scrolled body::before { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
+}
