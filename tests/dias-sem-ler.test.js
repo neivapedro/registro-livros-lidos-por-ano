@@ -38,6 +38,18 @@ test('idleDays: horário de verão não altera a contagem; datas futuras são ig
   assert.equal(idleDays(['2026-11-01', '2026-11-10'], '2026-11-05'), 4, 'futuro não conta como último dia');
 });
 
+test('activityDays: tempo cronometrado/ouvido (sem avanço) também é atividade', async () => {
+  const { activityDays, readingDays } = await import('../app/js/journal.js');
+  const books = [{ journal: [
+    { date: '2026-11-01', from: 0, to: 10, unit: 'page', note: '' },
+    { date: '2026-11-04', from: 10, to: 10, unit: 'page', note: '', minutes: 15 },
+    { date: '2026-11-03', from: 10, to: 10, unit: 'page', note: 'só nota' },
+  ] }];
+  assert.deepEqual([...readingDays(books)], ['2026-11-01']);
+  assert.deepEqual([...activityDays(books)].sort(), ['2026-11-01', '2026-11-04']);
+  assert.equal(idleDays(activityDays(books), '2026-11-05'), 1);
+});
+
 test('com sequência atual nunca há texto de ociosidade', () => {
   for (const days of [new Set(['2026-11-05']), new Set(['2026-11-04'])]) {
     assert.ok(currentDayStreak(days, '2026-11-05').count > 0);
