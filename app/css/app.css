@@ -4109,3 +4109,9 @@ html.is-scrolled:has(.cbar.is-on)::after, html:has(body.sheet-open)::after, html
 .greet-idle svg { flex-shrink: 0; opacity: 0.7; }
 .greet-idle:active { opacity: 0.6; }
 .greet-idle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+/* ===== 1.6.3 Alvos de toque ===== */
+/* "+ Trecho" dentro de bloco com animacao de entrada (translateY): o Chromium mede a caixa em ponto
+   flutuante de 32 bits e dava 43,99997px com min-height de 44px. 0,5px a mais deixa folga em qualquer
+   fase da animacao, sem mudanca visivel. */
+.btn-outline.sm, .book-tab-panel .btn-outline.sm, .empty .btn-outline, .empty.has-art .btn-outline { min-height: 44.5px; }
