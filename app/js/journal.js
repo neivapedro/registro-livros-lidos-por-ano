@@ -231,6 +231,18 @@ export function readingDays(books, year = null) {
   return out;
 }
 
+/**
+ * Dias com qualquer atividade de leitura registrada: avanço no diário OU tempo cronometrado/ouvido
+ * (entrada com minutos, mesmo sem avanço de página). Usado pela linha "dias sem ler" do Início.
+ */
+export function activityDays(books) {
+  const out = readingDays(books);
+  for (const book of books) {
+    for (const entry of book.journal || []) if (entry.minutes > 0) out.add(entry.date);
+  }
+  return out;
+}
+
 function dayNumber(iso) {
   return Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86400000;
 }

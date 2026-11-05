@@ -142,7 +142,7 @@ try {
     const { context, page } = await newPage({ data: withLast(daysAgo(7)) });
     const btn = idleLine(page);
     assert.equal(await btn.count(), 1);
-    assert.equal(await btn.getAttribute('aria-label'), 'Registrar leitura de O Nome do Vento, edição comentada e muito longa');
+    assert.equal(await btn.getAttribute('aria-label'), 'Você não registra leitura há 7 dias. Registrar leitura de O Nome do Vento, edição comentada e muito longa');
     const box = await btn.boundingBox();
     assert.ok(box.height >= 44, `área de toque (${box.height})`);
     await btn.tap();

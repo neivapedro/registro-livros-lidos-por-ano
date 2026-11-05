@@ -10,7 +10,7 @@ import { timerBanner } from './timer.js';
 import { compactBar } from '../large-title.js';
 import { firstUpNext } from '../upnext.js';
 import { currentDayStreak, greetingFor, idleDays, idleText, longDate, streakText } from '../greeting.js';
-import { minutesListenedInYear, readingDays } from '../journal.js';
+import { activityDays, minutesListenedInYear, readingDays } from '../journal.js';
 import { editHref, registerHint } from './book-detail.js';
 import { formatDuration, headphonesIcon, hoursText } from '../audio.js';
 import { suggestTeaser } from './ai-views.js';
@@ -227,7 +227,7 @@ function greetingHeader(state, ui, today, now, controls) {
     for (const b of state.books) {
       if (b.status === STATUS.READING && (!idleBook || String(b.updatedAt || '') > String(idleBook.updatedAt || ''))) idleBook = b;
     }
-    idle = idleBook ? idleText({ days: idleDays(days, today), hasReading: true }) : '';
+    idle = idleBook ? idleText({ days: idleDays(activityDays(state.books), today), hasReading: true }) : '';
   }
   return `
     <header class="greet">
@@ -237,7 +237,7 @@ function greetingHeader(state, ui, today, now, controls) {
       </div>
       <h1 class="greet-title" data-large-title>${esc(hello)}${name ? `, <em class="greet-name">${esc(name)}</em>` : ''}</h1>
       ${streak ? `<p class="greet-streak"><span class="greet-dot" aria-hidden="true"></span>${esc(streak)}</p>` : ''}
-      ${idle ? `<p class="greet-streak greet-idle-row"><button type="button" class="greet-idle" data-action="update-page" data-id="${esc(idleBook.id)}" aria-label="${esc(`Registrar leitura de ${idleBook.title}`)}"><span>${esc(idle)}</span>${icon('chevronRight', { size: 14, stroke: 2 })}</button></p>` : ''}
+      ${idle ? `<p class="greet-streak greet-idle-row"><button type="button" class="greet-idle" data-action="update-page" data-id="${esc(idleBook.id)}" aria-label="${esc(`${idle}. Registrar leitura de ${idleBook.title}`)}"><span>${esc(idle)}</span>${icon('chevronRight', { size: 14, stroke: 2 })}</button></p>` : ''}
     </header>`;
 }
 
