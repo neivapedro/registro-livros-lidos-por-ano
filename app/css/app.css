@@ -4097,3 +4097,21 @@ html.is-scrolled:has(.cbar.is-on)::after, html:has(body.sheet-open)::after, html
 @media (prefers-contrast: more), (prefers-reduced-transparency: reduce) {
   html.is-scrolled body::before { background: var(--bg); -webkit-backdrop-filter: none; backdrop-filter: none; }
 }
+
+/* ===== 1.6.3 Dias sem ler ===== */
+.greet-idle-row { margin-top: -6px; margin-bottom: -4px; }
+.greet-idle {
+  display: inline-flex; align-items: center; gap: 4px; min-height: 44px; margin: 0; padding: 0 12px 0 0;
+  border: 0; background: none; font: inherit; font-size: calc(13px * var(--type-scale, 1)); font-weight: 700;
+  color: var(--text-soft); text-align: left; line-height: 1.3; cursor: pointer; -webkit-tap-highlight-color: transparent;
+}
+.greet-idle span { min-width: 0; overflow-wrap: anywhere; }
+.greet-idle svg { flex-shrink: 0; opacity: 0.7; }
+.greet-idle:active { opacity: 0.6; }
+.greet-idle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+
+/* ===== 1.6.3 Alvos de toque ===== */
+/* "+ Trecho" dentro de bloco com animacao de entrada (translateY): o Chromium mede a caixa em ponto
+   flutuante de 32 bits e dava 43,99997px com min-height de 44px. 0,5px a mais deixa folga em qualquer
+   fase da animacao, sem mudanca visivel. */
+.btn-outline.sm, .book-tab-panel .btn-outline.sm, .empty .btn-outline, .empty.has-art .btn-outline { min-height: 44.5px; }
