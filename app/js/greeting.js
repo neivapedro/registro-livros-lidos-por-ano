@@ -45,3 +45,27 @@ export function streakText({ count, today }) {
   if (count === 1) return today ? 'Leitura registrada hoje' : 'Última leitura ontem';
   return `${count} dias seguidos lendo`;
 }
+
+const IDLE_MIN_DAYS = 3;
+
+function dayNumber(iso) {
+  return Date.UTC(Number(iso.slice(0, 4)), Number(iso.slice(5, 7)) - 1, Number(iso.slice(8, 10))) / 86400000;
+}
+
+/**
+ * Dias corridos sem leitura registrada: de hoje até o último dia com leitura (datas no
+ * calendário, em UTC: sem surpresa com horário de verão). Datas futuras são ignoradas.
+ * Sem nenhum dia com leitura até hoje: 0. days: Set ou lista de 'AAAA-MM-DD'.
+ */
+export function idleDays(days, today) {
+  if (!isIsoDate(today)) return 0;
+  let last = '';
+  for (const d of days) if (isIsoDate(d) && d <= today && d > last) last = d;
+  return last ? dayNumber(today) - dayNumber(last) : 0;
+}
+
+/** "Você não registra leitura há 12 dias" a partir de 3 dias e com livro em leitura; senão ''. */
+export function idleText({ days, hasReading }) {
+  if (!hasReading || !Number.isFinite(days) || days < IDLE_MIN_DAYS) return '';
+  return `Você não registra leitura há ${Math.floor(days)} dias`;
+}
